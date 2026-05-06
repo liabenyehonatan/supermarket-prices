@@ -1,0 +1,12 @@
+dumps/
+.env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+logging.log
+*.egg-info/
+.DS_Store
+.claude/
