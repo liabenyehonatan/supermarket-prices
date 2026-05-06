@@ -1,0 +1,21 @@
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+
+# Database
+sqlalchemy==2.0.30
+asyncpg==0.29.0
+alembic==1.13.1
+
+# Israeli supermarket scraper & parser (let pip pick compatible versions)
+il-supermarket-scraper
+il-supermarket-parser
+
+# Task scheduling
+celery==5.4.0
+redis==5.0.6
+
+# Utilities
+python-dotenv==1.0.1
+httpx==0.27.0
+pydantic-settings==2.3.0
