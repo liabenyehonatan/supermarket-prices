@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
@@ -10,11 +10,11 @@ import { ChainLogo } from '../components/ChainLogo';
 import { useBasket } from '../context/BasketContext';
 import type { BasketCompareResponse, BasketStoreTotal } from '../types';
 
-function fmt(p: number) { return `₪${p.toFixed(2)}`; }
+function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
 
 /* ── Result card ─────────────────────────────────────────── */
-function ResultCard({ store, rank, maxTotal }: {
-  store: BasketStoreTotal; rank: number; maxTotal: number;
+function ResultCard({ store, rank, maxTotal, minTotal }: {
+  store: BasketStoreTotal; rank: number; maxTotal: number; minTotal: number;
 }) {
   const [open, setOpen] = useState(rank === 0);
   const isWinner  = rank === 0;
@@ -91,9 +91,9 @@ function ResultCard({ store, rank, maxTotal }: {
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <div className="basket-result-total tabular">{fmt(store.total_price)}</div>
-          {!isWinner && savings > 0.01 && (
+          {!isWinner && store.total_price - minTotal > 0.01 && (
             <span style={{ fontSize: 12, color: 'var(--red-500)', fontWeight: 600 }} className="tabular">
-              +{fmt(Math.abs(store.total_price - (maxTotal - (maxTotal - store.total_price))))}
+              +{fmt(store.total_price - minTotal)}
             </span>
           )}
           {rank === 1 && (
@@ -157,12 +157,15 @@ export function BasketPage() {
   const [results, setResults] = useState<BasketCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   async function handleCompare() {
     if (!items.length) return;
     setLoading(true); setError(null); setResults(null);
     try {
-      setResults(await compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity }))));
+      const data = await compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })));
+      setResults(data);
+      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch {
       setError('לא הצלחנו להשוות. בדוק שהשרת פעיל ונסה שוב.');
     } finally {
@@ -170,7 +173,11 @@ export function BasketPage() {
     }
   }
 
-  const maxTotal   = results ? Math.max(...results.stores.map(s => s.total_price)) : 0;
+  const completeStores = results ? results.stores.filter(s => s.items_missing === 0) : [];
+  const maxTotal = completeStores.length >= 2
+    ? Math.max(...completeStores.map(s => s.total_price))
+    : results ? Math.max(...results.stores.map(s => s.total_price)) : 0;
+  const minTotal = results && results.stores.length > 0 ? results.stores[0].total_price : 0;
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
 
   /* Empty state */
@@ -321,7 +328,7 @@ export function BasketPage() {
         {/* Results */}
         {results && !loading && (
           <>
-            <div className="section-divider">תוצאות ההשוואה</div>
+            <div className="section-divider" ref={resultsRef}>תוצאות ההשוואה</div>
 
             <div className="section-header" style={{ marginBottom: 16 }}>
               <div>
@@ -342,6 +349,7 @@ export function BasketPage() {
                   store={store}
                   rank={idx}
                   maxTotal={maxTotal}
+                  minTotal={minTotal}
                 />
               ))}
             </div>

@@ -20,6 +20,15 @@ python -m app.scraper.mass_scraper             # Multi-chain via il-supermarket-
 python -m app.parser.parser_service            # Shufersal GZ files
 python -m app.parser.parser_service victory    # Victory GZ files
 
+# Celery worker (runs tasks)
+celery -A app.celery_app worker --loglevel=info
+
+# Celery Beat (schedules tasks every 3h + nightly)
+celery -A app.celery_app beat --loglevel=info
+
+# Both in one process (development only)
+celery -A app.celery_app worker --beat --loglevel=info
+
 # Tests
 pytest
 ```
@@ -59,8 +68,8 @@ Three endpoints under `/api/v1`:
 
 All DB access is async (`AsyncSession` via `asyncpg`). FastAPI dependency `get_db` provides a session per request.
 
-### Task queue
-Celery + Redis are in `requirements.txt` but not yet wired up — intended for scheduled scraping jobs.
+### Task queue (`app/celery_app.py`, `app/tasks.py`)
+Celery + Redis. Three tasks: `scrape_all`, `parse_all`, `scrape_and_parse` (full pipeline). Beat schedule runs `scrape_and_parse` every 3 hours (skipping blocked FTP chains) and a full scrape at 2 AM nightly. API endpoints at `/api/v1/tasks/*` allow triggering tasks on demand and checking status by task ID.
 
 ## Rules
 

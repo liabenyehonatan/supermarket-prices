@@ -86,6 +86,8 @@ def _get_parser_name_for_folder(folder_name: str) -> str | None:
 async def parse_store_files(chains: list[str] = None):
     """Parse all Stores XML files and upsert store records."""
     store_files = iter_dump_files(FileTypesFilters.STORE_FILE, chains)
+    if not store_files:
+        logger.info("  No store files found, skipping")
     logger.info(f"Store files to parse: {len(store_files)}")
 
     for dump_file in store_files:
@@ -124,8 +126,11 @@ async def parse_store_files(chains: list[str] = None):
 # ── Price file parsing ────────────────────────────────────────────────────────
 
 async def parse_price_files(chains: list[str] = None):
-    """Parse all PriceFull XML files and upsert product + price records."""
-    price_files = iter_dump_files(FileTypesFilters.PRICE_FULL_FILE, chains)
+    """Parse all PriceFull and Price (delta) XML files and upsert product + price records."""
+    price_files = (
+        iter_dump_files(FileTypesFilters.PRICE_FULL_FILE, chains)
+        + iter_dump_files(FileTypesFilters.PRICE_FILE, chains)
+    )
     logger.info(f"Price files to parse: {len(price_files)}")
 
     for dump_file in price_files:
