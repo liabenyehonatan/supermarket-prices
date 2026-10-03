@@ -205,7 +205,8 @@ img { max-width: 100%; display: block; }
 .header-search-input {
   width: 100%;
   height: 40px;
-  padding: 0 var(--sp-4) 0 40px;
+  padding: 0 var(--sp-4);
+  padding-inline-start: 40px;
   border: 1.5px solid var(--line-strong);
   border-radius: var(--r-full);
   background: var(--surface-50);
@@ -228,6 +229,8 @@ img { max-width: 100%; display: block; }
   transform: translateY(-50%);
   color: var(--ink-400);
   pointer-events: none;
+  display: flex;
+  align-items: center;
 }
 
 .header-actions {
@@ -1025,10 +1028,11 @@ img { max-width: 100%; display: block; }
   display: flex;
   gap: var(--sp-2);
   overflow-x: auto;
-  padding-bottom: var(--sp-2);
+  overflow-y: visible;
+  padding-block: var(--sp-2);
   scrollbar-width: none;
   -ms-overflow-style: none;
-  padding-inline: var(--sp-1);
+  padding-inline: var(--sp-2);
 }
 .chains-row::-webkit-scrollbar { display: none; }
 
@@ -1348,11 +1352,15 @@ img { max-width: 100%; display: block; }
   flex: 1;
   min-width: 160px;
   position: relative;
+  display: flex;
+  align-items: center;
 }
 .location-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 40px;
-  padding: 0 var(--sp-4) 0 36px;
+  padding: 0 var(--sp-4);
+  padding-inline-start: 36px;
   border: 1.5px solid var(--line-strong);
   border-radius: var(--r-full);
   background: var(--surface-0);
@@ -1374,6 +1382,8 @@ img { max-width: 100%; display: block; }
   transform: translateY(-50%);
   color: var(--ink-400);
   pointer-events: none;
+  display: flex;
+  align-items: center;
 }
 
 /* ============================================================

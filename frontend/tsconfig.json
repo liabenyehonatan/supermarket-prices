@@ -14,7 +14,19 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/app",
+    "src/components/basket",
+    "src/components/layout",
+    "src/components/search",
+    "src/components/ui",
+    "src/lib/basket-store.ts",
+    "src/lib/utils.ts",
+    "src/i18n",
+    "src/proxy.ts"
+  ]
 }

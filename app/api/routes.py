@@ -4,8 +4,10 @@ import logging
 from decimal import Decimal
 from typing import List, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_
+from fastapi.responses import RedirectResponse
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -55,25 +57,48 @@ async def search_products(
     # Check if the query looks like a barcode (all digits)
     is_barcode = q.strip().isdigit()
 
+    # Subquery: count current prices per product (proxy for popularity)
+    store_count_sq = (
+        select(Price.product_id, func.count(Price.id).label("store_count"))
+        .where(Price.is_current == True)
+        .group_by(Price.product_id)
+        .subquery()
+    )
+
     if is_barcode:
-        # Exact barcode match
-        query = select(Product).where(
-            Product.barcode == q.strip()
-        ).limit(limit)
+        result = await db.execute(
+            select(Product).where(Product.barcode == q.strip()).limit(limit)
+        )
+        products = result.scalars().all()
     else:
-        # Hebrew text search using ILIKE (case-insensitive LIKE)
-        # % means "anything before or after"
-        # So %טבסקו% matches "רוטב טבסקו 60 מ"ל"
-        query = select(Product).where(
-            Product.name.ilike(f"%{q}%")
-        ).limit(limit)
+        from sqlalchemy import case as sa_case
+        # Relevance score: 2 if name starts with query, 1 otherwise
+        relevance = sa_case((Product.name.ilike(f"{q}%"), 2), else_=1)
+        exact_q = (
+            select(Product, func.coalesce(store_count_sq.c.store_count, 0).label("sc"), relevance.label("rel"))
+            .outerjoin(store_count_sq, Product.id == store_count_sq.c.product_id)
+            .where(Product.name.ilike(f"%{q}%"))
+            .order_by(relevance.desc(), func.coalesce(store_count_sq.c.store_count, 0).desc())
+            .limit(limit)
+        )
+        result = await db.execute(exact_q)
+        rows = result.all()
+        products = [r[0] for r in rows]
 
-    result = await db.execute(query)
-    products = result.scalars().all()
-
-    if not products:
-        # Return empty list, not an error
-        return []
+        if not products:
+            # Fuzzy fallback via pg_trgm — handles typos like "גבימה" → "גבינה"
+            fuzzy_q = (
+                select(Product, func.coalesce(store_count_sq.c.store_count, 0).label("sc"))
+                .outerjoin(store_count_sq, Product.id == store_count_sq.c.product_id)
+                .where(func.word_similarity(q, Product.name) > 0.2)
+                .order_by(
+                    func.word_similarity(q, Product.name).desc(),
+                    func.coalesce(store_count_sq.c.store_count, 0).desc(),
+                )
+                .limit(limit)
+            )
+            result = await db.execute(fuzzy_q)
+            products = [r[0] for r in result.all()]
 
     return products
 
@@ -118,6 +143,7 @@ async def compare_product_prices(
         .where(
             Price.product_id == product.id,
             Price.is_current == True,
+            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores
         )
         .order_by(Price.price.asc())  # Cheapest first
     )
@@ -157,6 +183,76 @@ async def compare_product_prices(
         most_expensive_price=most_expensive,
         price_difference=most_expensive - cheapest,
     )
+
+
+# ─── Endpoint: List cities ───────────────────────────────────────────────────
+
+@router.get(
+    "/stores/cities",
+    response_model=List[str],
+    summary="Return all distinct store cities",
+)
+async def list_cities(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Store.city)
+        .where(Store.city.isnot(None), Store.city != "")
+        .distinct()
+        .order_by(Store.city)
+    )
+    return [row[0] for row in result.all()]
+
+
+# ─── Endpoint: Product image (via Shufersal CDN) ─────────────────────────────
+
+SHUFERSAL_SEARCH = "https://www.shufersal.co.il/online/he/search/results"
+SHUFERSAL_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+
+@router.get("/products/{barcode}/image", summary="Redirect to product image")
+async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Product).where(Product.barcode == barcode))
+    product = result.scalar_one_or_none()
+
+    if product and product.image_url:
+        return RedirectResponse(product.image_url, status_code=302)
+
+    def _names_similar(our_name: str, their_name: str) -> bool:
+        our_words = set(our_name.split())
+        their_words = set(their_name.split())
+        if not our_words:
+            return False
+        return len(our_words & their_words) / len(our_words) >= 0.6
+
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get(
+                SHUFERSAL_SEARCH,
+                params={"q": barcode, "format": "json"},
+                headers=SHUFERSAL_HEADERS,
+            )
+            results = resp.json().get("results", [])
+
+            if not results and product:
+                resp2 = await client.get(
+                    SHUFERSAL_SEARCH,
+                    params={"q": product.name, "format": "json"},
+                    headers=SHUFERSAL_HEADERS,
+                )
+                name_results = resp2.json().get("results", [])
+                results = [
+                    r for r in name_results
+                    if _names_similar(product.name, r.get("name", ""))
+                ]
+
+        image_url = results[0].get("baseProductImageMedium") if results else None
+    except Exception:
+        image_url = None
+
+    if image_url and product:
+        product.image_url = image_url
+        await db.commit()
+        return RedirectResponse(image_url, status_code=302)
+
+    raise HTTPException(status_code=404, detail="No image found")
 
 
 # ─── Endpoint 3: Basket Comparison ───────────────────────────────────────────
@@ -206,6 +302,7 @@ async def compare_basket(
         .where(
             Product.barcode.in_(barcodes),
             Price.is_current == True,
+            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores
         )
     )
 
@@ -269,16 +366,20 @@ async def compare_basket(
             item_prices=list(barcode_prices.values()),
         ))
 
-    # Step 6: Sort by total price — cheapest first
-    store_totals.sort(key=lambda x: x.total_price)
+    # Step 6: Sort — complete baskets first, then by price ascending
+    store_totals.sort(key=lambda x: (x.items_missing, x.total_price))
 
-    # Calculate max savings
-    if len(store_totals) >= 2:
-        max_savings = store_totals[-1].total_price - store_totals[0].total_price
+    # Calculate max savings among complete-basket stores only
+    complete = [s for s in store_totals if s.items_missing == 0]
+    if len(complete) >= 2:
+        max_savings = complete[-1].total_price - complete[0].total_price
+        cheapest_store = complete[0].store.name
+    elif store_totals:
+        max_savings = Decimal("0")
         cheapest_store = store_totals[0].store.name
     else:
         max_savings = Decimal("0")
-        cheapest_store = store_totals[0].store.name if store_totals else None
+        cheapest_store = None
 
     return BasketCompareResponse(
         stores=store_totals,
