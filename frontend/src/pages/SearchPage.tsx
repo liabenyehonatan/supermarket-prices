@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, ChevronLeft, Barcode, Camera,
-  MapPin, Navigation, TrendingDown,
+  MapPin, Navigation, TrendingDown, Video, VideoOff,
 } from 'lucide-react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 function SearchProductIcon() {
   // Magnifying glass with a mini price-comparison bar chart inside the lens
@@ -34,9 +35,11 @@ function BuildBasketIcon() {
     </svg>
   );
 }
-import { searchProducts, compareProduct } from '../api/client';
+import { searchProducts, compareProduct, fetchCities } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
+import { ProductImage } from '../components/ProductImage';
 import type { Product } from '../types';
+import { cleanBrand, extractProductDisplay } from '../lib/utils';
 
 /* ── constants ────────────────────────────────────────────── */
 const FEATURED_CHAINS = [
@@ -58,8 +61,8 @@ const POPULAR: { label: string; q: string }[] = [
 type SearchTab = 'text' | 'barcode' | 'image';
 
 /* ── helpers ──────────────────────────────────────────────── */
-function fmt(p: number) {
-  return `₪${p.toFixed(2)}`;
+function fmt(p: number | string) {
+  return `₪${Number(p).toFixed(2)}`;
 }
 
 /* ── sub-components ───────────────────────────────────────── */
@@ -82,28 +85,105 @@ function SkeletonCard() {
 
 function BarcodePanel({ onSearch }: { onSearch: (q: string) => void }) {
   const [val, setVal] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [camError, setCamError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+
+  const stopScan = useCallback(() => {
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+    readerRef.current = null;
+    setScanning(false);
+  }, []);
+
+  const startScan = useCallback(async () => {
+    setCamError(null);
+    setScanning(true);
+    try {
+      const reader = new BrowserMultiFormatReader();
+      readerRef.current = reader;
+      const controls = await reader.decodeFromConstraints(
+        { video: { facingMode: 'environment' } },
+        videoRef.current!,
+        (result, err) => {
+          if (result) {
+            stopScan();
+            onSearch(result.getText());
+          }
+          if (err && !(err.name === 'NotFoundException')) {
+            setCamError('לא הצלחנו לגשת למצלמה');
+            stopScan();
+          }
+        }
+      );
+      controlsRef.current = controls;
+    } catch {
+      setCamError('לא ניתן לגשת למצלמה — אשרי גישה בדפדפן');
+      setScanning(false);
+    }
+  }, [onSearch, stopScan]);
+
+  useEffect(() => () => { controlsRef.current?.stop(); }, []);
+
   return (
     <div className="barcode-panel">
-      <div className="barcode-visual" aria-hidden>
-        <div className="barcode-bars">
-          {[4,6,3,7,5,8,3,6,5,4,7,6,3,5,8,4,6,3].map((h, i) => (
-            <div key={i} className="barcode-bar" style={{ height: h * 3.5 }} />
-          ))}
+      {/* Camera viewfinder */}
+      {scanning && (
+        <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden',
+                      background: '#000', marginBottom: 16, aspectRatio: '4/3' }}>
+          <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay muted playsInline />
+          {/* Scan frame overlay */}
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <div style={{ width: 200, height: 120, border: '2px solid rgba(255,255,255,0.9)', borderRadius: 8,
+                          boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }} />
+          </div>
+          <button
+            onClick={stopScan}
+            style={{ position: 'absolute', top: 10, insetInlineEnd: 10,
+                     background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
+                     width: 36, height: 36, display: 'flex', alignItems: 'center',
+                     justifyContent: 'center', cursor: 'pointer', color: '#fff' }}
+            aria-label="סגור מצלמה"
+          >
+            <X size={18} strokeWidth={2.5} />
+          </button>
         </div>
-        <span style={{ fontSize: 11, color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>
-          729000006685
-        </span>
-      </div>
+      )}
+      {!scanning && (
+        <div className="barcode-visual" aria-hidden>
+          <div className="barcode-bars">
+            {[4,6,3,7,5,8,3,6,5,4,7,6,3,5,8,4,6,3].map((h, i) => (
+              <div key={i} className="barcode-bar" style={{ height: h * 3.5 }} />
+            ))}
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>
+            729000006685
+          </span>
+        </div>
+      )}
+      {camError && (
+        <div style={{ color: 'var(--red-500)', fontSize: 13, marginBottom: 10, textAlign: 'center' }}>{camError}</div>
+      )}
+      {/* Camera scan button */}
+      <button
+        className={`btn ${scanning ? 'btn-secondary' : 'btn-primary'} btn-full`}
+        style={{ marginBottom: 12, gap: 8 }}
+        onClick={scanning ? stopScan : startScan}
+      >
+        {scanning ? <><VideoOff size={16} strokeWidth={2} /> עצור סריקה</> : <><Camera size={16} strokeWidth={2} /> סרוק ברקוד עם מצלמה</>}
+      </button>
+      {/* Manual entry */}
       <div className="barcode-input-row">
         <input
           type="number"
           className="barcode-input"
-          placeholder="הקלד מספר ברקוד..."
+          placeholder="או הקלד מספר ברקוד..."
           value={val}
           onChange={e => setVal(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && val && onSearch(val)}
           aria-label="ברקוד מוצר"
-          autoFocus
         />
         <button
           className="btn btn-primary"
@@ -153,7 +233,11 @@ export function SearchPage() {
   const [error, setError]     = useState<string | null>(null);
   const [cheapest, setCheapest] = useState<Record<string, number>>({});
   const [locationMode, setLocationMode] = useState<'none' | 'city'>('none');
-  const [cityInput, setCityInput] = useState('');
+  const [cityInput, setCityInput] = useState(() => sessionStorage.getItem('cityFilter') ?? '');
+  const [cities, setCities] = useState<string[]>([]);
+  const [cityFocused, setCityFocused] = useState(false);
+  const [chainFilter, setChainFilter] = useState<string>(() => sessionStorage.getItem('chainFilter') ?? '');
+  const [focused, setFocused] = useState(false);
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -191,12 +275,42 @@ export function SearchPage() {
     })();
   }, [results]);
 
+  // Load available cities once
+  useEffect(() => {
+    fetchCities().then(setCities).catch(() => {});
+  }, []);
+
   function handleInput(val: string) {
     setQuery(val);
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
       setSearchParams(val.trim() ? { q: val.trim() } : {}, { replace: true });
     }, 320);
+  }
+
+  function saveCity(city: string) {
+    setCityInput(city);
+    if (!city || cities.includes(city)) {
+      sessionStorage.setItem('cityFilter', city || '');
+      if (!city) sessionStorage.removeItem('cityFilter');
+    }
+  }
+
+  function selectCity(city: string) {
+    setCityInput(city);
+    sessionStorage.setItem('cityFilter', city);
+    setCityFocused(false);
+    setLocationMode('none');
+  }
+
+  function selectChain(name: string) {
+    if (chainFilter === name) {
+      setChainFilter('');
+      sessionStorage.removeItem('chainFilter');
+    } else {
+      setChainFilter(name);
+      sessionStorage.setItem('chainFilter', name);
+    }
   }
 
   function clearSearch() {
@@ -211,6 +325,17 @@ export function SearchPage() {
   }
 
   const hasQuery = query.trim().length > 0;
+
+  // Sort: names starting with query come first
+  const sortedResults = [...results].sort((a, b) => {
+    const q = query.trim().toLowerCase();
+    const aS = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+    const bS = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+    return aS - bS;
+  });
+
+  const showDropdown = focused && hasQuery && sortedResults.length > 0;
+  const showDropdownSkeleton = focused && hasQuery && loading && sortedResults.length === 0;
 
   /* ── render ─────────────────────────────────────────────── */
   return (
@@ -256,114 +381,264 @@ export function SearchPage() {
           </div>
         )}
 
-        {/* ── Search panel ──────────────────────────────────── */}
-        <div className="search-panel-box">
-          {/* Tabs */}
-          <div className="search-tabs" role="tablist" aria-label="שיטת חיפוש">
-            {([
-              { id: 'text' as SearchTab,    icon: <Search size={14} strokeWidth={2} />,   label: 'חיפוש טקסט' },
-              { id: 'barcode' as SearchTab, icon: <Barcode size={14} strokeWidth={2} />,  label: 'ברקוד' },
-              { id: 'image' as SearchTab,   icon: <Camera size={14} strokeWidth={2} />,   label: 'תמונה' },
-            ] as { id: SearchTab; icon: React.ReactNode; label: string }[]).map(t => (
-              <button
-                key={t.id}
-                role="tab"
-                aria-selected={tab === t.id}
-                className={`search-tab${tab === t.id ? ' active' : ''}`}
-                onClick={() => setTab(t.id)}
+        {/* ── Location panel ────────────────────────────────── */}
+        <div className="location-panel">
+          <button
+            className={`location-btn${locationMode === 'none' ? '' : ''}`}
+            onClick={() => {
+              if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                  () => alert('GPS: חנויות קרובות — תכונה תהיה זמינה עם השרת'),
+                  () => alert('לא ניתן לקבל מיקום')
+                );
+              }
+            }}
+            aria-label="חנויות קרובות לפי מיקום"
+          >
+            <Navigation size={15} strokeWidth={2} />
+            חנויות קרובות
+          </button>
+
+          <button
+            className={`location-btn${locationMode === 'city' || cityInput ? ' active' : ''}`}
+            onClick={() => setLocationMode(m => m === 'city' ? 'none' : 'city')}
+            aria-label="חפש לפי עיר"
+          >
+            <MapPin size={15} strokeWidth={2} />
+            {cityInput || 'חפש לפי עיר'}
+            {cityInput && (
+              <span
+                role="button"
+                aria-label="הסר סינון עיר"
+                onClick={e => { e.stopPropagation(); saveCity(''); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  marginInlineStart: 4, width: 16, height: 16,
+                  borderRadius: '50%', background: 'var(--green-200)',
+                  color: 'var(--green-700)', flexShrink: 0,
+                }}
               >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
+                <X size={10} strokeWidth={3} />
+              </span>
+            )}
+          </button>
+
+          {locationMode === 'city' && (() => {
+            const q = cityInput.trim();
+            const matched = (q && !cities.includes(q))
+              ? cities.filter(c => c.includes(q)).slice(0, 8)
+              : cities.slice(0, 8);
+            const isValid = !q || cities.includes(q);
+            const showSuggestions = cityFocused && matched.length > 0;
+            return (
+              <div className="location-input-wrap" style={{ position: 'relative' }}>
+                <MapPin className="location-input-icon" size={14} strokeWidth={2} />
+                <input
+                  type="text"
+                  className="location-input"
+                  placeholder="הקלידי שם עיר..."
+                  value={cityInput}
+                  onChange={e => saveCity(e.target.value)}
+                  onFocus={() => setCityFocused(true)}
+                  onBlur={() => setTimeout(() => setCityFocused(false), 180)}
+                  autoFocus
+                  aria-label="עיר לסינון"
+                  style={{ borderColor: !isValid && q ? 'var(--red-400)' : undefined }}
+                />
+                {cityInput && (
+                  <button
+                    onMouseDown={() => { saveCity(''); setCityFocused(false); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer',
+                             color: 'var(--ink-400)', display: 'flex', padding: 4, flexShrink: 0 }}
+                    aria-label="נקה עיר"
+                  >
+                    <X size={13} strokeWidth={2.5} />
+                  </button>
+                )}
+                {/* City suggestions dropdown */}
+                {showSuggestions && (
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                    background: 'var(--surface-0)', border: '1.5px solid var(--line)',
+                    borderRadius: 'var(--r-lg)', boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                    zIndex: 300, overflow: 'hidden',
+                    backdropFilter: 'none',
+                  }}>
+                    {matched.map((city, i) => (
+                      <button
+                        key={city}
+                        onMouseDown={() => selectCity(city)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '10px 14px',
+                          borderBottom: i < matched.length - 1 ? '1px solid var(--line)' : 'none',
+                          border: 'none', background: 'transparent', cursor: 'pointer',
+                          textAlign: 'start', fontFamily: 'var(--font-sans)',
+                          fontSize: 14, color: 'var(--ink-900)',
+                        }}
+                      >
+                        <MapPin size={14} strokeWidth={2} color="var(--ink-400)" style={{ flexShrink: 0 }} />
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
+        {cityInput && cities.includes(cityInput) && (
+          <div className="near-stores-note" role="status" style={{ marginBottom: 12 }}>
+            <MapPin size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+            <span>
+              מסנן חנויות ב-<strong>{cityInput}</strong> — הסינון יחול על כל מוצר שתפתחי
+            </span>
+            <button
+              onClick={() => saveCity('')}
+              style={{
+                marginInlineStart: 'auto', flexShrink: 0,
+                display: 'flex', alignItems: 'center',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'inherit', opacity: 0.7, padding: 2,
+              }}
+              aria-label="הסר סינון עיר"
+            >
+              <X size={15} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
+
+        {/* ── Search panel ──────────────────────────────────── */}
+        <div style={{ position: 'relative' }}>
+          <div className="search-panel-box">
+            {/* Tabs */}
+            <div className="search-tabs" role="tablist" aria-label="שיטת חיפוש">
+              {([
+                { id: 'text' as SearchTab,    icon: <Search size={14} strokeWidth={2} />,   label: 'חיפוש טקסט' },
+                { id: 'barcode' as SearchTab, icon: <Barcode size={14} strokeWidth={2} />,  label: 'ברקוד' },
+                { id: 'image' as SearchTab,   icon: <Camera size={14} strokeWidth={2} />,   label: 'תמונה' },
+              ] as { id: SearchTab; icon: React.ReactNode; label: string }[]).map(t => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  className={`search-tab${tab === t.id ? ' active' : ''}`}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Text search */}
+            {tab === 'text' && (
+              <div className="search-hero">
+                <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
+                <input
+                  ref={inputRef}
+                  type="search"
+                  className="search-hero-input"
+                  placeholder="שם מוצר בעברית, מותג, או ברקוד..."
+                  value={query}
+                  onChange={e => handleInput(e.target.value)}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setTimeout(() => setFocused(false), 200)}
+                  autoFocus={!hasQuery}
+                  aria-label="חיפוש מוצר"
+                />
+                {hasQuery && (
+                  <button className="search-hero-clear" onClick={clearSearch} aria-label="נקה חיפוש">
+                    <X size={14} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Barcode */}
+            {tab === 'barcode' && (
+              <BarcodePanel onSearch={q => { setTab('text'); startSearch(q); }} />
+            )}
+
+            {/* Image */}
+            {tab === 'image' && <ImagePanel />}
           </div>
 
-          {/* Text search */}
-          {tab === 'text' && (
-            <div className="search-hero">
-              <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
-              <input
-                ref={inputRef}
-                type="search"
-                className="search-hero-input"
-                placeholder="שם מוצר בעברית, מותג, או ברקוד..."
-                value={query}
-                onChange={e => handleInput(e.target.value)}
-                autoFocus={!hasQuery}
-                aria-label="חיפוש מוצר"
-              />
-              {hasQuery && (
-                <button className="search-hero-clear" onClick={clearSearch} aria-label="נקה חיפוש">
-                  <X size={14} strokeWidth={2.5} />
-                </button>
-              )}
+          {/* Skeleton dropdown while loading */}
+          {showDropdownSkeleton && tab === 'text' && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0,
+              background: 'var(--surface)', border: '1.5px solid var(--line)',
+              borderRadius: 'var(--r-lg)', boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
+              zIndex: 200, overflow: 'hidden', marginTop: 4,
+            }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
+                  borderBottom: i < 4 ? '1px solid var(--line)' : 'none',
+                }}>
+                  <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0 }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="skeleton" style={{ height: 14, width: `${55 + (i % 3) * 15}%` }} />
+                    <div className="skeleton" style={{ height: 12, width: `${30 + (i % 2) * 15}%` }} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Barcode */}
-          {tab === 'barcode' && (
-            <BarcodePanel onSearch={q => { setTab('text'); startSearch(q); }} />
-          )}
-
-          {/* Image */}
-          {tab === 'image' && <ImagePanel />}
-        </div>
-
-        {/* ── Location panel ────────────────────────────────── */}
-        {!hasQuery && (
-          <>
-            <div className="location-panel">
-              <button
-                className={`location-btn${locationMode === 'none' ? '' : ''}`}
-                onClick={() => {
-                  if ('geolocation' in navigator) {
-                    navigator.geolocation.getCurrentPosition(
-                      () => alert('GPS: חנויות קרובות — תכונה תהיה זמינה עם השרת'),
-                      () => alert('לא ניתן לקבל מיקום')
-                    );
-                  }
-                }}
-                aria-label="חנויות קרובות לפי מיקום"
-              >
-                <Navigation size={15} strokeWidth={2} />
-                חנויות קרובות
-              </button>
-
-              <button
-                className={`location-btn${locationMode === 'city' ? ' active' : ''}`}
-                onClick={() => setLocationMode(m => m === 'city' ? 'none' : 'city')}
-                aria-label="חפש לפי עיר"
-              >
-                <MapPin size={15} strokeWidth={2} />
-                חפש לפי עיר
-              </button>
-
-              {locationMode === 'city' && (
-                <div className="location-input-wrap">
-                  <MapPin className="location-input-icon" size={14} strokeWidth={2} />
-                  <input
-                    type="text"
-                    className="location-input"
-                    placeholder="שם עיר או מיקוד..."
-                    value={cityInput}
-                    onChange={e => setCityInput(e.target.value)}
-                    autoFocus
-                    aria-label="עיר או מיקוד"
-                  />
+          {/* Autocomplete dropdown — outside search-panel-box to avoid overflow clipping */}
+          {showDropdown && tab === 'text' && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0,
+              background: 'var(--surface)', border: '1.5px solid var(--line)',
+              borderRadius: 'var(--r-lg)', boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
+              zIndex: 200, overflow: 'hidden', marginTop: 4,
+              maxHeight: 'calc(100vh - 420px)', overflowY: 'auto',
+              opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
+            }}>
+              {sortedResults.slice(0, 8).map((product, i) => (
+                <button
+                  key={product.barcode}
+                  onMouseDown={() => navigate(`/product/${product.barcode}`)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 16px',
+                    borderBottom: i < Math.min(sortedResults.length, 8) - 1 ? '1px solid var(--line)' : 'none',
+                    border: 'none', background: 'transparent', cursor: 'pointer',
+                    textAlign: 'start', fontFamily: 'var(--font-sans)',
+                  }}
+                >
+                  <ProductImage barcode={product.barcode} name={product.name} size={44} borderRadius={10} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {(() => {
+                      const { displayName, size } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
+                      return (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-900)',
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {displayName}{size ? `, ${size}` : ''}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>
+                            ({[product.barcode, cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')})
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </button>
+              ))}
+              {sortedResults.length > 8 && (
+                <div style={{ padding: '9px 16px', fontSize: 12, color: 'var(--ink-400)',
+                              textAlign: 'center', borderTop: '1px solid var(--line)' }}>
+                  ועוד {sortedResults.length - 8} תוצאות — גלול למטה לראות הכל
                 </div>
               )}
             </div>
+          )}
+        </div>
 
-            {locationMode === 'city' && cityInput && (
-              <div className="near-stores-note" role="status">
-                <MapPin size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                <span>
-                  חיפוש חנויות ב-<strong>{cityInput}</strong> — תכונה זו תהיה זמינה לאחר חיבור לשרת מיקומים.
-                </span>
-              </div>
-            )}
-          </>
-        )}
 
         {/* ── Chains carousel ───────────────────────────────── */}
         {!hasQuery && (
@@ -371,21 +646,43 @@ export function SearchPage() {
             <div className="section-header" style={{ marginBottom: 12 }}>
               <div>
                 <div className="section-title">רשתות מובילות</div>
-                <div className="section-subtitle">לחץ לחיפוש מוצרים ברשת ספציפית</div>
+                <div className="section-subtitle">לחץ לסינון מחירים לפי רשת</div>
               </div>
+              {chainFilter && (
+                <button className="btn btn-ghost btn-sm" onClick={() => selectChain('')}
+                  style={{ color: 'var(--ink-500)', fontSize: 12 }}>
+                  <X size={13} strokeWidth={2.5} />
+                  הסר סינון
+                </button>
+              )}
             </div>
-            <div className="chains-row" style={{ marginBottom: 32, paddingBottom: 8 }}>
+            <div className="chains-row" style={{ marginBottom: chainFilter ? 8 : 32, paddingBottom: 8 }}>
               {FEATURED_CHAINS.map(name => (
                 <button
                   key={name}
-                  onClick={() => startSearch(name)}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
-                  aria-label={`חפש מוצרים ב${name}`}
+                  onClick={() => selectChain(name)}
+                  style={{
+                    border: 'none', background: 'none', cursor: 'pointer', padding: 4,
+                    borderRadius: 12,
+                    outline: chainFilter === name ? '2.5px solid var(--green-600)' : 'none',
+                    opacity: chainFilter && chainFilter !== name ? 0.45 : 1,
+                    transition: 'opacity 0.15s, outline 0.15s',
+                  }}
+                  aria-label={`סנן לפי ${name}`}
+                  aria-pressed={chainFilter === name}
                 >
                   <ChainLogo name={name} size={52} showLabel />
                 </button>
               ))}
             </div>
+            {chainFilter && (
+              <div className="near-stores-note" role="status" style={{ marginBottom: 16 }}>
+                <MapPin size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span>
+                  מסנן מחירים לפי רשת <strong>{chainFilter}</strong> — הסינון יחול על כל מוצר שתפתחי
+                </span>
+              </div>
+            )}
 
             {/* Popular searches */}
             <div className="section-header" style={{ marginBottom: 12 }}>
@@ -406,15 +703,9 @@ export function SearchPage() {
         )}
 
         {/* ── Results ───────────────────────────────────────── */}
-        {hasQuery && (
+        {hasQuery && !showDropdown && !showDropdownSkeleton && (
           <>
-            {loading && (
-              <div className="results-list">
-                {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
-              </div>
-            )}
-
-            {!loading && error && (
+            {error && (
               <div className="empty-state">
                 <div className="empty-state-icon"><Search size={28} strokeWidth={1.5} /></div>
                 <div className="empty-state-title">שגיאה בחיפוש</div>
@@ -448,7 +739,7 @@ export function SearchPage() {
                   </button>
                 </div>
 
-                <div className="results-list">
+                <div className="results-list" style={{ paddingBottom: 80 }}>
                   {results.map(product => {
                     const price = cheapest[product.barcode];
                     return (
@@ -459,27 +750,20 @@ export function SearchPage() {
                         style={{ width: '100%', textAlign: 'start', border: '1px solid var(--line)', cursor: 'pointer' }}
                         aria-label={`${product.name}${price ? ` — הכי זול ${fmt(price)}` : ''}`}
                       >
-                        {/* Product image placeholder */}
-                        <div
-                          style={{
-                            width: 56, height: 56, borderRadius: 12,
-                            background: 'var(--surface-100)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0, color: 'var(--ink-300)',
-                          }}
-                        >
-                          <Barcode size={22} strokeWidth={1.5} />
-                        </div>
+                        <ProductImage barcode={product.barcode} name={product.name} size={56} />
 
                         <div className="product-card-body">
-                          <div className="product-card-name">{product.name}</div>
-                          <div className="product-card-meta">
-                            {[product.brand, product.category, product.unit_of_measure]
-                              .filter(Boolean).join(' · ')}
-                          </div>
-                          {product.barcode && (
-                            <div className="product-card-barcode">{product.barcode}</div>
-                          )}
+                          {(() => {
+                            const { displayName, size } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
+                            return (
+                              <>
+                                <div className="product-card-name">{displayName}{size ? `, ${size}` : ''}</div>
+                                <div className="product-card-meta">
+                                  ({[product.barcode, cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')})
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
 
                         <div className="product-card-price">

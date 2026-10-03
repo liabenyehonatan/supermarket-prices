@@ -25,6 +25,10 @@ export function compareProduct(barcode: string): Promise<ProductCompareResponse>
   return request<ProductCompareResponse>(`/api/v1/products/${barcode}/compare`);
 }
 
+export function fetchCities(): Promise<string[]> {
+  return request<string[]>('/api/v1/stores/cities');
+}
+
 export function compareBasket(
   items: { barcode: string; quantity: number }[]
 ): Promise<BasketCompareResponse> {
