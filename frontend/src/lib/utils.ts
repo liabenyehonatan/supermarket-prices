@@ -59,7 +59,11 @@ export function fixProductName(name?: string | null): string {
       return prefix + expanded + suffix;
     })
     .replace(/(\d)([א-ת])/g, '$1 $2')
-    .replace(/([א-ת])(\d)/g, '$1 $2');
+    .replace(/([א-ת])(\d)/g, '$1 $2')
+    // "3%בקבוק" → "3% בקבוק": space between % and Hebrew
+    .replace(/(%)([א-ת])/g, '$1 $2')
+    // "1%1 בקבוק" → "1% בקבוק": remove lone digit glued right after % (formatting artifact)
+    .replace(/(\d%)(\d)(?=\s|$)/g, '$1');
 }
 
 
@@ -104,8 +108,10 @@ export function extractProductDisplay(
   if (unit && unit !== '---') {
     const fixedUnit = fixProductName(unit);
     if (!/^100\s/.test(fixedUnit)) {
-      // Real size from unit_of_measure — strip matching size from name to avoid duplication
-      const nameWithoutSize = workingName.replace(SIZE_AT_END, '').trim();
+      // Real size from unit_of_measure — strip SIZE + any trailing Hebrew-only words (e.g. partial brand)
+      // e.g. "חלב מועשר 1% בקבוק 1 ל יטבתה" → strip " 1 ל יטבתה" → "חלב מועשר 1% בקבוק"
+      const SIZE_WITH_TAIL = /\s+\d+(?:[.,]\d+)?\s*(?:גרם|מיליליטר|ליטר|קילוגרם|קג|מל|ג'|ג|ל'|ל)(?:\s+[א-ת]+)*\s*$/;
+      const nameWithoutSize = workingName.replace(SIZE_WITH_TAIL, '').trim();
       return { displayName: nameWithoutSize || workingName, size: fixedUnit };
     }
   }
