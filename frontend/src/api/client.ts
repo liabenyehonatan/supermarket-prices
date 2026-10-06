@@ -15,9 +15,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function searchProducts(q: string, limit = 20): Promise<Product[]> {
+export function searchProducts(q: string, limit = 20, offset = 0): Promise<Product[]> {
   return request<Product[]>(
-    `/api/v1/products/search?q=${encodeURIComponent(q)}&limit=${limit}`
+    `/api/v1/products/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`
   );
 }
 
@@ -25,8 +25,18 @@ export function compareProduct(barcode: string): Promise<ProductCompareResponse>
   return request<ProductCompareResponse>(`/api/v1/products/${barcode}/compare`);
 }
 
+// The city list rarely changes, so share one request per page load.
+// (Dev StrictMode runs effects twice, which used to fire this call twice.)
+let citiesRequest: Promise<string[]> | null = null;
+
 export function fetchCities(): Promise<string[]> {
-  return request<string[]>('/api/v1/stores/cities');
+  if (!citiesRequest) {
+    citiesRequest = request<string[]>('/api/v1/stores/cities').catch(err => {
+      citiesRequest = null; // allow a retry after a failure
+      throw err;
+    });
+  }
+  return citiesRequest;
 }
 
 export function compareBasket(

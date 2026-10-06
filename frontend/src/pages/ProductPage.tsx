@@ -137,7 +137,7 @@ export function ProductPage() {
 
         {/* Back */}
         <button className="page-back" onClick={() => navigate(-1)}>
-          <ArrowRight size={18} strokeWidth={2} style={{ transform: 'scaleX(-1)' }} />
+          <ArrowRight size={18} strokeWidth={2} />
           חזרה לתוצאות
         </button>
 
@@ -170,7 +170,7 @@ export function ProductPage() {
             {/* Product card */}
             <div className="product-hero">
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <ProductImage barcode={data.product.barcode} name={data.product.name} size={72} borderRadius={14} />
+                <ProductImage barcode={data.product.barcode} name={data.product.name} size={72} />
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {(() => {

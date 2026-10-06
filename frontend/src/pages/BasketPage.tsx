@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { compareBasket } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
+import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { BasketCompareResponse, BasketStoreTotal } from '../types';
 
@@ -234,6 +235,7 @@ export function BasketPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
             {items.map(item => (
               <div key={item.barcode} className="basket-item">
+                <ProductImage barcode={item.barcode} name={item.name} size={48} />
                 <div
                   className="basket-item-body"
                   style={{ cursor: 'pointer' }}
@@ -243,6 +245,7 @@ export function BasketPage() {
                   onKeyDown={e => e.key === 'Enter' && navigate(`/product/${item.barcode}`)}
                 >
                   <div className="basket-item-name">{item.name}</div>
+
                   <div className="basket-item-meta">
                     {[item.brand, item.unit].filter(Boolean).join(' · ')}
                   </div>
