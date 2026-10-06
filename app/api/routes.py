@@ -7,7 +7,7 @@ from typing import List, Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, func, and_, text
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -44,6 +44,7 @@ async def search_products(
     # /products/search?q=טבסקו&limit=10
     q: str = Query(..., min_length=1, description="Product name or barcode to search for"),
     limit: int = Query(20, ge=1, le=100, description="Max results to return"),
+    offset: int = Query(0, ge=0, description="Number of results to skip (for paging)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -52,6 +53,7 @@ async def search_products(
     Examples:
     - /api/v1/products/search?q=טבסקו
     - /api/v1/products/search?q=7290000066885
+    - /api/v1/products/search?q=חלב&limit=20&offset=20  (second page)
     """
 
     # Check if the query looks like a barcode (all digits)
@@ -72,21 +74,37 @@ async def search_products(
         products = result.scalars().all()
     else:
         from sqlalchemy import case as sa_case
-        # Relevance score: 2 if name starts with query, 1 otherwise
-        relevance = sa_case((Product.name.ilike(f"{q}%"), 2), else_=1)
+        # Any word may match (like Shufersal's own search), in any order.
+        # Ranking: names that contain more of the query's words come first,
+        # then names starting with the full query, then popularity.
+        words = q.split()
+        if not words:
+            return []
+        word_hits = [
+            sa_case((Product.name.icontains(w, autoescape=True), 1), else_=0)
+            for w in words
+        ]
+        words_matched = sum(word_hits)
+        prefix_bonus = sa_case((Product.name.ilike(f"{q}%"), 1), else_=0)
         exact_q = (
-            select(Product, func.coalesce(store_count_sq.c.store_count, 0).label("sc"), relevance.label("rel"))
+            select(Product, func.coalesce(store_count_sq.c.store_count, 0).label("sc"))
             .outerjoin(store_count_sq, Product.id == store_count_sq.c.product_id)
-            .where(Product.name.ilike(f"%{q}%"))
-            .order_by(relevance.desc(), func.coalesce(store_count_sq.c.store_count, 0).desc())
+            .where(or_(*[Product.name.icontains(w, autoescape=True) for w in words]))
+            .order_by(
+                words_matched.desc(),
+                prefix_bonus.desc(),
+                func.coalesce(store_count_sq.c.store_count, 0).desc(),
+                Product.id,  # stable order so pages don't overlap
+            )
+            .offset(offset)
             .limit(limit)
         )
         result = await db.execute(exact_q)
         rows = result.all()
         products = [r[0] for r in rows]
 
-        if not products:
-            # Fuzzy fallback via pg_trgm — handles typos like "גבימה" → "גבינה"
+        if not products and offset == 0:
+            # Fuzzy fallback (first page only — later pages would just append noise) via pg_trgm — handles typos like "גבימה" → "גבינה"
             fuzzy_q = (
                 select(Product, func.coalesce(store_count_sq.c.store_count, 0).label("sc"))
                 .outerjoin(store_count_sq, Product.id == store_count_sq.c.product_id)
@@ -94,7 +112,9 @@ async def search_products(
                 .order_by(
                     func.word_similarity(q, Product.name).desc(),
                     func.coalesce(store_count_sq.c.store_count, 0).desc(),
+                    Product.id,
                 )
+                .offset(offset)
                 .limit(limit)
             )
             result = await db.execute(fuzzy_q)

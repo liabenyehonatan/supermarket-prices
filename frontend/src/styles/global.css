@@ -135,7 +135,9 @@ body {
   font-size: var(--fs-15);
   line-height: var(--lh-normal);
   color: var(--fg-primary);
-  background: var(--bg-page);
+  /* Pale sky-blue ombre fading to white, fixed to the viewport */
+  background: linear-gradient(180deg, #EAF6FC 0%, #F4FAFD 45%, #FFFFFF 100%) fixed;
+  min-height: 100vh;
   font-feature-settings: var(--tnum);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -530,6 +532,19 @@ img { max-width: 100%; display: block; }
   text-overflow: ellipsis;
   line-height: var(--lh-snug);
 }
+.size-chip {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--blue-100);
+  color: var(--blue-600);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: middle;
+  white-space: nowrap;
+}
 .product-card-meta {
   font-size: var(--fs-13);
   color: var(--ink-500);
@@ -556,6 +571,33 @@ img { max-width: 100%; display: block; }
 .product-card-chevron {
   color: var(--ink-300);
   flex-shrink: 0;
+}
+
+.quick-add-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  border: 1.5px solid var(--green-600);
+  background: var(--surface-0);
+  color: var(--green-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--dur-fast), border-color var(--dur-fast),
+              color var(--dur-fast), transform var(--dur-fast);
+}
+.quick-add-btn:hover { background: var(--green-50); }
+.quick-add-btn:active { transform: scale(0.9); }
+.quick-add-btn.added {
+  background: var(--green-600);
+  border-color: var(--green-600);
+  color: #fff;
+}
+.quick-add-btn.small {
+  width: 30px;
+  height: 30px;
 }
 
 /* ============================================================
@@ -1014,6 +1056,58 @@ img { max-width: 100%; display: block; }
   letter-spacing: -0.02em;
   line-height: var(--lh-snug);
 }
+.hero-banner {
+  position: relative;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background: #F4F0E6;
+  width: 100%;
+  height: clamp(170px, 30vw, 230px);
+}
+.hero-banner-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 55%;
+  transform: scale(1.18);
+  transform-origin: center 55%;
+}
+/* Soft darkening so the title box and the basket both read clearly */
+.hero-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(16, 20, 24, 0.12), rgba(16, 20, 24, 0.32));
+  pointer-events: none;
+}
+.hero-banner-title {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--sp-4);
+}
+.hero-banner-title::before {
+  /* Darken the photo behind the title, on the reading side (right in RTL) */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to left, rgba(16, 20, 24, 0.6) 0%, rgba(16, 20, 24, 0.35) 45%, rgba(16, 20, 24, 0) 75%);
+  pointer-events: none;
+}
+.hero-banner-title .hero-title {
+  position: relative;
+  z-index: 1;
+  color: #FFFFFF;
+  font-size: var(--fs-20);
+  text-wrap: balance;
+  margin: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
 .hero-tagline {
   font-size: var(--fs-14);
   color: var(--ink-400);
@@ -1103,7 +1197,7 @@ img { max-width: 100%; display: block; }
   position: relative;
   overflow: hidden;
   text-align: center;
-  min-height: 148px;
+  min-height: 128px;
 }
 .mode-card:hover {
   box-shadow: var(--shadow-md);
@@ -1120,24 +1214,19 @@ img { max-width: 100%; display: block; }
 }
 
 .mode-card-icon {
-  width: 60px;
-  height: 60px;
+  width: 76px;
+  height: 76px;
   border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-bottom: 2px;
+  margin-bottom: -6px;
 }
-.mode-card-icon.green {
-  background: #EFF8FF;
-  border: 1.5px solid #BAE2FB;
-  color: #0284C7;
-}
+.mode-card-icon.green,
 .mode-card-icon.orange {
-  background: #F4F5F7;
-  border: 1.5px solid #D4D7DD;
-  color: #5C6573;
+  background: transparent;
+  border: none;
 }
 
 .mode-card-title {
@@ -1156,6 +1245,56 @@ img { max-width: 100%; display: block; }
 /* ============================================================
    Search mode tabs
    ============================================================ */
+.search-steps {
+  margin-bottom: var(--sp-4);
+}
+.search-steps-label {
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-500);
+  text-align: center;
+  margin-bottom: var(--sp-2);
+}
+.search-steps-flow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--sp-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.search-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-800);
+  text-align: center;
+  min-width: 0;
+}
+.search-step {
+  width: 120px;
+  white-space: nowrap;
+}
+/* Every icon gets the same fixed box, so the labels sit on one baseline */
+.search-step img,
+.search-step svg {
+  display: block;
+  height: 56px;
+  width: 56px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+.search-steps-arrow {
+  color: var(--ink-400);
+  flex-shrink: 0;
+  /* Centre the arrow on the 40px icon row */
+  margin-top: 16px;
+}
+
 .search-tabs {
   display: flex;
   gap: var(--sp-1);
@@ -1347,6 +1486,38 @@ img { max-width: 100%; display: block; }
   border-color: var(--green-600);
   background: var(--green-50);
   color: var(--green-700);
+}
+/* Nearby stores: matte dark-brown outline on the page background, no fill */
+.location-panel > .location-btn:first-child {
+  border-color: #7A4A2B;
+  background: transparent;
+  color: #5A3620;
+}
+/* City filter: matte dark-green outline on the page background, no fill */
+.location-panel > .location-btn:nth-child(2) {
+  border-color: #3B6B4F;
+  background: transparent;
+  color: #2E5A40;
+}
+/* Hover feedback: the outline darkens a step and a soft shadow lifts the button */
+.location-panel > .location-btn {
+  transition: border-color 0.18s ease, color 0.18s ease,
+              transform 0.18s ease, box-shadow 0.18s ease;
+}
+.location-panel > .location-btn:first-child:hover {
+  border-color: #5A3620;
+  color: #3F2514;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(90, 54, 32, 0.14);
+}
+.location-panel > .location-btn:nth-child(2):hover {
+  border-color: #2E5A40;
+  color: #1F3F2C;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(46, 90, 64, 0.14);
+}
+.location-panel > .location-btn:active {
+  transform: translateY(0) scale(0.98);
 }
 .location-input-wrap {
   flex: 1;
@@ -1632,12 +1803,13 @@ img { max-width: 100%; display: block; }
    "Add more" floating search
    ============================================================ */
 .search-panel-box {
-  background: var(--bg-card);
+  /* Light sage green, matching the no-image icon tile */
+  background: #DDEBD6;
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-md);
   padding: var(--sp-5);
   margin-bottom: var(--sp-6);
-  border: 1px solid var(--line);
+  border: 1px solid #CBDFC3;
 }
 
 /* ============================================================

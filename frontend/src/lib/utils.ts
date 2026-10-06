@@ -29,6 +29,10 @@ const HEB_ABBREVS: Record<string, string> = {
   'סוכ.':    'סוכריות',
   'חט.':     'חטיף',
   'חטיפ.':   'חטיפים',
+  'עגבני.':  'עגבניות',
+  'יוגור.':  'יוגורט',
+  'מינרל.':  'מינרלים',
+  'בק.':     'בקבוק',
   'עגב.':    'עגבניות',
   'עגבנ.':   'עגבניות',
   'מלפפ.':   'מלפפון',
@@ -68,10 +72,30 @@ export function fixProductName(name?: string | null): string {
 
 
 // Unit words that should NOT be stripped when they follow a number
-const UNIT_WORDS = /^(?:גרם|מיליליטר|ליטר|קילוגרם|יחידות|יחידה|קג|מל|ג'|ג|ל'|ל)$/i;
+const UNIT_WORDS = /^(?:גרם|גר'?|מיליליטר|מ["״]?ל|מל|ליטר|ל'|ל|קילוגרם|ק["״]?ג|קג|ג'|ג|יח'?|יחידות|יחידה)$/i;
 
-// Matches "NUMBER unit" at end of a name, e.g. "250 גרם", "1.5 ל'", "500 מל"
-const SIZE_AT_END = /\s+(\d+(?:[.,]\d+)?)\s*(גרם|מיליליטר|ליטר|קילוגרם|קג|מל|ג'|ג|ל'|ל)\s*$/;
+// Matches "NUMBER unit" at end of a name, e.g. "250 גרם", "1.5 ל'", "500 מל".
+// Anything after the unit that is only Hebrew words is captured as a trailing tail
+// (usually the brand, e.g. "800 ג יכין" → size "800 גרם", tail "יכין").
+// Multipacks ("400*3ג", "6*1.5ל") are kept as one size: "400×3 גרם", "6×1.5 ליטר"
+const SIZE_AT_END = /\s+(\d+(?:[.,]\d+)?(?:\s*\*\s*\d+(?:[.,]\d+)?)?)\s*(גרם|גר'?|מיליליטר|מ["״]?ל|מל|ליטר|ל'|ל|קילוגרם|ק["״]?ג|קג|ג'|ג|יח'|יחידות|יח)((?:\s+[א-ת'"״A-Za-z]+)*)\s*$/;
+
+// Abbreviated units → full words, so the size reads "800 גרם" not "800 ג"
+const FULL_UNIT: Record<string, string> = {
+  'ג': 'גרם', "ג'": 'גרם', 'גר': 'גרם', "גר'": 'גרם',
+  'ל': 'ליטר', "ל'": 'ליטר',
+  'מל': 'מ"ל', 'מ"ל': 'מ"ל', 'מ״ל': 'מ"ל', 'מיליליטר': 'מ"ל',
+  'קג': 'ק"ג', 'ק"ג': 'ק"ג', 'ק״ג': 'ק"ג', 'קילוגרם': 'ק"ג',
+  "יח'": 'יחידות', 'יח': 'יחידות',
+};
+function fullUnit(unit: string): string {
+  return FULL_UNIT[unit] ?? unit;
+}
+
+// Multipack separator "*" shown as "×"
+function fullNumber(num: string): string {
+  return num.replace(/\s*\*\s*/, '×');
+}
 
 function _stripBrandAndJunk(workingName: string, brand?: string | null): string {
   let result = workingName;
@@ -98,8 +122,8 @@ export function extractProductDisplay(
   name?: string | null,
   brand?: string | null,
   unit?: string | null,
-): { displayName: string; size: string } {
-  if (!name) return { displayName: '', size: '' };
+): { displayName: string; size: string; tailBrand: string } {
+  if (!name) return { displayName: '', size: '', tailBrand: '' };
 
   let workingName = fixProductName(name);
   workingName = _stripBrandAndJunk(workingName, brand);
@@ -107,12 +131,19 @@ export function extractProductDisplay(
   // Check unit_of_measure for a real package size (not comparison unit "100 X")
   if (unit && unit !== '---') {
     const fixedUnit = fixProductName(unit);
-    if (!/^100\s/.test(fixedUnit)) {
+    const isMeasure = /(גרם|ליטר|מ"ל|ק"ג|קילוגרם)/.test(fixedUnit);
+    if (!/^100\s/.test(fixedUnit) && isMeasure) {
       // Real size from unit_of_measure — strip SIZE + any trailing Hebrew-only words (e.g. partial brand)
       // e.g. "חלב מועשר 1% בקבוק 1 ל יטבתה" → strip " 1 ל יטבתה" → "חלב מועשר 1% בקבוק"
-      const SIZE_WITH_TAIL = /\s+\d+(?:[.,]\d+)?\s*(?:גרם|מיליליטר|ליטר|קילוגרם|קג|מל|ג'|ג|ל'|ל)(?:\s+[א-ת]+)*\s*$/;
-      const nameWithoutSize = workingName.replace(SIZE_WITH_TAIL, '').trim();
-      return { displayName: nameWithoutSize || workingName, size: fixedUnit };
+      const sizeMatch = workingName.match(SIZE_AT_END);
+      const nameWithoutSize = sizeMatch
+        ? workingName.slice(0, sizeMatch.index).trim()
+        : workingName;
+      return {
+        displayName: nameWithoutSize || workingName,
+        size: fixedUnit,
+        tailBrand: sizeMatch?.[3]?.trim() ?? '',
+      };
     }
   }
 
@@ -120,12 +151,16 @@ export function extractProductDisplay(
   const sizeMatch = workingName.match(SIZE_AT_END);
   if (sizeMatch) {
     const nameWithoutSize = workingName.slice(0, sizeMatch.index).trim();
-    return { displayName: nameWithoutSize || workingName, size: sizeMatch[1] + ' ' + sizeMatch[2] };
+    return {
+      displayName: nameWithoutSize || workingName,
+      size: fullNumber(sizeMatch[1]) + ' ' + fullUnit(sizeMatch[2]),
+      tailBrand: sizeMatch[3]?.trim() ?? '',
+    };
   }
 
   // No size found — strip trailing bare number
   workingName = workingName.replace(/\s+\d+(\.\d+)?\s*$/, '').trim();
-  return { displayName: workingName || fixProductName(name), size: '' };
+  return { displayName: workingName || fixProductName(name), size: '', tailBrand: '' };
 }
 
 export function cleanProductName(name?: string | null, brand?: string | null): string {
