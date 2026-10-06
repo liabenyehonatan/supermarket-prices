@@ -2,46 +2,68 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, ChevronLeft, Barcode, Camera,
-  MapPin, Navigation, TrendingDown, Video, VideoOff,
+  MapPin, Navigation, TrendingUp, Video, VideoOff, Plus, Check,
 } from 'lucide-react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 
 function SearchProductIcon() {
-  // Magnifying glass with a mini price-comparison bar chart inside the lens
+  // Reference illustration: magnifying glass with an apple
+  return <img src="/icons/search-apple.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
+}
+
+function CompareTrendIcon() {
+  // Thin line arrow trending up, drawn to match the line-art icons beside it
   return (
-    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden
-      stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="8.5" strokeWidth="2.1"/>
-      <line x1="8.5"  y1="15" x2="8.5"  y2="11.5" strokeWidth="2"/>
-      <line x1="12"   y1="15" x2="12"   y2="8.5"   strokeWidth="2"/>
-      <line x1="15.5" y1="15" x2="15.5" y2="12.5"  strokeWidth="2"/>
-      <line x1="7.5"  y1="15" x2="16.5" y2="15"    strokeWidth="1.5"/>
-      <line x1="18.5" y1="18.5" x2="26" y2="26" strokeWidth="2.3"/>
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden
+      stroke="#4D6B39" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 37 L17 26 L25 32 L41 16" />
+      <path d="M31 16 L41 16 L41 26" />
     </svg>
   );
 }
 
 function BuildBasketIcon() {
-  // Basket with two filled dots (groceries) framed by the handle arc
-  return (
-    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden
-      stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="10" cy="12" r="2.2" fill="currentColor" stroke="none"/>
-      <circle cx="20" cy="12" r="2.2" fill="currentColor" stroke="none"/>
-      <path d="M6.5 17 C6.5 6 23.5 6 23.5 17" strokeWidth="2.1" fill="none"/>
-      <path d="M3.5 17 L5.5 27 Q6 29 8 29 L22 29 Q24 29 24.5 27 L26.5 17 Z"
-        strokeWidth="2" fill="none"/>
-      <line x1="4.5" y1="22.5" x2="25.5" y2="22.5" strokeWidth="1.5"/>
-    </svg>
-  );
+  // Reference illustration: hand dropping a carton into a basket with a plant
+  return <img src="/icons/basket-plant.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
 }
+
 import { searchProducts, compareProduct, fetchCities } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
+import { HeroBanner } from '../components/HeroBanner';
+import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
 
 /* ── constants ────────────────────────────────────────────── */
+const PAGE_SIZE = 20;
+
+/* ── search snapshot: going back from a product returns to the same results and scroll position ── */
+const SNAPSHOT_KEY = 'sali_search_snapshot';
+interface SearchSnapshot {
+  q: string;
+  results: Product[];
+  hasMore: boolean;
+  cheapest: Record<string, number>;
+  scrollY: number;
+}
+function readSnapshot(q: string): SearchSnapshot | null {
+  try {
+    const raw = sessionStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw) as SearchSnapshot;
+    return snap.q === q ? snap : null;
+  } catch {
+    return null;
+  }
+}
+function writeSnapshot(snap: SearchSnapshot) {
+  try {
+    sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
+  } catch {
+    // storage full or blocked — going back just reloads the results
+  }
+}
 const FEATURED_CHAINS = [
   'שופרסל', 'רמי לוי', 'ויקטורי', 'מגה',
   'יוחננוף', 'טיב טעם', 'אושר עד', 'קרפור', 'חצי חינם',
@@ -80,6 +102,41 @@ function SkeletonCard() {
         <div className="skeleton" style={{ height: 14, width: 48 }} />
       </div>
     </div>
+  );
+}
+
+function QuickAddButton({ product, small }: { product: Product; small?: boolean }) {
+  const { addItem } = useBasket();
+  const [added, setAdded] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleAdd(e: React.SyntheticEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    addItem({
+      barcode: product.barcode,
+      quantity: 1,
+      name: product.name,
+      brand: product.brand,
+      unit: product.unit_of_measure,
+    });
+    setAdded(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setAdded(false), 1400);
+  }
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  return (
+    <button
+      type="button"
+      className={`quick-add-btn${small ? ' small' : ''}${added ? ' added' : ''}`}
+      onMouseDown={handleAdd}
+      aria-label={`הוסף ${product.name} לסל`}
+      title="הוסף לסל"
+    >
+      {added ? <Check size={small ? 14 : 16} strokeWidth={2.5} /> : <Plus size={small ? 14 : 16} strokeWidth={2.5} />}
+    </button>
   );
 }
 
@@ -226,12 +283,15 @@ function ImagePanel() {
 export function SearchPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const initialSnap = useRef<SearchSnapshot | null>(readSnapshot(searchParams.get('q') ?? ''));
   const [query, setQuery]     = useState(searchParams.get('q') ?? '');
   const [tab, setTab]         = useState<SearchTab>('text');
-  const [results, setResults] = useState<Product[]>([]);
+  const [results, setResults] = useState<Product[]>(() => initialSnap.current?.results ?? []);
+  const [hasMore, setHasMore] = useState(() => initialSnap.current?.hasMore ?? false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
-  const [cheapest, setCheapest] = useState<Record<string, number>>({});
+  const [cheapest, setCheapest] = useState<Record<string, number>>(() => initialSnap.current?.cheapest ?? {});
   const [locationMode, setLocationMode] = useState<'none' | 'city'>('none');
   const [cityInput, setCityInput] = useState(() => sessionStorage.getItem('cityFilter') ?? '');
   const [cities, setCities] = useState<string[]>([]);
@@ -242,31 +302,86 @@ export function SearchPage() {
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setResults([]); setError(null); return; }
+    if (!q.trim()) { setResults([]); setHasMore(false); setError(null); return; }
     setLoading(true); setError(null);
     try {
-      setResults(await searchProducts(q.trim()));
+      const page = await searchProducts(q.trim(), PAGE_SIZE, 0);
+      setResults(page);
+      setHasMore(page.length === PAGE_SIZE);
     } catch {
       setError('לא הצלחנו לטעון. בדוק שהשרת פעיל ונסה שוב.');
       setResults([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  async function loadMore() {
+    if (!query.trim() || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await searchProducts(query.trim(), PAGE_SIZE, results.length);
+      setResults(prev => [...prev, ...page]);
+      setHasMore(page.length === PAGE_SIZE);
+    } catch {
+      setError('לא הצלחנו לטעון עוד תוצאות. נסה שוב.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   useEffect(() => {
     const q = searchParams.get('q') ?? '';
     setQuery(q);
+    const restore = initialSnap.current;
+    if (restore && restore.q === q) {
+      // Came back from a product page: the results are already here, just restore the scroll
+      if (restore.scrollY > 0) setTimeout(() => window.scrollTo(0, restore.scrollY), 0);
+      return;
+    }
     if (q) void doSearch(q);
   }, [searchParams, doSearch]);
 
+  // Save the current results for the URL's query, so "back" can restore them
+  useEffect(() => {
+    const q = (searchParams.get('q') ?? '').trim();
+    if (!q || loading || !results.length) return;
+    writeSnapshot({ q, results, hasMore, cheapest, scrollY: readSnapshot(q)?.scrollY ?? 0 });
+  }, [searchParams, results, hasMore, cheapest, loading]);
+
+  // Track the scroll position for the current query (throttled)
+  useEffect(() => {
+    const q = (searchParams.get('q') ?? '').trim();
+    // Remember the last position the user scrolled to. Read it from the scroll events,
+    // not at unmount: the site scrolls smoothly, so the value at unmount is mid-animation.
+    let lastY = window.scrollY;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const saveScroll = (y: number) => {
+      const snap = readSnapshot(q);
+      if (snap) writeSnapshot({ ...snap, scrollY: y });
+    };
+    const onScroll = () => {
+      lastY = window.scrollY;
+      if (timer) return;
+      timer = setTimeout(() => { timer = null; saveScroll(lastY); }, 200);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (timer) clearTimeout(timer);
+      saveScroll(lastY);
+    };
+  }, [searchParams]);
+
   // Fetch cheapest price per visible result
   useEffect(() => {
-    if (!results.length) return;
+    const missing = results.filter(p => cheapest[p.barcode] == null);
+    if (!missing.length) return;
     void (async () => {
       const map: Record<string, number> = {};
       await Promise.allSettled(
-        results.slice(0, 12).map(async p => {
+        missing.map(async p => {
           try { map[p.barcode] = (await compareProduct(p.barcode)).cheapest_price; }
           catch { /* ignore */ }
         })
@@ -314,7 +429,7 @@ export function SearchPage() {
   }
 
   function clearSearch() {
-    setQuery(''); setResults([]); setError(null);
+    setQuery(''); setResults([]); setHasMore(false); setError(null);
     setSearchParams({}, { replace: true });
     inputRef.current?.focus();
   }
@@ -345,39 +460,8 @@ export function SearchPage() {
         {/* ── Hero ─────────────────────────────────────────── */}
         {!hasQuery && (
           <div className="hero-section">
-            <h1 className="hero-title">השוואת מחירי סופרמרקט</h1>
+            <HeroBanner title="השוואת מחירי סופרמרקט" />
             <p className="hero-tagline">34 רשתות · עדכון יומי</p>
-          </div>
-        )}
-
-        {/* ── Mode cards (dual CTA) ─────────────────────────── */}
-        {!hasQuery && (
-          <div className="mode-cards">
-            {/* Search product */}
-            <button
-              className="mode-card"
-              onClick={() => { setTimeout(() => inputRef.current?.focus(), 50); }}
-              aria-label="חיפוש מוצר בודד"
-            >
-              <div className="mode-card-icon green">
-                <SearchProductIcon />
-              </div>
-              <div className="mode-card-title">חפש מוצר</div>
-              <div className="mode-card-sub">השווה מחיר בין כל הרשתות</div>
-            </button>
-
-            {/* Build basket */}
-            <button
-              className="mode-card"
-              onClick={() => navigate('/basket')}
-              aria-label="בנה סל קניות"
-            >
-              <div className="mode-card-icon orange">
-                <BuildBasketIcon />
-              </div>
-              <div className="mode-card-title">בנה סל</div>
-              <div className="mode-card-sub">מצא את הרשת הזולה ביותר</div>
-            </button>
           </div>
         )}
 
@@ -513,6 +597,27 @@ export function SearchPage() {
         <div style={{ position: 'relative' }}>
           <div className="search-panel-box">
             {/* Tabs */}
+            {/* How it works: three steps in order, so the flow itself carries the meaning */}
+            <div className="search-steps">
+              <div className="search-steps-label">איך זה עובד</div>
+              <ol className="search-steps-flow">
+                <li className="search-step">
+                  <SearchProductIcon />
+                  <span>מחפשים מוצר</span>
+                </li>
+                <ChevronLeft size={16} strokeWidth={2} className="search-steps-arrow" aria-hidden />
+                <li className="search-step">
+                  <BuildBasketIcon />
+                  <span>מוסיפים לסל</span>
+                </li>
+                <ChevronLeft size={16} strokeWidth={2} className="search-steps-arrow" aria-hidden />
+                <li className="search-step">
+                  <CompareTrendIcon />
+                  <span>משווים בין הרשתות</span>
+                </li>
+              </ol>
+            </div>
+
             <div className="search-tabs" role="tablist" aria-label="שיטת חיפוש">
               {([
                 { id: 'text' as SearchTab,    icon: <Search size={14} strokeWidth={2} />,   label: 'חיפוש טקסט' },
@@ -598,37 +703,50 @@ export function SearchPage() {
               maxHeight: 'calc(100vh - 420px)', overflowY: 'auto',
               opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
             }}>
-              {sortedResults.slice(0, 8).map((product, i) => (
-                <button
-                  key={product.barcode}
-                  onMouseDown={() => navigate(`/product/${product.barcode}`)}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '10px 16px',
-                    borderBottom: i < Math.min(sortedResults.length, 8) - 1 ? '1px solid var(--line)' : 'none',
-                    border: 'none', background: 'transparent', cursor: 'pointer',
-                    textAlign: 'start', fontFamily: 'var(--font-sans)',
-                  }}
-                >
-                  <ProductImage barcode={product.barcode} name={product.name} size={44} borderRadius={10} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {(() => {
-                      const { displayName, size } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
-                      return (
-                        <>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-900)',
-                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {displayName}{size ? `, ${size}` : ''}
-                          </div>
-                          <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>
-                            ({[product.barcode, cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')})
-                          </div>
-                        </>
-                      );
-                    })()}
+              {sortedResults.slice(0, 8).map((product, i) => {
+                const price = cheapest[product.barcode];
+                return (
+                  <div
+                    key={product.barcode}
+                    role="button"
+                    tabIndex={0}
+                    onMouseDown={() => navigate(`/product/${product.barcode}`)}
+                    onKeyDown={e => e.key === 'Enter' && navigate(`/product/${product.barcode}`)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 16px',
+                      borderBottom: i < Math.min(sortedResults.length, 8) - 1 ? '1px solid var(--line)' : 'none',
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      textAlign: 'start', fontFamily: 'var(--font-sans)',
+                    }}
+                  >
+                    <ProductImage barcode={product.barcode} name={product.name} size={44} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {(() => {
+                        const { displayName, size, tailBrand } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
+                        return (
+                          <>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink-900)',
+                                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {displayName}
+                              {size && <span className="size-chip">{size}</span>}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--ink-500)' }}>
+                              {[product.barcode, tailBrand || cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    {price != null && (
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green-700)', flexShrink: 0 }}>
+                        {fmt(price)}
+                      </div>
+                    )}
+                    <QuickAddButton product={product} small />
                   </div>
-                </button>
-              ))}
+                );
+              })}
               {sortedResults.length > 8 && (
                 <div style={{ padding: '9px 16px', fontSize: 12, color: 'var(--ink-400)',
                               textAlign: 'center', borderTop: '1px solid var(--line)' }}>
@@ -687,7 +805,7 @@ export function SearchPage() {
             {/* Popular searches */}
             <div className="section-header" style={{ marginBottom: 12 }}>
               <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <TrendingDown size={18} strokeWidth={1.8} color="var(--green-600)" />
+                <TrendingUp size={18} strokeWidth={1.8} color="var(--green-600)" />
                 חיפושים פופולריים
               </div>
             </div>
@@ -743,10 +861,13 @@ export function SearchPage() {
                   {results.map(product => {
                     const price = cheapest[product.barcode];
                     return (
-                      <button
+                      <div
                         key={product.barcode}
+                        role="button"
+                        tabIndex={0}
                         className="product-card"
                         onClick={() => navigate(`/product/${product.barcode}`)}
+                        onKeyDown={e => e.key === 'Enter' && navigate(`/product/${product.barcode}`)}
                         style={{ width: '100%', textAlign: 'start', border: '1px solid var(--line)', cursor: 'pointer' }}
                         aria-label={`${product.name}${price ? ` — הכי זול ${fmt(price)}` : ''}`}
                       >
@@ -754,12 +875,15 @@ export function SearchPage() {
 
                         <div className="product-card-body">
                           {(() => {
-                            const { displayName, size } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
+                            const { displayName, size, tailBrand } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
                             return (
                               <>
-                                <div className="product-card-name">{displayName}{size ? `, ${size}` : ''}</div>
+                                <div className="product-card-name">
+                                  {displayName}
+                                  {size && <span className="size-chip">{size}</span>}
+                                </div>
                                 <div className="product-card-meta">
-                                  ({[product.barcode, cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')})
+                                  {[product.barcode, tailBrand || cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')}
                                 </div>
                               </>
                             );
@@ -779,14 +903,24 @@ export function SearchPage() {
                           )}
                         </div>
 
+                        <QuickAddButton product={product} />
+
                         <ChevronLeft
                           size={18} strokeWidth={2} color="var(--ink-300)"
-                          style={{ transform: 'scaleX(-1)', flexShrink: 0 }}
+                          style={{ flexShrink: 0 }}
                         />
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
+
+                {hasMore && (
+                  <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 80 }}>
+                    <button className="btn btn-secondary" onClick={() => void loadMore()} disabled={loadingMore}>
+                      {loadingMore ? 'טוען...' : 'טען עוד תוצאות'}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </>
