@@ -40,9 +40,14 @@ export function fetchCities(): Promise<string[]> {
 }
 
 export function compareBasket(
-  items: { barcode: string; quantity: number }[]
+  items: { barcode: string; quantity: number }[],
+  filters: { city?: string; chain?: string } = {}
 ): Promise<BasketCompareResponse> {
-  return request<BasketCompareResponse>('/api/v1/basket/compare', {
+  const params = new URLSearchParams();
+  if (filters.city?.trim()) params.set('city', filters.city.trim());
+  if (filters.chain?.trim()) params.set('chain', filters.chain.trim());
+  const qs = params.toString();
+  return request<BasketCompareResponse>(`/api/v1/basket/compare${qs ? `?${qs}` : ''}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(items),
