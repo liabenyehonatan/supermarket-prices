@@ -1,15 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, TrendingDown, MapPin, Truck, Plus, Minus,
-  Check, Barcode, Tag, ExternalLink, Navigation, X, ChevronDown,
+  Check, Tag, ExternalLink, Navigation, X, ChevronDown,
 } from 'lucide-react';
-import { compareProduct } from '../api/client';
+import { compareProduct, fetchCities } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
+import { FEATURED_CHAINS, matchCity, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
+import { useCurrentCity } from '../lib/location';
+import { LocationPrompt } from '../components/LocationPrompt';
 
 function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
 
@@ -47,14 +50,13 @@ export function ProductPage() {
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty]     = useState(1);
   const [added, setAdded] = useState(false);
-  const [cityFilter, setCityFilter] = useState(() => sessionStorage.getItem('cityFilter') ?? '');
-  const [chainFilter, setChainFilter] = useState(() => sessionStorage.getItem('chainFilter') ?? '');
+  const [cityFilter, setCityFilter] = useState(readCityFilter);
+  const [chainFilter, setChainFilter] = useState(readChainFilter);
   const [chainPickerOpen, setChainPickerOpen] = useState(false);
   const chainPickerRef = useRef<HTMLDivElement>(null);
   const cheapestRowRef = useRef<HTMLDivElement>(null);
   const [highlight, setHighlight] = useState(false);
   const [showCheapestPopup, setShowCheapestPopup] = useState(false);
-  const [gpsLoading, setGpsLoading] = useState(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, [barcode]);
 
@@ -98,27 +100,13 @@ export function ProductPage() {
     setTimeout(() => setAdded(false), 2200);
   }
 
-  function handleGps() {
-    if (!navigator.geolocation) return;
-    setGpsLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=he`,
-            { headers: { 'Accept-Language': 'he' } }
-          );
-          const json = await res.json();
-          const city = json.address?.city || json.address?.town || json.address?.village || json.address?.suburb || '';
-          if (city) { setCityFilter(city); sessionStorage.setItem('cityFilter', city); }
-        } catch { /* ignore */ } finally {
-          setGpsLoading(false);
-        }
-      },
-      () => setGpsLoading(false),
-      { timeout: 8000 }
-    );
-  }
+  const onLocatedCity = useCallback(async (found: string) => {
+    const cities = await fetchCities().catch(() => [] as string[]);
+    const city = matchCity(found, cities);
+    setCityFilter(city);
+    saveCityFilter(city);
+  }, []);
+  const { locate: handleGps, locating: gpsLoading, problem: locationProblem, dismiss: dismissLocation } = useCurrentCity(onLocatedCity);
 
   const namedPrices = data ? data.prices.filter(row => row.store_name) : [];
   const filteredPrices = namedPrices
@@ -281,7 +269,7 @@ export function ProductPage() {
                     onClick={() => {
                       setShowCheapestPopup(false);
                       setCityFilter('');
-                      sessionStorage.removeItem('cityFilter');
+                      saveCityFilter('');
                       setTimeout(() => {
                         cheapestRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         setHighlight(true);
@@ -329,7 +317,7 @@ export function ProductPage() {
 
               {chainFilter && (
                 <button
-                  onClick={() => { setChainFilter(''); sessionStorage.removeItem('chainFilter'); }}
+                  onClick={() => { setChainFilter(''); saveChainFilter(''); }}
                   style={{
                     display: 'inline-flex', alignItems: 'center',
                     background: 'none', border: 'none', cursor: 'pointer',
@@ -349,14 +337,13 @@ export function ProductPage() {
                   zIndex: 300, padding: '10px 8px',
                   display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 320,
                 }}>
-                  {['שופרסל','רמי לוי','ויקטורי','מגה','יוחננוף','טיב טעם','אושר עד','קרפור','חצי חינם'].map(name => (
+                  {FEATURED_CHAINS.map(name => (
                     <button
                       key={name}
                       onClick={() => {
                         const next = chainFilter === name ? '' : name;
                         setChainFilter(next);
-                        if (next) sessionStorage.setItem('chainFilter', next);
-                        else sessionStorage.removeItem('chainFilter');
+                        saveChainFilter(next);
                         setChainPickerOpen(false);
                       }}
                       style={{
@@ -390,7 +377,7 @@ export function ProductPage() {
                     <MapPin size={13} strokeWidth={2} />
                     {cityFilter}
                     <button
-                      onClick={() => { setCityFilter(''); sessionStorage.removeItem('cityFilter'); }}
+                      onClick={() => { setCityFilter(''); saveCityFilter(''); }}
                       style={{
                         display: 'inline-flex', alignItems: 'center',
                         background: 'none', border: 'none', cursor: 'pointer',
@@ -412,7 +399,7 @@ export function ProductPage() {
                     type="text"
                     placeholder="סנן לפי עיר..."
                     value={cityFilter}
-                    onChange={e => { setCityFilter(e.target.value); sessionStorage.setItem('cityFilter', e.target.value); }}
+                    onChange={e => { setCityFilter(e.target.value); saveCityFilter(e.target.value); }}
                     style={{
                       width: '100%', boxSizing: 'border-box',
                       padding: '10px 36px 10px 12px',
@@ -438,7 +425,7 @@ export function ProductPage() {
                 }}
               >
                 <Navigation size={15} strokeWidth={2} />
-                {gpsLoading ? 'מאתר...' : 'המיקום שלי'}
+                {gpsLoading ? 'מאתר...' : 'לפי מיקום נוכחי'}
               </button>
             </div>
 
@@ -454,11 +441,11 @@ export function ProductPage() {
                 <div className="empty-state-desc">נסי לשנות את הסינון</div>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
                   {cityFilter && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => { setCityFilter(''); sessionStorage.removeItem('cityFilter'); }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setCityFilter(''); saveCityFilter(''); }}>
                       הסר סינון עיר
                     </button>
                   )}
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setCityFilter(''); setChainFilter(''); sessionStorage.removeItem('cityFilter'); sessionStorage.removeItem('chainFilter'); }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setCityFilter(''); setChainFilter(''); saveCityFilter(''); saveChainFilter(''); }}>
                     הצג את כל החנויות
                   </button>
                 </div>
@@ -475,7 +462,7 @@ export function ProductPage() {
                     ref={isCheapest ? cheapestRowRef : undefined}
                     className={`compare-row${isCheapest ? ' cheapest' : ''}`}
                     style={isCheapest && highlight ? {
-                      outline: '2.5px solid var(--green-500)',
+                      outline: '2.5px solid var(--green-400)',
                       borderRadius: 'var(--r-lg)',
                       transition: 'outline 0.3s',
                     } : undefined}
@@ -587,6 +574,8 @@ export function ProductPage() {
           </button>
         </div>
       )}
+
+      <LocationPrompt problem={locationProblem} onRetry={handleGps} onClose={dismissLocation} />
     </div>
   );
 }
