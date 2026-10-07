@@ -25,6 +25,17 @@ export function compareProduct(barcode: string): Promise<ProductCompareResponse>
   return request<ProductCompareResponse>(`/api/v1/products/${barcode}/compare`);
 }
 
+// Cheapest current price for many barcodes in one request — used by the search
+// results list, instead of one /compare call per visible product.
+export function cheapestPricesBatch(barcodes: string[]): Promise<Record<string, number>> {
+  if (barcodes.length === 0) return Promise.resolve({});
+  return request<Record<string, number>>('/api/v1/products/cheapest-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ barcodes }),
+  });
+}
+
 // The city list rarely changes, so share one request per page load.
 // (Dev StrictMode runs effects twice, which used to fire this call twice.)
 let citiesRequest: Promise<string[]> | null = null;

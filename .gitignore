@@ -10,3 +10,11 @@ logging.log
 *.egg-info/
 .DS_Store
 .claude/
+
+# Scraper session cookies — written at runtime, must never be committed
+*_cookies.txt
+# Celery Beat runtime state
+celerybeat-schedule*
+# Build output
+frontend/.next/
+frontend/dist/

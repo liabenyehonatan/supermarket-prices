@@ -1,6 +1,17 @@
 import { useCallback, useState } from 'react';
 
 export type LocationProblem = 'denied' | 'unavailable' | 'timeout' | 'unsupported' | 'no-city';
+export type Coords = { lat: number; lng: number };
+
+// The raw position is kept too (not just the city) so pages can show the
+// distance to each geocoded store.
+const COORDS_KEY = 'myCoords';
+export function readMyCoords(): Coords | null {
+  try {
+    const raw = sessionStorage.getItem(COORDS_KEY);
+    return raw ? JSON.parse(raw) as Coords : null;
+  } catch { return null; }
+}
 
 /** Reverse-geocode coordinates to a Hebrew city name (OpenStreetMap Nominatim). */
 async function cityFromCoords(lat: number, lon: number): Promise<string> {
@@ -18,7 +29,7 @@ async function cityFromCoords(lat: number, lon: number): Promise<string> {
  * When location services are off or blocked, `problem` is set so the page
  * can show the "turn on location" prompt.
  */
-export function useCurrentCity(onCity: (city: string) => void) {
+export function useCurrentCity(onCity: (city: string) => void, onCoords?: (coords: Coords) => void) {
   const [locating, setLocating] = useState(false);
   const [problem, setProblem] = useState<LocationProblem | null>(null);
 
@@ -28,6 +39,9 @@ export function useCurrentCity(onCity: (city: string) => void) {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async pos => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        try { sessionStorage.setItem(COORDS_KEY, JSON.stringify(coords)); } catch { /* storage blocked */ }
+        onCoords?.(coords);
         try {
           const city = await cityFromCoords(pos.coords.latitude, pos.coords.longitude);
           if (city) onCity(city);
@@ -48,7 +62,7 @@ export function useCurrentCity(onCity: (city: string) => void) {
       },
       { timeout: 10000, maximumAge: 5 * 60 * 1000 },
     );
-  }, [onCity]);
+  }, [onCity, onCoords]);
 
   const dismiss = useCallback(() => setProblem(null), []);
 

@@ -17,6 +17,7 @@ from app.api.schemas import (
     ProductSearchResult,
     ProductCompareResponse,
     PriceAtStore,
+    CheapestPriceRequest,
     BasketItem,
     BasketCompareResponse,
     BasketStoreTotal,
@@ -184,6 +185,7 @@ async def compare_product_prices(
             store_id=store.id,
             store_name=store.name,
             store_city=store.city,
+            store_address=store.address,
             chain_name=chain.name,
             price=price.price,
             unit_price=price.unit_price,
@@ -203,6 +205,45 @@ async def compare_product_prices(
         most_expensive_price=most_expensive,
         price_difference=most_expensive - cheapest,
     )
+
+
+# ─── Endpoint: Cheapest price for many products at once ─────────────────────
+
+@router.post(
+    "/products/cheapest-batch",
+    response_model=dict[str, Decimal],
+    summary="Cheapest current price for a list of barcodes, in one request",
+)
+async def cheapest_prices_batch(
+    payload: CheapestPriceRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Given a list of barcodes, return the cheapest current price for each.
+
+    Replaces calling /products/{barcode}/compare once per result on a search
+    page (N requests) with a single query. A barcode with no current price is
+    left out of the response.
+
+    Example:
+    - POST /api/v1/products/cheapest-batch  {"barcodes": ["729...", "729..."]}
+    """
+    barcodes = [b for b in payload.barcodes if b]
+    if not barcodes:
+        return {}
+
+    rows = await db.execute(
+        select(Product.barcode, func.min(Price.price))
+        .join(Price, Price.product_id == Product.id)
+        .join(Store, Price.store_id == Store.id)
+        .where(
+            Product.barcode.in_(barcodes),
+            Price.is_current == True,
+            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores, same as /compare
+        )
+        .group_by(Product.barcode)
+    )
+    return {barcode: price for barcode, price in rows.all()}
 
 
 # ─── Endpoint: List cities ───────────────────────────────────────────────────
