@@ -8,7 +8,9 @@ import {
 import { compareBasket } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
+import { StoreFilters } from '../components/StoreFilters';
 import { useBasket } from '../context/BasketContext';
+import { readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import type { BasketCompareResponse, BasketStoreTotal } from '../types';
 
 function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
@@ -45,7 +47,8 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
             <span
               style={{
                 position: 'absolute', top: -6, insetInlineEnd: -6,
-                background: 'var(--green-600)', color: '#fff',
+                background: 'var(--mint)', color: 'var(--green-700)',
+                border: '1px solid var(--mint-line)',
                 borderRadius: '50%', width: 20, height: 20,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
@@ -158,26 +161,43 @@ export function BasketPage() {
   const [results, setResults] = useState<BasketCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const [city, setCity]       = useState(readCityFilter);
+  const [chain, setChain]     = useState(readChainFilter);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const requestId  = useRef(0);
 
-  async function handleCompare() {
+  async function runCompare(filters: { city: string; chain: string }) {
     if (!items.length) return;
+    const id = ++requestId.current;  // only the latest request may update the page
     setLoading(true); setError(null); setResults(null);
     try {
-      const data = await compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })));
+      const data = await compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })), filters);
+      if (id !== requestId.current) return;
       setResults(data);
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch {
-      setError('לא הצלחנו להשוות. בדוק שהשרת פעיל ונסה שוב.');
+      if (id === requestId.current) setError('לא הצלחנו להשוות. בדוק שהשרת פעיל ונסה שוב.');
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
+  }
+
+  const handleCompare = () => void runCompare({ city, chain });
+
+  // A filter change re-runs a comparison that is already on screen
+  function changeCity(next: string) {
+    setCity(next); saveCityFilter(next);
+    if (results || loading) void runCompare({ city: next, chain });
+  }
+  function changeChain(next: string) {
+    setChain(next); saveChainFilter(next);
+    if (results || loading) void runCompare({ city, chain: next });
   }
 
   const completeStores = results ? results.stores.filter(s => s.items_missing === 0) : [];
   const maxTotal = completeStores.length >= 2
     ? Math.max(...completeStores.map(s => s.total_price))
-    : results ? Math.max(...results.stores.map(s => s.total_price)) : 0;
+    : results && results.stores.length ? Math.max(...results.stores.map(s => s.total_price)) : 0;
   const minTotal = results && results.stores.length > 0 ? results.stores[0].total_price : 0;
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
 
@@ -285,6 +305,11 @@ export function BasketPage() {
           הוסף מוצרים לסל
         </button>
 
+        {/* Store filters: the comparison only covers the chosen city / chain */}
+        {items.length > 0 && (
+          <StoreFilters city={city} chain={chain} onCityChange={changeCity} onChainChange={changeChain} />
+        )}
+
         {/* Compare CTA */}
         {items.length > 0 && (
           <button
@@ -337,13 +362,30 @@ export function BasketPage() {
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TrendingDown size={20} strokeWidth={2} color="var(--green-600)" />
-                  {results.stores.length} רשתות · ממוין מהזול ליקר
+                  {results.stores.length} סניפים · ממוין מהזול ליקר
                 </div>
                 <div className="section-subtitle">
                   עבור {results.total_items_requested} מוצרים בסל
+                  {(city || chain) && <> · {[chain, city && `ב${city}`].filter(Boolean).join(' ')}</>}
                 </div>
               </div>
             </div>
+
+            {results.stores.length === 0 && (
+              <div className="empty-state" style={{ padding: '32px 0' }}>
+                <div className="empty-state-title">
+                  {city || chain ? `לא נמצאו חנויות ${[chain, city && `ב${city}`].filter(Boolean).join(' ')} עם המוצרים בסל` : 'לא נמצאו חנויות עם המוצרים בסל'}
+                </div>
+                {(city || chain) && (
+                  <button className="btn btn-secondary btn-sm" onClick={() => {
+                    setCity(''); setChain(''); saveCityFilter(''); saveChainFilter('');
+                    void runCompare({ city: '', chain: '' });
+                  }}>
+                    הצג את כל החנויות
+                  </button>
+                )}
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
               {results.stores.map((store, idx) => (
