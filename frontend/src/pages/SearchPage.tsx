@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, ChevronLeft, Barcode, Camera,
-  MapPin, Navigation, TrendingUp, Video, VideoOff, Plus, Check,
+  MapPin, Navigation, TrendingUp, VideoOff, Plus, Check,
 } from 'lucide-react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 
@@ -28,12 +28,15 @@ function BuildBasketIcon() {
 }
 
 import { searchProducts, compareProduct, fetchCities } from '../api/client';
-import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
+import { ChainCarousel } from '../components/ChainCarousel';
+import { LocationPrompt } from '../components/LocationPrompt';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
+import { FEATURED_CHAINS, matchCity, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
+import { useCurrentCity } from '../lib/location';
 
 /* ── constants ────────────────────────────────────────────── */
 const PAGE_SIZE = 20;
@@ -64,11 +67,6 @@ function writeSnapshot(snap: SearchSnapshot) {
     // storage full or blocked — going back just reloads the results
   }
 }
-const FEATURED_CHAINS = [
-  'שופרסל', 'רמי לוי', 'ויקטורי', 'מגה',
-  'יוחננוף', 'טיב טעם', 'אושר עד', 'קרפור', 'חצי חינם',
-];
-
 const POPULAR: { label: string; q: string }[] = [
   { label: 'חלב 3%', q: 'חלב' },
   { label: 'לחם אחיד', q: 'לחם' },
@@ -88,23 +86,6 @@ function fmt(p: number | string) {
 }
 
 /* ── sub-components ───────────────────────────────────────── */
-function SkeletonCard() {
-  return (
-    <div className="product-card" style={{ pointerEvents: 'none', gap: 12 }}>
-      <div className="skeleton" style={{ width: 56, height: 56, borderRadius: 12, flexShrink: 0 }} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div className="skeleton" style={{ height: 15, width: '72%' }} />
-        <div className="skeleton" style={{ height: 12, width: '48%' }} />
-        <div className="skeleton" style={{ height: 12, width: '38%' }} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-        <div className="skeleton" style={{ height: 24, width: 64 }} />
-        <div className="skeleton" style={{ height: 14, width: 48 }} />
-      </div>
-    </div>
-  );
-}
-
 function QuickAddButton({ product, small }: { product: Product; small?: boolean }) {
   const { addItem } = useBasket();
   const [added, setAdded] = useState(false);
@@ -252,6 +233,7 @@ function BarcodePanel({ onSearch }: { onSearch: (q: string) => void }) {
           חפש
         </button>
       </div>
+
     </div>
   );
 }
@@ -293,13 +275,15 @@ export function SearchPage() {
   const [error, setError]     = useState<string | null>(null);
   const [cheapest, setCheapest] = useState<Record<string, number>>(() => initialSnap.current?.cheapest ?? {});
   const [locationMode, setLocationMode] = useState<'none' | 'city'>('none');
-  const [cityInput, setCityInput] = useState(() => sessionStorage.getItem('cityFilter') ?? '');
+  const [cityInput, setCityInput] = useState(readCityFilter);
   const [cities, setCities] = useState<string[]>([]);
   const [cityFocused, setCityFocused] = useState(false);
-  const [chainFilter, setChainFilter] = useState<string>(() => sessionStorage.getItem('chainFilter') ?? '');
+  const [chainFilter, setChainFilter] = useState<string>(readChainFilter);
   const [focused, setFocused] = useState(false);
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownMax, setDropdownMax] = useState(360);
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setHasMore(false); setError(null); return; }
@@ -405,27 +389,30 @@ export function SearchPage() {
 
   function saveCity(city: string) {
     setCityInput(city);
-    if (!city || cities.includes(city)) {
-      sessionStorage.setItem('cityFilter', city || '');
-      if (!city) sessionStorage.removeItem('cityFilter');
-    }
+    if (!city || cities.includes(city)) saveCityFilter(city);
   }
 
-  function selectCity(city: string) {
+  const selectCity = useCallback((city: string) => {
     setCityInput(city);
-    sessionStorage.setItem('cityFilter', city);
+    saveCityFilter(city);
     setCityFocused(false);
     setLocationMode('none');
-  }
+  }, []);
+
+  // "By current location": fill the city filter from the device's position
+  const onLocatedCity = useCallback((found: string) => selectCity(matchCity(found, cities)), [cities, selectCity]);
+  const { locate, locating, problem: locationProblem, dismiss: dismissLocation } = useCurrentCity(onLocatedCity);
 
   function selectChain(name: string) {
-    if (chainFilter === name) {
-      setChainFilter('');
-      sessionStorage.removeItem('chainFilter');
-    } else {
-      setChainFilter(name);
-      sessionStorage.setItem('chainFilter', name);
-    }
+    const next = chainFilter === name ? '' : name;
+    setChainFilter(next);
+    saveChainFilter(next);
+  }
+
+  // The dropdown is a preview; closing it reveals the full, scrollable results list
+  function showAllResults() {
+    setFocused(false);
+    inputRef.current?.blur();
   }
 
   function clearSearch() {
@@ -452,6 +439,27 @@ export function SearchPage() {
   const showDropdown = focused && hasQuery && sortedResults.length > 0;
   const showDropdownSkeleton = focused && hasQuery && loading && sortedResults.length === 0;
 
+  // Size the dropdown so it always ends above the bottom nav bar
+  useEffect(() => {
+    if (!showDropdown) return;
+    const fit = () => {
+      const el = dropdownRef.current;
+      if (!el) return;
+      const nav = document.querySelector('.bottom-nav');
+      const navTop = nav && getComputedStyle(nav).display !== 'none'
+        ? nav.getBoundingClientRect().top
+        : window.innerHeight;
+      setDropdownMax(Math.max(200, navTop - el.getBoundingClientRect().top - 12));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    window.addEventListener('scroll', fit, { passive: true });
+    return () => {
+      window.removeEventListener('resize', fit);
+      window.removeEventListener('scroll', fit);
+    };
+  }, [showDropdown]);
+
   /* ── render ─────────────────────────────────────────────── */
   return (
     <div className="page-wrapper">
@@ -468,19 +476,13 @@ export function SearchPage() {
         {/* ── Location panel ────────────────────────────────── */}
         <div className="location-panel">
           <button
-            className={`location-btn${locationMode === 'none' ? '' : ''}`}
-            onClick={() => {
-              if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                  () => alert('GPS: חנויות קרובות — תכונה תהיה זמינה עם השרת'),
-                  () => alert('לא ניתן לקבל מיקום')
-                );
-              }
-            }}
-            aria-label="חנויות קרובות לפי מיקום"
+            className="location-btn"
+            onClick={locate}
+            disabled={locating}
+            aria-label="סנן לפי המיקום הנוכחי"
           >
             <Navigation size={15} strokeWidth={2} />
-            חנויות קרובות
+            {locating ? 'מאתר מיקום...' : 'לפי מיקום נוכחי'}
           </button>
 
           <button
@@ -695,12 +697,12 @@ export function SearchPage() {
 
           {/* Autocomplete dropdown — outside search-panel-box to avoid overflow clipping */}
           {showDropdown && tab === 'text' && (
-            <div style={{
+            <div ref={dropdownRef} style={{
               position: 'absolute', top: '100%', left: 0, right: 0,
               background: 'var(--surface)', border: '1.5px solid var(--line)',
               borderRadius: 'var(--r-lg)', boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
               zIndex: 200, overflow: 'hidden', marginTop: 4,
-              maxHeight: 'calc(100vh - 420px)', overflowY: 'auto',
+              maxHeight: dropdownMax, overflowY: 'auto',
               opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
             }}>
               {sortedResults.slice(0, 8).map((product, i) => {
@@ -748,10 +750,15 @@ export function SearchPage() {
                 );
               })}
               {sortedResults.length > 8 && (
-                <div style={{ padding: '9px 16px', fontSize: 12, color: 'var(--ink-400)',
-                              textAlign: 'center', borderTop: '1px solid var(--line)' }}>
-                  ועוד {sortedResults.length - 8} תוצאות — גלול למטה לראות הכל
-                </div>
+                <button
+                  type="button"
+                  className="dropdown-show-all"
+                  onMouseDown={e => { e.preventDefault(); showAllResults(); }}
+                  onClick={showAllResults}
+                >
+                  הצג את כל התוצאות (<span dir="ltr">{sortedResults.length}{hasMore ? '+' : ''}</span>)
+                  <ChevronLeft size={14} strokeWidth={2.5} />
+                </button>
               )}
             </div>
           )}
@@ -774,25 +781,12 @@ export function SearchPage() {
                 </button>
               )}
             </div>
-            <div className="chains-row" style={{ marginBottom: chainFilter ? 8 : 32, paddingBottom: 8 }}>
-              {FEATURED_CHAINS.map(name => (
-                <button
-                  key={name}
-                  onClick={() => selectChain(name)}
-                  style={{
-                    border: 'none', background: 'none', cursor: 'pointer', padding: 4,
-                    borderRadius: 12,
-                    outline: chainFilter === name ? '2.5px solid var(--green-600)' : 'none',
-                    opacity: chainFilter && chainFilter !== name ? 0.45 : 1,
-                    transition: 'opacity 0.15s, outline 0.15s',
-                  }}
-                  aria-label={`סנן לפי ${name}`}
-                  aria-pressed={chainFilter === name}
-                >
-                  <ChainLogo name={name} size={52} showLabel />
-                </button>
-              ))}
-            </div>
+            <ChainCarousel
+              chains={FEATURED_CHAINS}
+              selected={chainFilter}
+              onSelect={selectChain}
+              style={{ marginBottom: chainFilter ? 8 : 32 }}
+            />
             {chainFilter && (
               <div className="near-stores-note" role="status" style={{ marginBottom: 16 }}>
                 <MapPin size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
@@ -927,6 +921,8 @@ export function SearchPage() {
         )}
 
       </div>
+
+      <LocationPrompt problem={locationProblem} onRetry={locate} onClose={dismissLocation} />
     </div>
   );
 }
