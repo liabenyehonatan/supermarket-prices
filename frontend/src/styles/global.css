@@ -5,8 +5,10 @@
 :root {
   --green-900: #0E5E3A;
   --green-800: #126E45;
-  --green-700: #178551;
-  --green-600: #1FA463;
+  /* Darkened a step from the original design: #1FA463/#178551 read as too bright
+     for the "add to basket" button and the price numbers. */
+  --green-700: #126E45;
+  --green-600: #178551;
   --green-500: #34BE7B;
   --green-400: #6CD49E;
   --green-200: #BCE9CF;
@@ -53,8 +55,8 @@
   --bg-card:      var(--surface-0);
   --bg-section:   var(--surface-100);
   /* Mint used for every "cheapest" marker (stat tile, cheapest row, winner card) */
-  --mint:         var(--green-50);
-  --mint-line:    var(--green-200);
+  --mint:         var(--cheapest-bg);
+  --mint-line:    var(--cheapest-border);
   --bg-cheapest:  var(--mint);
   --bg-promo:     var(--orange-50);
 
@@ -63,6 +65,11 @@
   --fg-tertiary:  var(--ink-300);
   --fg-on-brand:  #FFFFFF;
 
+  /* Exact colors supplied for the two tinted squares */
+  --savings-bg:     #F2E1CD;
+  --savings-border: #C9A876;
+  --cheapest-bg:    #DCE6D5;
+  --cheapest-border:#9FB393;
   --accent:         var(--green-600);
   --accent-pressed: var(--green-700);
   --accent-tint:    var(--green-50);
@@ -285,9 +292,9 @@ img { max-width: 100%; display: block; }
   inset-block-end: 0;
   inset-inline: 0;
   height: var(--bottom-nav-h);
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* Fully solid — a translucent bar let card content behind it show through faintly,
+     which read as content "rising over" the bar. */
+  background: var(--bg-card);
   border-top: 1px solid var(--line);
   display: flex;
   /* Always above page content, including the search dropdown (z 200) and popovers (z 300) */
@@ -376,9 +383,13 @@ img { max-width: 100%; display: block; }
   background: var(--green-600);
   color: #fff;
 }
-/* Hover: light beige-orange (was blue) */
-.btn-primary:hover  { background: var(--orange-100); color: var(--orange-700); }
-.btn-primary:active { background: var(--orange-200); color: var(--orange-700); }
+/* Hover: warm beige-orange instead of blue — the same color for every primary
+   button, including "add to basket" and the basket compare CTA */
+.btn-primary:hover  { background: #C98A4B; }
+.btn-primary:active { background: #A86F39; }
+.btn-compare:hover  { background: #C98A4B; }
+.btn-compare:active { background: #A86F39; }
+
 
 .btn-secondary {
   background: var(--surface-100);
@@ -578,6 +589,15 @@ img { max-width: 100%; display: block; }
   flex-shrink: 0;
 }
 
+/* Narrow phones: 5 flex items (image, text, price, add button, chevron) don't all
+   fit at full size — tighten the gap and drop the purely decorative chevron
+   (the whole row is already a click target) so the name keeps real room to truncate in. */
+@media (max-width: 400px) {
+  .product-card { gap: var(--sp-2); padding: var(--sp-3); }
+  .product-card-chevron { display: none; }
+  .product-card-price-value { font-size: var(--fs-16); }
+}
+
 .quick-add-btn {
   width: 36px;
   height: 36px;
@@ -723,7 +743,7 @@ img { max-width: 100%; display: block; }
   flex-wrap: wrap;
 }
 .product-hero-price-min {
-  font-size: var(--fs-40);
+  font-size: var(--fs-28);
   font-weight: var(--fw-black);
   color: var(--green-700);
   font-variant-numeric: tabular-nums;
@@ -751,9 +771,10 @@ img { max-width: 100%; display: block; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--orange-50);
+  background: var(--savings-bg);
   color: var(--orange-700);
-  border-radius: var(--r-md);
+  border: 1.5px solid var(--savings-border);
+  border-radius: var(--r-full);
   padding: var(--sp-2) var(--sp-3);
   font-size: var(--fs-14);
   font-weight: var(--fw-semibold);
@@ -885,7 +906,7 @@ img { max-width: 100%; display: block; }
   margin-top: 2px;
 }
 .basket-result-total {
-  font-size: var(--fs-28);
+  font-size: var(--fs-20);
   font-weight: var(--fw-black);
   color: var(--ink-900);
   font-variant-numeric: tabular-nums;
@@ -1585,17 +1606,40 @@ img { max-width: 100%; display: block; }
 }
 .compare-row-delivery:hover { background: var(--blue-500); color: #fff; }
 
+.compare-row-nav {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.compare-row-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  background: var(--surface-100);
+  color: var(--ink-600);
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  border: none;
+  text-decoration: none;
+}
+.compare-row-nav a:hover { background: var(--green-100); color: var(--green-700); }
+
 /* ============================================================
    Quick stats bar (product page)
    ============================================================ */
 .stats-bar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0, 1fr), not plain 1fr: lets a column shrink below its content's natural
+     width instead of forcing the whole row (and the page) wider than the viewport */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2px;
   margin-bottom: var(--sp-4);
 }
 .stat-item {
   background: var(--bg-card);
+  border: 1.5px solid var(--line-strong);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-xs);
   padding: var(--sp-4) var(--sp-3);
@@ -1604,9 +1648,12 @@ img { max-width: 100%; display: block; }
   gap: 4px;
   align-items: center;
   text-align: center;
+  min-width: 0;
 }
-.stat-item.highlight { background: var(--mint); }
-.stat-item.savings   { background: var(--orange-50); }
+/* Exact match to the cheapest-tag icon's own card color */
+.stat-item.highlight { background: var(--cheapest-bg); border: 1.5px solid var(--cheapest-border); }
+/* Exact match to the piggy-bank icon's own card color, so the icon has no visible edge */
+.stat-item.savings   { background: var(--savings-bg); border: 1.5px solid var(--savings-border); }
 .stat-label {
   font-size: var(--fs-11, 11px);
   font-weight: var(--fw-medium);
@@ -1614,6 +1661,79 @@ img { max-width: 100%; display: block; }
   text-transform: uppercase;
   letter-spacing: 0.03em;
   white-space: nowrap;
+}
+.savings-with-icon {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  text-align: start;
+  gap: var(--sp-2);
+}
+.stat-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.savings-with-icon svg,
+.savings-with-icon .stat-icon-big {
+  flex-shrink: 0;
+}
+.stat-icon-wrap {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  /* Same color as the tile it sits in — no border, no visible edge */
+  background: var(--savings-bg);
+}
+.stat-icon-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Each icon's own artwork fills a different fraction of its canvas —
+     these per-icon scales bring the drawing itself to the same visual size. */
+  transform: scale(1.40);
+}
+.stat-icon-wrap-plain {
+  background: var(--bg-card);
+}
+.stat-icon-wrap-plain img {
+  object-fit: contain;
+  transform: scale(0.98);
+}
+.stat-icon-wrap-cheapest {
+  background: var(--cheapest-bg);
+}
+.stat-icon-wrap-cheapest img {
+  /* Must stay >= ~1.14 or the source image's own white margin peeks out at the edges */
+  transform: scale(1.15);
+}
+
+/* Narrow/medium phones: three tiles with a 56px icon each don't leave enough room for
+   longer prices (e.g. "₪21.39") next to it — shrink the icon and the digits so nothing
+   bleeds past the tile. 480px covers common phones up to the iPhone Pro Max width (430px). */
+@media (max-width: 480px) {
+  .stat-item { padding: var(--sp-3) 6px; }
+  .stat-icon-wrap { width: 30px; height: 30px; }
+  .stat-value { font-size: 14px; letter-spacing: -0.03em; }
+  .stat-label { font-size: 10px; }
+  .savings-with-icon { gap: 4px; }
+}
+/* Very narrow phones: even a 30px icon beside the price doesn't leave room for a
+   two-digit total — stack the icon above the text instead of beside it. */
+@media (max-width: 420px) {
+  .savings-with-icon {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+  .savings-with-icon .stat-item-text {
+    align-items: center;
+    text-align: center;
+  }
+  .stat-icon-wrap { width: 26px; height: 26px; }
 }
 .stat-value {
   font-size: var(--fs-20);
@@ -1834,14 +1954,14 @@ img { max-width: 100%; display: block; }
    Near stores panel (location result)
    ============================================================ */
 .near-stores-note {
-  background: var(--blue-100);
+  background: var(--savings-bg);
   border-radius: var(--r-lg);
   padding: var(--sp-4);
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
   font-size: var(--fs-14);
-  color: var(--blue-600);
+  color: #8A6B3F;
   margin-bottom: var(--sp-4);
 }
 

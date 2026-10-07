@@ -53,6 +53,7 @@ class PriceAtStore(BaseModel):
     store_id: int
     store_name: Optional[str]
     store_city: Optional[str]
+    store_address: Optional[str]
     chain_name: str
     price: Decimal
     unit_price: Optional[Decimal]
@@ -76,6 +77,11 @@ class ProductCompareResponse(BaseModel):
     cheapest_price: Decimal
     most_expensive_price: Decimal
     price_difference: Decimal  # How much you save by choosing cheapest
+
+
+class CheapestPriceRequest(BaseModel):
+    """A list of barcodes to look up the cheapest current price for, in one call."""
+    barcodes: List[str]
 
 
 class BasketItem(BaseModel):
