@@ -18,7 +18,7 @@ async function cityFromCoords(lat: number, lon: number): Promise<string> {
  * When location services are off or blocked, `problem` is set so the page
  * can show the "turn on location" prompt.
  */
-export function useCurrentCity(onCity: (city: string) => void) {
+export function useCurrentCity(onCity: (city: string, coords: { lat: number; lng: number }) => void) {
   const [locating, setLocating] = useState(false);
   const [problem, setProblem] = useState<LocationProblem | null>(null);
 
@@ -28,9 +28,10 @@ export function useCurrentCity(onCity: (city: string) => void) {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async pos => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         try {
-          const city = await cityFromCoords(pos.coords.latitude, pos.coords.longitude);
-          if (city) onCity(city);
+          const city = await cityFromCoords(coords.lat, coords.lng);
+          if (city) onCity(city, coords);
           else setProblem('no-city');
         } catch {
           setProblem('no-city');

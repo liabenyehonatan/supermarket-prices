@@ -1,20 +1,42 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowRight, TrendingDown, MapPin, Truck, Plus, Minus,
-  Check, Tag, ExternalLink, Navigation, X, ChevronDown,
+  ArrowRight, MapPin, Truck, Plus, Minus, Check, Tag, ExternalLink, Navigation, X, ChevronDown,
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
-import type { ProductCompareResponse } from '../types';
+import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
 import { FEATURED_CHAINS, matchCity, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity } from '../lib/location';
 import { LocationPrompt } from '../components/LocationPrompt';
 
 function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
+
+// Great-circle distance between two lat/lng points, in km.
+function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = (bLat - aLat) * Math.PI / 180;
+  const dLng = (bLng - aLng) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(aLat * Math.PI / 180) * Math.cos(bLat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Waze and Google Maps both accept a free-text destination — no store coordinates
+// needed, so this works today even though store geocoding hasn't run yet.
+function storeNavQuery(row: PriceAtStore): string {
+  return [row.store_name, row.store_address, row.store_city].filter(Boolean).join(', ') || row.chain_name;
+}
+function wazeUrl(row: PriceAtStore): string {
+  return `https://waze.com/ul?q=${encodeURIComponent(storeNavQuery(row))}&navigate=yes`;
+}
+function googleMapsUrl(row: PriceAtStore): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(storeNavQuery(row))}`;
+}
 
 function timeAgo(iso?: string): string {
   if (!iso) return '';
@@ -57,6 +79,14 @@ export function ProductPage() {
   const cheapestRowRef = useRef<HTMLDivElement>(null);
   const [highlight, setHighlight] = useState(false);
   const [showCheapestPopup, setShowCheapestPopup] = useState(false);
+  // Raw coordinates, kept (not just the city name) so distance-to-store can use them
+  // once stores are geocoded — see the note near the distance badge below.
+  const [myCoords, setMyCoords] = useState<{ lat: number; lng: number } | null>(() => {
+    try {
+      const raw = sessionStorage.getItem('myCoords');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
 
   useEffect(() => { window.scrollTo(0, 0); }, [barcode]);
 
@@ -100,7 +130,10 @@ export function ProductPage() {
     setTimeout(() => setAdded(false), 2200);
   }
 
-  const onLocatedCity = useCallback(async (found: string) => {
+  const onLocatedCity = useCallback(async (found: string, coords: { lat: number; lng: number }) => {
+    // Keep the raw coordinates too, for the distance-to-store badge
+    setMyCoords(coords);
+    try { sessionStorage.setItem('myCoords', JSON.stringify(coords)); } catch { /* storage blocked */ }
     const cities = await fetchCities().catch(() => [] as string[]);
     const city = matchCity(found, cities);
     setCityFilter(city);
@@ -121,7 +154,10 @@ export function ProductPage() {
 
   return (
     <div className="page-wrapper">
-      <div className="container">
+      {/* The sticky add-to-basket bar floats above the bottom nav, on top of the page's
+          own bottom padding — reserve extra room so short pages (e.g. a filter with no
+          matching stores) don't end up with their last bit of content hidden under it. */}
+      <div className="container" style={{ paddingBottom: data ? 96 : 0 }}>
 
         {/* Back */}
         <button className="page-back" onClick={() => navigate(-1)}>
@@ -189,41 +225,44 @@ export function ProductPage() {
                 )}
               </div>
 
-              {/* Savings callout */}
-              {savings > 0.01 && (
-                <div className="product-hero-savings savings-pop">
-                  <TrendingDown size={16} strokeWidth={2} />
-                  <span>
-                    חסוך עד{' '}
-                    <strong className="tabular">{fmt(savings)}</strong>
-                    {savingsPct > 0 && <span style={{ marginInlineStart: 4, opacity: 0.8 }}>({savingsPct}%)</span>}
-                    {' '}בין הרשתות
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* ── Quick stats ────────────────────────────────── */}
             <div className="stats-bar">
               <div
-                className="stat-item highlight"
+                className="stat-item highlight savings-with-icon"
                 style={{ cursor: 'pointer' }}
                 onClick={() => setShowCheapestPopup(v => !v)}
                 title="לחץ לראות את הסניף"
               >
-                <div className="stat-label">הכי זול ↓</div>
-                <div className="stat-value">{fmt(data.cheapest_price)}</div>
-                <div className="stat-sub">{namedPrices[0]?.chain_name}</div>
+                <div className="stat-item-text">
+                  <div className="stat-label">הכי זול ↓</div>
+                  <div className="stat-value">{fmt(data.cheapest_price)}</div>
+                  <div className="stat-sub">{namedPrices[0]?.chain_name}</div>
+                </div>
+                <span className="stat-icon-wrap stat-icon-wrap-cheapest">
+                  <img src="/icons/cheapest-tag.webp" alt="" aria-hidden />
+                </span>
               </div>
-              <div className="stat-item">
-                <div className="stat-label">ממוצע</div>
-                <div className="stat-value">{fmt(avgPrice)}</div>
-                <div className="stat-sub">{data.prices.length} חנויות</div>
+              <div className="stat-item savings-with-icon">
+                <div className="stat-item-text">
+                  <div className="stat-label">ממוצע</div>
+                  <div className="stat-value">{fmt(avgPrice)}</div>
+                  <div className="stat-sub">{data.prices.length} חנויות</div>
+                </div>
+                <span className="stat-icon-wrap stat-icon-wrap-plain">
+                  <img src="/icons/avg-calculator.png" alt="" aria-hidden />
+                </span>
               </div>
-              <div className="stat-item savings">
-                <div className="stat-label">חסכון</div>
-                <div className="stat-value">{fmt(savings)}</div>
-                <div className="stat-sub">{savingsPct}%</div>
+              <div className="stat-item savings savings-with-icon">
+                <div className="stat-item-text">
+                  <div className="stat-label">חסכון</div>
+                  <div className="stat-value">{fmt(savings)}</div>
+                  <div className="stat-sub">{savingsPct}%</div>
+                </div>
+                <span className="stat-icon-wrap">
+                  <img src="/icons/piggy-bank.webp" alt="" aria-hidden />
+                </span>
               </div>
             </div>
 
@@ -364,52 +403,45 @@ export function ProductPage() {
               )}
             </div>
 
-            {/* City filter */}
+            {/* City filter — a single input, always editable. It used to switch to a
+                read-only "chip" display the instant cityFilter became truthy, which
+                happened after the very first keystroke — so typing a second letter was
+                impossible. The clear button now just overlays the input instead. */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-              {cityFilter ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
-                  <div style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    background: 'var(--green-50)', border: '1.5px solid var(--green-200)',
-                    borderRadius: 20, padding: '5px 10px',
-                    fontSize: 13, fontWeight: 600, color: 'var(--green-700)',
-                  }}>
-                    <MapPin size={13} strokeWidth={2} />
-                    {cityFilter}
-                    <button
-                      onClick={() => { setCityFilter(''); saveCityFilter(''); }}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center',
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: 'var(--green-600)', padding: 0, marginInlineStart: 2,
-                      }}
-                      aria-label="הסר סינון עיר"
-                    >
-                      <X size={13} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <MapPin size={15} strokeWidth={2} style={{
-                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                    color: 'var(--ink-400)', pointerEvents: 'none',
-                  }} />
-                  <input
-                    type="text"
-                    placeholder="סנן לפי עיר..."
-                    value={cityFilter}
-                    onChange={e => { setCityFilter(e.target.value); saveCityFilter(e.target.value); }}
+              <div style={{ position: 'relative', flex: 1 }}>
+                <MapPin size={15} strokeWidth={2} style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  color: 'var(--ink-400)', pointerEvents: 'none',
+                }} />
+                <input
+                  type="text"
+                  placeholder="סנן לפי עיר..."
+                  value={cityFilter}
+                  onChange={e => { setCityFilter(e.target.value); saveCityFilter(e.target.value); }}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    padding: cityFilter ? '10px 36px' : '10px 36px 10px 12px',
+                    border: '1.5px solid var(--line)', borderRadius: 'var(--r-lg)',
+                    fontSize: 14, background: 'var(--surface)', color: 'var(--ink-900)',
+                    fontFamily: 'var(--font-sans)', outline: 'none',
+                  }}
+                />
+                {cityFilter && (
+                  <button
+                    onClick={() => { setCityFilter(''); saveCityFilter(''); }}
                     style={{
-                      width: '100%', boxSizing: 'border-box',
-                      padding: '10px 36px 10px 12px',
-                      border: '1.5px solid var(--line)', borderRadius: 'var(--r-lg)',
-                      fontSize: 14, background: 'var(--surface)', color: 'var(--ink-900)',
-                      fontFamily: 'var(--font-sans)', outline: 'none',
+                      position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: 'var(--surface-200)', border: 'none', cursor: 'pointer',
+                      color: 'var(--ink-500)', padding: 0,
                     }}
-                  />
-                </div>
-              )}
+                    aria-label="הסר סינון עיר"
+                  >
+                    <X size={12} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
               <button
                 onClick={handleGps}
                 disabled={gpsLoading}
@@ -484,6 +516,36 @@ export function ProductPage() {
                           עודכן לפני {timeAgo(row.price_updated_at)}
                         </div>
                       )}
+                      {/* Distance needs the store's own coordinates, which aren't geocoded
+                          yet (see project notes) — this will start appearing on its own
+                          once that runs, with no further change needed here. */}
+                      {myCoords && row.latitude != null && row.longitude != null && (
+                        <div className="compare-row-city" style={{ color: 'var(--ink-400)' }}>
+                          {distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude).toFixed(1)} ק״מ ממך
+                        </div>
+                      )}
+                      <div className="compare-row-nav">
+                        <a
+                          href={wazeUrl(row)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          aria-label={`נווט בוויז ל-${row.store_name || row.chain_name}`}
+                        >
+                          <Navigation size={10} strokeWidth={2} />
+                          Waze
+                        </a>
+                        <a
+                          href={googleMapsUrl(row)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          aria-label={`נווט בגוגל מפות ל-${row.store_name || row.chain_name}`}
+                        >
+                          <MapPin size={10} strokeWidth={2} />
+                          Maps
+                        </a>
+                      </div>
                     </div>
 
                     <div className="compare-row-right">
