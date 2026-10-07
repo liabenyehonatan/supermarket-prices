@@ -27,7 +27,7 @@ function BuildBasketIcon() {
   return <img src="/icons/basket-plant.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
 }
 
-import { searchProducts, compareProduct, fetchCities } from '../api/client';
+import { searchProducts, cheapestPricesBatch, fetchCities } from '../api/client';
 import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
 import { ChainCarousel } from '../components/ChainCarousel';
@@ -78,7 +78,7 @@ const POPULAR: { label: string; q: string }[] = [
   { label: 'גבינה צהובה', q: 'גבינה' },
 ];
 
-type SearchTab = 'text' | 'barcode' | 'image';
+type SearchTab = 'text' | 'barcode';
 
 /* ── helpers ──────────────────────────────────────────────── */
 function fmt(p: number | string) {
@@ -167,28 +167,36 @@ function BarcodePanel({ onSearch }: { onSearch: (q: string) => void }) {
 
   return (
     <div className="barcode-panel">
-      {/* Camera viewfinder */}
-      {scanning && (
-        <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden',
-                      background: '#000', marginBottom: 16, aspectRatio: '4/3' }}>
-          <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay muted playsInline />
-          {/* Scan frame overlay */}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-            <div style={{ width: 200, height: 120, border: '2px solid rgba(255,255,255,0.9)', borderRadius: 8,
-                          boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }} />
-          </div>
-          <button
-            onClick={stopScan}
-            style={{ position: 'absolute', top: 10, insetInlineEnd: 10,
-                     background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
-                     width: 36, height: 36, display: 'flex', alignItems: 'center',
-                     justifyContent: 'center', cursor: 'pointer', color: '#fff' }}
-            aria-label="סגור מצלמה"
-          >
-            <X size={18} strokeWidth={2.5} />
-          </button>
+      {/* The video element stays mounted at all times (just hidden via CSS when not
+          scanning) so videoRef.current is already attached the instant startScan runs.
+          Conditionally rendering it on `scanning` left a render race: setScanning(true)
+          doesn't mount the <video> until the next render, but startScan tried to use
+          videoRef.current in the same tick — it was still null, so the camera call
+          silently failed. */}
+      <div
+        style={{
+          position: 'relative', borderRadius: 12, overflow: 'hidden',
+          background: '#000', marginBottom: 16, aspectRatio: '4/3',
+          display: scanning ? 'block' : 'none',
+        }}
+      >
+        <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay muted playsInline />
+        {/* Scan frame overlay */}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ width: 200, height: 120, border: '2px solid rgba(255,255,255,0.9)', borderRadius: 8,
+                        boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }} />
         </div>
-      )}
+        <button
+          onClick={stopScan}
+          style={{ position: 'absolute', top: 10, insetInlineEnd: 10,
+                   background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
+                   width: 36, height: 36, display: 'flex', alignItems: 'center',
+                   justifyContent: 'center', cursor: 'pointer', color: '#fff' }}
+          aria-label="סגור מצלמה"
+        >
+          <X size={18} strokeWidth={2.5} />
+        </button>
+      </div>
       {!scanning && (
         <div className="barcode-visual" aria-hidden>
           <div className="barcode-bars">
@@ -206,7 +214,7 @@ function BarcodePanel({ onSearch }: { onSearch: (q: string) => void }) {
       )}
       {/* Camera scan button */}
       <button
-        className={`btn ${scanning ? 'btn-secondary' : 'btn-primary'} btn-full`}
+        className={`btn ${scanning ? 'btn-secondary' : 'btn-primary btn-compare'} btn-full`}
         style={{ marginBottom: 12, gap: 8 }}
         onClick={scanning ? stopScan : startScan}
       >
@@ -238,29 +246,6 @@ function BarcodePanel({ onSearch }: { onSearch: (q: string) => void }) {
   );
 }
 
-function ImagePanel() {
-  const fileRef = useRef<HTMLInputElement>(null);
-  return (
-    <div className="image-upload-panel">
-      <input ref={fileRef} type="file" accept="image/*" className="sr-only" aria-label="העלה תמונת מוצר" />
-      <div
-        className="image-drop-zone"
-        onClick={() => fileRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
-        aria-label="העלה תמונה לזיהוי מוצר"
-      >
-        <div className="image-drop-zone-icon">
-          <Camera size={28} strokeWidth={1.5} />
-        </div>
-        <div className="image-drop-zone-title">העלה תמונת מוצר</div>
-        <div className="image-drop-zone-sub">גרור לכאן, לחץ לבחירה, או שלח מהאלבום</div>
-      </div>
-    </div>
-  );
-}
-
 /* ── main component ───────────────────────────────────────── */
 export function SearchPage() {
   const navigate = useNavigate();
@@ -275,10 +260,12 @@ export function SearchPage() {
   const [error, setError]     = useState<string | null>(null);
   const [cheapest, setCheapest] = useState<Record<string, number>>(() => initialSnap.current?.cheapest ?? {});
   const [locationMode, setLocationMode] = useState<'none' | 'city'>('none');
-  const [cityInput, setCityInput] = useState(readCityFilter);
+  // City and chain filters also live in the URL (?city= / ?supermarket=) so a
+  // refresh or a shared link keeps them; sessionStorage carries them across pages.
+  const [cityInput, setCityInput] = useState(() => searchParams.get('city') ?? readCityFilter());
   const [cities, setCities] = useState<string[]>([]);
   const [cityFocused, setCityFocused] = useState(false);
-  const [chainFilter, setChainFilter] = useState<string>(readChainFilter);
+  const [chainFilter, setChainFilter] = useState<string>(() => searchParams.get('supermarket') ?? readChainFilter());
   const [focused, setFocused] = useState(false);
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -318,6 +305,8 @@ export function SearchPage() {
   useEffect(() => {
     const q = searchParams.get('q') ?? '';
     setQuery(q);
+    setChainFilter(searchParams.get('supermarket') ?? sessionStorage.getItem('chainFilter') ?? '');
+    setCityInput(searchParams.get('city') ?? sessionStorage.getItem('cityFilter') ?? '');
     const restore = initialSnap.current;
     if (restore && restore.q === q) {
       // Came back from a product page: the results are already here, just restore the scroll
@@ -358,19 +347,16 @@ export function SearchPage() {
     };
   }, [searchParams]);
 
-  // Fetch cheapest price per visible result
+  // Fetch the cheapest price for every visible result in a single request,
+  // instead of one /compare call per product.
   useEffect(() => {
-    const missing = results.filter(p => cheapest[p.barcode] == null);
+    const missing = results.filter(p => cheapest[p.barcode] == null).map(p => p.barcode);
     if (!missing.length) return;
     void (async () => {
-      const map: Record<string, number> = {};
-      await Promise.allSettled(
-        missing.map(async p => {
-          try { map[p.barcode] = (await compareProduct(p.barcode)).cheapest_price; }
-          catch { /* ignore */ }
-        })
-      );
-      setCheapest(prev => ({ ...prev, ...map }));
+      try {
+        const map = await cheapestPricesBatch(missing);
+        setCheapest(prev => ({ ...prev, ...map }));
+      } catch { /* ignore — results just keep their skeleton price */ }
     })();
   }, [results]);
 
@@ -387,14 +373,28 @@ export function SearchPage() {
     }, 320);
   }
 
+  function setCityUrlParam(city: string) {
+    setSearchParams(prev => {
+      const params = new URLSearchParams(prev);
+      if (city) params.set('city', city);
+      else params.delete('city');
+      return params;
+    }, { replace: true });
+  }
+
   function saveCity(city: string) {
     setCityInput(city);
-    if (!city || cities.includes(city)) saveCityFilter(city);
+    // Only commit a city that's empty or an exact match — not every keystroke while typing
+    if (!city || cities.includes(city)) {
+      saveCityFilter(city);
+      setCityUrlParam(city);
+    }
   }
 
   const selectCity = useCallback((city: string) => {
     setCityInput(city);
     saveCityFilter(city);
+    setCityUrlParam(city);
     setCityFocused(false);
     setLocationMode('none');
   }, []);
@@ -407,6 +407,12 @@ export function SearchPage() {
     const next = chainFilter === name ? '' : name;
     setChainFilter(next);
     saveChainFilter(next);
+    setSearchParams(prev => {
+      const params = new URLSearchParams(prev);
+      if (next) params.set('supermarket', next);
+      else params.delete('supermarket');
+      return params;
+    }, { replace: true });
   }
 
   // The dropdown is a preview; closing it reveals the full, scrollable results list
@@ -624,7 +630,6 @@ export function SearchPage() {
               {([
                 { id: 'text' as SearchTab,    icon: <Search size={14} strokeWidth={2} />,   label: 'חיפוש טקסט' },
                 { id: 'barcode' as SearchTab, icon: <Barcode size={14} strokeWidth={2} />,  label: 'ברקוד' },
-                { id: 'image' as SearchTab,   icon: <Camera size={14} strokeWidth={2} />,   label: 'תמונה' },
               ] as { id: SearchTab; icon: React.ReactNode; label: string }[]).map(t => (
                 <button
                   key={t.id}
@@ -669,7 +674,6 @@ export function SearchPage() {
             )}
 
             {/* Image */}
-            {tab === 'image' && <ImagePanel />}
           </div>
 
           {/* Skeleton dropdown while loading */}
@@ -901,6 +905,7 @@ export function SearchPage() {
 
                         <ChevronLeft
                           size={18} strokeWidth={2} color="var(--ink-300)"
+                          className="product-card-chevron"
                           style={{ flexShrink: 0 }}
                         />
                       </div>
