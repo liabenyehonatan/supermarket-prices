@@ -284,6 +284,8 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
 )
 async def compare_basket(
     items: List[BasketItem],
+    city: Optional[str] = Query(None, description="Only stores whose city contains this text"),
+    chain: Optional[str] = Query(None, description="Only stores of this chain (exact name)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -297,6 +299,9 @@ async def compare_basket(
         {"barcode": "11210000094", "quantity": 2},
         {"barcode": "7290000066885", "quantity": 1}
     ]
+
+    Optional query params narrow the stores compared, matching the
+    filters of the product compare page: ?city=הרצליה&chain=שופרסל
     """
 
     if not items:
@@ -325,6 +330,11 @@ async def compare_basket(
             ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores
         )
     )
+    if city and city.strip():
+        # Same "contains" match the product page uses
+        prices_query = prices_query.where(Store.city.icontains(city.strip(), autoescape=True))
+    if chain and chain.strip():
+        prices_query = prices_query.where(Chain.name == chain.strip())
 
     prices_result = await db.execute(prices_query)
     all_price_rows = prices_result.all()
