@@ -1,0 +1,84 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: supermarket_prices
+      POSTGRES_USER: supermarket
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supermarket123}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supermarket -d supermarket_prices"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://supermarket:${POSTGRES_PASSWORD:-supermarket123}@db:5432/supermarket_prices
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - dumps:/app/dumps
+
+  celery:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://supermarket:${POSTGRES_PASSWORD:-supermarket123}@db:5432/supermarket_prices
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.celery_app worker --beat --loglevel=info
+    volumes:
+      - dumps:/app/dumps
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - frontend
+
+volumes:
+  pgdata:
+  dumps:

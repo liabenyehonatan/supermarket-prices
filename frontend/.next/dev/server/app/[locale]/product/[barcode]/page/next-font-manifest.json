@@ -1,0 +1,15 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/src/app/[locale]/product/[barcode]/page": [
+      "static/media/4c42083b9bffcb01-s.p.01zus3.tz2k99.woff2",
+      "static/media/1a072933b891bea6-s.p.0ag2x0_84lov2.woff2",
+      "static/media/86c8c58929c52757-s.p.0.9xmnne063hw.woff2",
+      "static/media/1c9ef42b327f16c7-s.p.05.1ccstyjr3y.woff2",
+      "static/media/36363bfb06833f56-s.p.0-pny06~-x26a.woff2",
+      "static/media/a73419dd2ba2d841-s.p.0x-0vqtj_fzf1.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

@@ -1,0 +1,92 @@
+module.exports = [
+"[project]/messages/he.json.[json].cjs [app-rsc] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+module.exports = {
+    "nav": {
+        "basket": "סל קניות",
+        "search": "חיפוש מוצרים",
+        "howItWorks": "איך זה עובד",
+        "language": "English"
+    },
+    "hero": {
+        "tagline": "קנה חכם. חסוך אמיתי.",
+        "subtitle": "השווה מחירי סל קניות מלא בין כל רשתות הסופרמרקט בישראל — בזמן אמת.",
+        "basketTab": "השוואת סל קניות",
+        "searchTab": "חיפוש מוצר",
+        "searchPlaceholder": "חפש מוצר לפי שם או ברקוד...",
+        "basketPlaceholder": "הוסף מוצרים לסל...",
+        "compare": "השווה מחירים",
+        "addToBasket": "הוסף לסל",
+        "scanBarcode": "סרוק ברקוד"
+    },
+    "stats": {
+        "products": "מוצרים",
+        "chains": "רשתות",
+        "stores": "סניפים",
+        "updatedEvery": "עדכון כל 3 שעות"
+    },
+    "how": {
+        "title": "איך זה עובד?",
+        "step1Title": "בנה את הסל שלך",
+        "step1Desc": "חפש מוצרים לפי שם או סרוק ברקוד",
+        "step2Title": "בחר את הסניף הקרוב",
+        "step2Desc": "סנן לפי מרחק, רשת או מחיר",
+        "step3Title": "קנה וחסוך",
+        "step3Desc": "ראה כמה תחסוך בכל חנות ועבור לאתר המשלוחים"
+    },
+    "basket": {
+        "title": "הסל שלי",
+        "empty": "הסל ריק — חפש מוצר כדי להתחיל",
+        "items": "פריטים",
+        "compareAll": "השווה בכל הרשתות",
+        "clear": "נקה סל",
+        "saveBasket": "שמור סל",
+        "shareBasket": "שתף סל",
+        "cheapestStore": "הזול ביותר",
+        "savings": "חיסכון",
+        "missing": "חסרים",
+        "goToStore": "עבור לחנות",
+        "transferBasket": "העבר סל לאתר"
+    },
+    "product": {
+        "price": "מחיר",
+        "unitPrice": "מחיר ליחידה",
+        "brand": "מותג",
+        "manufacturer": "יצרן",
+        "barcode": "ברקוד",
+        "nutrition": "ערכים תזונתיים",
+        "calories": "קלוריות",
+        "protein": "חלבון",
+        "carbs": "פחמימות",
+        "fat": "שומן",
+        "noImage": "אין תמונה",
+        "priceHistory": "היסטוריית מחירים",
+        "priceAlert": "התראת מחיר",
+        "smartSub": "תחליף חכם",
+        "addToBasket": "הוסף לסל"
+    },
+    "filters": {
+        "sortBy": "מיין לפי",
+        "lowestPrice": "מחיר נמוך",
+        "distance": "מרחק",
+        "chain": "רשת",
+        "allChains": "כל הרשתות",
+        "inStock": "יש במלאי",
+        "withPromo": "עם מבצע"
+    },
+    "common": {
+        "nis": "₪",
+        "km": "ק\"מ",
+        "loading": "טוען...",
+        "error": "שגיאה בטעינת הנתונים",
+        "retry": "נסה שוב",
+        "close": "סגור",
+        "save": "שמור",
+        "cancel": "ביטול",
+        "notFound": "לא נמצאו תוצאות"
+    }
+};
+}),
+];
+
+//# sourceMappingURL=messages_he_json_%5Bjson%5D_cjs_138befg._.js.map

@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/liabenyehonatan/supermarket-prices/frontend/src/app/layout.tsx"],"sourcesContent":["// Root layout — just renders children. Locale-specific layout is in [locale]/layout.tsx\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return children;\n}\n"],"names":["RootLayout","children"],"mappings":"AAAA,wFAAwF;;;;;AACzE,SAASA,WAAW,EAAEC,QAAQ,EAAiC;IAC5E,OAAOA;AACT"}}]
+}

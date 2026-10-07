@@ -2,8 +2,8 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
-  ChevronDown, ChevronUp, TrendingDown, AlertCircle,
-  Tag, Truck, CheckCircle2, ExternalLink,
+  ChevronDown, ChevronUp, TrendingUp, AlertCircle,
+  Tag, Truck, CheckCircle2, ExternalLink, Navigation, MapPin,
 } from 'lucide-react';
 import { compareBasket } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
@@ -11,7 +11,41 @@ import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { BasketCompareResponse, BasketStoreTotal } from '../types';
 
+function CartPercentIcon() {
+  // Shopping cart with a clear percent sign inside, drawn in currentColor so it follows
+  // the button's own color (including on hover), unlike a pasted image.
+  return (
+    <svg width="26" height="26" viewBox="0 0 28 28" fill="none" aria-hidden
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {/* handle */}
+      <path d="M2 3 H5.5 L7 6.5" />
+      {/* basket */}
+      <path d="M7 6.5 H25 L22 15.5 H10.5 Z" />
+      <line x1="7" y1="6.5" x2="10.5" y2="15.5" />
+      {/* wheels */}
+      <circle cx="12.5" cy="22.5" r="2" />
+      <circle cx="20" cy="22.5" r="2" />
+      {/* percent sign, clearly inside the basket */}
+      <line x1="12.3" y1="13" x2="19.3" y2="8.5" />
+      <circle cx="13" cy="8.8" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="18.7" cy="12.7" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
+
+// Same navigation links as the product page's store rows — Waze and Google Maps
+// both accept a free-text destination, so no store coordinates are needed.
+function storeNavQuery(store: { name: string; address?: string; city?: string; chain: { name: string } }): string {
+  return [store.name, store.address, store.city].filter(Boolean).join(', ') || store.chain.name;
+}
+function wazeUrl(store: Parameters<typeof storeNavQuery>[0]): string {
+  return `https://waze.com/ul?q=${encodeURIComponent(storeNavQuery(store))}&navigate=yes`;
+}
+function googleMapsUrl(store: Parameters<typeof storeNavQuery>[0]): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(storeNavQuery(store))}`;
+}
 
 /* ── Result card ─────────────────────────────────────────── */
 function ResultCard({ store, rank, maxTotal, minTotal }: {
@@ -87,6 +121,28 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
                 {store.items_missing} חסר
               </span>
             )}
+          </div>
+          <div className="compare-row-nav">
+            <a
+              href={wazeUrl(store.store)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              aria-label={`נווט בוויז ל-${store.store.name}`}
+            >
+              <Navigation size={10} strokeWidth={2} />
+              Waze
+            </a>
+            <a
+              href={googleMapsUrl(store.store)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              aria-label={`נווט בגוגל מפות ל-${store.store.name}`}
+            >
+              <MapPin size={10} strokeWidth={2} />
+              Maps
+            </a>
           </div>
         </div>
 
@@ -288,7 +344,7 @@ export function BasketPage() {
         {/* Compare CTA */}
         {items.length > 0 && (
           <button
-            className="btn btn-primary btn-lg btn-full"
+            className="btn btn-primary btn-compare btn-lg btn-full"
             style={{ marginBottom: 32 }}
             onClick={handleCompare}
             disabled={loading}
@@ -296,7 +352,7 @@ export function BasketPage() {
             {loading
               ? 'משווה מחירים...'
               : <>
-                  <TrendingDown size={18} strokeWidth={2} />
+                  <CartPercentIcon />
                   השווה מחירים עבור {totalItems} פריטים
                 </>
             }
@@ -336,7 +392,7 @@ export function BasketPage() {
             <div className="section-header" style={{ marginBottom: 16 }}>
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <TrendingDown size={20} strokeWidth={2} color="var(--green-600)" />
+                  <TrendingUp size={20} strokeWidth={2} color="var(--green-600)" />
                   {results.stores.length} רשתות · ממוין מהזול ליקר
                 </div>
                 <div className="section-subtitle">

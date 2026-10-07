@@ -13,6 +13,7 @@ export interface PriceAtStore {
   store_id: number;
   store_name: string;
   store_city?: string;
+  store_address?: string;
   chain_name: string;
   price: number;
   unit_price?: number;

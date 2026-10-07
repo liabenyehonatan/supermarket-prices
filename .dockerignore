@@ -1,0 +1,9 @@
+frontend/
+.git/
+.env
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dumps/
+*.egg-info/
