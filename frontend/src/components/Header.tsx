@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { Search, ShoppingBasket } from 'lucide-react';
 import { SaliLogo } from './SaliLogo';
 import { LocationChip } from './LocationChip';
@@ -26,6 +26,12 @@ export function Header() {
             סלי<span>.</span>
           </span>
         </button>
+
+        <nav className="header-nav" aria-label="ניווט ראשי">
+          <NavLink to="/" end className={({ isActive }) => `header-nav-link${isActive ? ' active' : ''}`}>בית</NavLink>
+          <NavLink to="/basket" className={({ isActive }) => `header-nav-link${isActive ? ' active' : ''}`}>הסלים שלי</NavLink>
+          <NavLink to="/scan" className={({ isActive }) => `header-nav-link${isActive ? ' active' : ''}`}>סריקת ברקוד</NavLink>
+        </nav>
 
         {!isOnSearch && (
           <div className="header-search">

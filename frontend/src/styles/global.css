@@ -2658,3 +2658,22 @@ img { max-width: 100%; display: block; }
 .example-prices { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
 .example-range { font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--ink-900); white-space: nowrap; }
 .example-save { font-size: var(--fs-12); font-weight: var(--fw-semibold); color: var(--green-700); background: var(--green-100); padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+
+/* Chain filter: say what is active, and how to undo it */
+.chain-active-note {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  margin-bottom: var(--sp-6); padding: 10px 14px; border-radius: var(--r-lg);
+  background: var(--green-100); color: var(--green-700); font-size: var(--fs-13);
+}
+.chain-active-note button { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; border: none; background: none; color: inherit; font: inherit; font-weight: var(--fw-semibold); cursor: pointer; text-decoration: underline; }
+.chain-carousel .chain-logo-name { font-size: 12px; }
+
+/* Desktop: keep the home column readable, and give the header real navigation */
+.header-nav { display: none; }
+@media (min-width: 768px) {
+  .home-container { max-width: 760px; }
+  .header-nav { display: flex; align-items: center; gap: var(--sp-1); margin-inline-start: var(--sp-6); }
+  .header-nav-link { padding: 8px 14px; border-radius: var(--r-full); font-size: var(--fs-14); font-weight: var(--fw-medium); color: var(--ink-600); text-decoration: none; }
+  .header-nav-link:hover { background: var(--surface-100); color: var(--ink-900); }
+  .header-nav-link.active { color: var(--green-700); background: var(--green-100); }
+}
