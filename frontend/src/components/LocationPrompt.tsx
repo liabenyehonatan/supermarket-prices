@@ -1,19 +1,25 @@
-import { useEffect } from 'react';
-import { MapPinOff, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MapPin, MapPinOff, X } from 'lucide-react';
+import { fetchCities } from '../api/client';
+import { CityPicker } from './CityPicker';
 import type { LocationProblem } from '../lib/location';
 
 const COPY: Record<LocationProblem, { title: string; body: string }> = {
+  ask: {
+    title: 'למצוא סופרים לידך?',
+    body: 'נשתמש במיקום שלך רק כדי לסנן סניפים ולהראות מרחק. אחרי הלחיצה המכשיר ישאל אם לאשר.',
+  },
   denied: {
     title: 'צריך להפעיל שירותי מיקום',
-    body: 'הגישה למיקום חסומה. כדי לסנן לפי המיקום הנוכחי, אפשרו גישה למיקום לאתר בהגדרות הדפדפן (סמל המנעול ליד הכתובת) ונסו שוב.',
+    body: 'הגישה למיקום חסומה במכשיר. אפשר לבחור עיר ידנית, או לאשר מיקום ולנסות שוב.',
   },
   unavailable: {
     title: 'שירותי המיקום כבויים',
-    body: 'לא הצלחנו לקבל את המיקום. הפעילו את שירותי המיקום (GPS) בהגדרות המכשיר ונסו שוב.',
+    body: 'לא הצלחנו לקבל את המיקום. אפשר לבחור עיר ידנית או לנסות שוב.',
   },
   timeout: {
     title: 'איתור המיקום לקח יותר מדי זמן',
-    body: 'ודאו ששירותי המיקום מופעלים במכשיר ונסו שוב.',
+    body: 'אפשר לבחור עיר ידנית או לנסות שוב.',
   },
   unsupported: {
     title: 'המכשיר לא תומך באיתור מיקום',
@@ -25,11 +31,19 @@ const COPY: Record<LocationProblem, { title: string; body: string }> = {
   },
 };
 
-export function LocationPrompt({ problem, onRetry, onClose }: {
+export function LocationPrompt({ problem, onRetry, onConfirm, onPickCity, suggestedCity, onClose }: {
   problem: LocationProblem | null;
   onRetry: () => void;
+  onConfirm: () => void;
+  onPickCity: (city: string) => void;
+  suggestedCity?: string;
   onClose: () => void;
 }) {
+  const [cities, setCities] = useState<string[]>([]);
+  useEffect(() => {
+    if (problem && cities.length === 0) fetchCities().then(setCities).catch(() => {});
+  }, [problem, cities.length]);
+
   useEffect(() => {
     if (!problem) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -39,7 +53,8 @@ export function LocationPrompt({ problem, onRetry, onClose }: {
 
   if (!problem) return null;
   const { title, body } = COPY[problem];
-  const canRetry = problem !== 'unsupported';
+  const isAsk = problem === 'ask';
+  const suggestion = suggestedCity && cities.includes(suggestedCity) ? suggestedCity : '';
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -53,14 +68,26 @@ export function LocationPrompt({ problem, onRetry, onClose }: {
         <button className="modal-close" onClick={onClose} aria-label="סגור">
           <X size={18} strokeWidth={2} />
         </button>
-        <div className="modal-icon"><MapPinOff size={26} strokeWidth={1.8} /></div>
+        <div className="modal-icon">
+          {isAsk ? <MapPin size={26} strokeWidth={1.8} /> : <MapPinOff size={26} strokeWidth={1.8} />}
+        </div>
         <div id="location-prompt-title" className="modal-title">{title}</div>
         <div className="modal-body">{body}</div>
+        <div className="modal-fields">
+        {!isAsk && suggestion && (
+          <button className="btn btn-secondary btn-full" onClick={() => onPickCity(suggestion)}>
+            להשתמש ב{suggestion}?
+          </button>
+        )}
+        <CityPicker value="" cities={cities} onChange={onPickCity} placeholder="בחרו עיר ידנית..." />
+        </div>
         <div className="modal-actions">
-          {canRetry && (
+          {isAsk ? (
+            <button className="btn btn-primary btn-full" onClick={onConfirm}>אפשר מיקום</button>
+          ) : problem !== 'unsupported' && (
             <button className="btn btn-primary btn-full" onClick={onRetry}>נסו שוב</button>
           )}
-          <button className="btn btn-secondary btn-full" onClick={onClose}>סגור</button>
+          <button className="btn btn-secondary btn-full" onClick={onClose}>{isAsk ? 'לא עכשיו' : 'סגור'}</button>
         </div>
       </div>
     </div>

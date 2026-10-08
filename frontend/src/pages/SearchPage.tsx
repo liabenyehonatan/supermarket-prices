@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Search, X, ChevronLeft, Barcode, Camera,
-  MapPin, Navigation, TrendingUp, VideoOff, Plus, Check,
+  Search, X, ChevronLeft, Barcode,
+  MapPin, Plus, Check,
 } from 'lucide-react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
 
 function SearchProductIcon() {
   // Reference illustration: magnifying glass with an apple
@@ -27,16 +26,16 @@ function BuildBasketIcon() {
   return <img src="/icons/basket-plant.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
 }
 
-import { searchProducts, cheapestPricesBatch, fetchCities } from '../api/client';
+import { searchProducts, cheapestPricesBatch } from '../api/client';
 import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
 import { ChainCarousel } from '../components/ChainCarousel';
-import { LocationPrompt } from '../components/LocationPrompt';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { FEATURED_CHAINS, matchCity, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
-import { useCurrentCity } from '../lib/location';
+import { timeAgo } from '../lib/basketCompare';
+import { readRecent, type RecentProduct } from '../lib/recent';
+import { FEATURED_CHAINS, readChainFilter, saveChainFilter } from '../lib/filters';
 
 /* ── constants ────────────────────────────────────────────── */
 const PAGE_SIZE = 20;
@@ -77,8 +76,6 @@ const POPULAR: { label: string; q: string }[] = [
   { label: 'יוגורט', q: 'יוגורט' },
   { label: 'גבינה צהובה', q: 'גבינה' },
 ];
-
-type SearchTab = 'text' | 'barcode';
 
 /* ── helpers ──────────────────────────────────────────────── */
 function fmt(p: number | string) {
@@ -121,150 +118,36 @@ function QuickAddButton({ product, small }: { product: Product; small?: boolean 
   );
 }
 
-function BarcodePanel({ onSearch }: { onSearch: (q: string) => void }) {
-  const [val, setVal] = useState('');
-  const [scanning, setScanning] = useState(false);
-  const [camError, setCamError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
-
-  const stopScan = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-    readerRef.current = null;
-    setScanning(false);
-  }, []);
-
-  const startScan = useCallback(async () => {
-    setCamError(null);
-    setScanning(true);
-    try {
-      const reader = new BrowserMultiFormatReader();
-      readerRef.current = reader;
-      const controls = await reader.decodeFromConstraints(
-        { video: { facingMode: 'environment' } },
-        videoRef.current!,
-        (result, err) => {
-          if (result) {
-            stopScan();
-            onSearch(result.getText());
-          }
-          if (err && !(err.name === 'NotFoundException')) {
-            setCamError('לא הצלחנו לגשת למצלמה');
-            stopScan();
-          }
-        }
-      );
-      controlsRef.current = controls;
-    } catch {
-      setCamError('לא ניתן לגשת למצלמה — אשרי גישה בדפדפן');
-      setScanning(false);
-    }
-  }, [onSearch, stopScan]);
-
-  useEffect(() => () => { controlsRef.current?.stop(); }, []);
-
-  return (
-    <div className="barcode-panel">
-      {/* The video element stays mounted at all times (just hidden via CSS when not
-          scanning) so videoRef.current is already attached the instant startScan runs.
-          Conditionally rendering it on `scanning` left a render race: setScanning(true)
-          doesn't mount the <video> until the next render, but startScan tried to use
-          videoRef.current in the same tick — it was still null, so the camera call
-          silently failed. */}
-      <div
-        style={{
-          position: 'relative', borderRadius: 12, overflow: 'hidden',
-          background: '#000', marginBottom: 16, aspectRatio: '4/3',
-          display: scanning ? 'block' : 'none',
-        }}
-      >
-        <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay muted playsInline />
-        {/* Scan frame overlay */}
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <div style={{ width: 200, height: 120, border: '2px solid rgba(255,255,255,0.9)', borderRadius: 8,
-                        boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }} />
-        </div>
-        <button
-          onClick={stopScan}
-          style={{ position: 'absolute', top: 10, insetInlineEnd: 10,
-                   background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
-                   width: 36, height: 36, display: 'flex', alignItems: 'center',
-                   justifyContent: 'center', cursor: 'pointer', color: '#fff' }}
-          aria-label="סגור מצלמה"
-        >
-          <X size={18} strokeWidth={2.5} />
-        </button>
-      </div>
-      {!scanning && (
-        <div className="barcode-visual" aria-hidden>
-          <div className="barcode-bars">
-            {[4,6,3,7,5,8,3,6,5,4,7,6,3,5,8,4,6,3].map((h, i) => (
-              <div key={i} className="barcode-bar" style={{ height: h * 3.5 }} />
-            ))}
-          </div>
-          <span style={{ fontSize: 11, color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>
-            729000006685
-          </span>
-        </div>
-      )}
-      {camError && (
-        <div style={{ color: 'var(--red-500)', fontSize: 13, marginBottom: 10, textAlign: 'center' }}>{camError}</div>
-      )}
-      {/* Camera scan button */}
-      <button
-        className={`btn ${scanning ? 'btn-secondary' : 'btn-primary btn-compare'} btn-full`}
-        style={{ marginBottom: 12, gap: 8 }}
-        onClick={scanning ? stopScan : startScan}
-      >
-        {scanning ? <><VideoOff size={16} strokeWidth={2} /> עצור סריקה</> : <><Camera size={16} strokeWidth={2} /> סרוק ברקוד עם מצלמה</>}
-      </button>
-      {/* Manual entry */}
-      <div className="barcode-input-row">
-        <input
-          type="number"
-          className="barcode-input"
-          placeholder="או הקלד מספר ברקוד..."
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && val && onSearch(val)}
-          aria-label="ברקוד מוצר"
-        />
-        <button
-          className="btn btn-primary"
-          disabled={!val}
-          onClick={() => val && onSearch(val)}
-          style={{ flexShrink: 0, gap: 6 }}
-        >
-          <Barcode size={16} strokeWidth={2} />
-          חפש
-        </button>
-      </div>
-
-    </div>
-  );
-}
-
 /* ── main component ───────────────────────────────────────── */
 export function SearchPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSnap = useRef<SearchSnapshot | null>(readSnapshot(searchParams.get('q') ?? ''));
+  // "How it works" shows once; afterwards it is only a small link away
+  const [showHow, setShowHow] = useState(() => {
+    try { return localStorage.getItem('sali_seen_how') !== '1'; } catch { return true; }
+  });
+  function closeHow() {
+    setShowHow(false);
+    try { localStorage.setItem('sali_seen_how', '1'); } catch { /* storage blocked — card returns next visit */ }
+  }
+  const { baskets, activeId, setActive } = useBasket();
+  const filledBaskets = baskets.filter(b => b.items.length > 0);
+  const [recent] = useState<RecentProduct[]>(readRecent);
+  const [recentPrices, setRecentPrices] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!recent.length) return;
+    cheapestPricesBatch(recent.map(r => r.barcode)).then(setRecentPrices).catch(() => {});
+  }, [recent]);
   const [query, setQuery]     = useState(searchParams.get('q') ?? '');
-  const [tab, setTab]         = useState<SearchTab>('text');
   const [results, setResults] = useState<Product[]>(() => initialSnap.current?.results ?? []);
   const [hasMore, setHasMore] = useState(() => initialSnap.current?.hasMore ?? false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [cheapest, setCheapest] = useState<Record<string, number>>(() => initialSnap.current?.cheapest ?? {});
-  const [locationMode, setLocationMode] = useState<'none' | 'city'>('none');
   // City and chain filters also live in the URL (?city= / ?supermarket=) so a
   // refresh or a shared link keeps them; sessionStorage carries them across pages.
-  const [cityInput, setCityInput] = useState(() => searchParams.get('city') ?? readCityFilter());
-  const [cities, setCities] = useState<string[]>([]);
-  const [cityFocused, setCityFocused] = useState(false);
   const [chainFilter, setChainFilter] = useState<string>(() => searchParams.get('supermarket') ?? readChainFilter());
   const [focused, setFocused] = useState(false);
   const inputRef  = useRef<HTMLInputElement>(null);
@@ -306,7 +189,6 @@ export function SearchPage() {
     const q = searchParams.get('q') ?? '';
     setQuery(q);
     setChainFilter(searchParams.get('supermarket') ?? sessionStorage.getItem('chainFilter') ?? '');
-    setCityInput(searchParams.get('city') ?? sessionStorage.getItem('cityFilter') ?? '');
     const restore = initialSnap.current;
     if (restore && restore.q === q) {
       // Came back from a product page: the results are already here, just restore the scroll
@@ -360,11 +242,6 @@ export function SearchPage() {
     })();
   }, [results]);
 
-  // Load available cities once
-  useEffect(() => {
-    fetchCities().then(setCities).catch(() => {});
-  }, []);
-
   function handleInput(val: string) {
     setQuery(val);
     if (debounce.current) clearTimeout(debounce.current);
@@ -372,36 +249,6 @@ export function SearchPage() {
       setSearchParams(val.trim() ? { q: val.trim() } : {}, { replace: true });
     }, 320);
   }
-
-  function setCityUrlParam(city: string) {
-    setSearchParams(prev => {
-      const params = new URLSearchParams(prev);
-      if (city) params.set('city', city);
-      else params.delete('city');
-      return params;
-    }, { replace: true });
-  }
-
-  function saveCity(city: string) {
-    setCityInput(city);
-    // Only commit a city that's empty or an exact match — not every keystroke while typing
-    if (!city || cities.includes(city)) {
-      saveCityFilter(city);
-      setCityUrlParam(city);
-    }
-  }
-
-  const selectCity = useCallback((city: string) => {
-    setCityInput(city);
-    saveCityFilter(city);
-    setCityUrlParam(city);
-    setCityFocused(false);
-    setLocationMode('none');
-  }, []);
-
-  // "By current location": fill the city filter from the device's position
-  const onLocatedCity = useCallback((found: string) => selectCity(matchCity(found, cities)), [cities, selectCity]);
-  const { locate, locating, problem: locationProblem, dismiss: dismissLocation } = useCurrentCity(onLocatedCity);
 
   function selectChain(name: string) {
     const next = chainFilter === name ? '' : name;
@@ -479,132 +326,54 @@ export function SearchPage() {
           </div>
         )}
 
-        {/* ── Location panel ────────────────────────────────── */}
-        <div className="location-panel">
-          <button
-            className="location-btn"
-            onClick={locate}
-            disabled={locating}
-            aria-label="סנן לפי המיקום הנוכחי"
-          >
-            <Navigation size={15} strokeWidth={2} />
-            {locating ? 'מאתר מיקום...' : 'לפי מיקום נוכחי'}
-          </button>
-
-          <button
-            className={`location-btn${locationMode === 'city' || cityInput ? ' active' : ''}`}
-            onClick={() => setLocationMode(m => m === 'city' ? 'none' : 'city')}
-            aria-label="חפש לפי עיר"
-          >
-            <MapPin size={15} strokeWidth={2} />
-            {cityInput || 'חפש לפי עיר'}
-            {cityInput && (
-              <span
-                role="button"
-                aria-label="הסר סינון עיר"
-                onClick={e => { e.stopPropagation(); saveCity(''); }}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  marginInlineStart: 4, width: 16, height: 16,
-                  borderRadius: '50%', background: 'var(--green-200)',
-                  color: 'var(--green-700)', flexShrink: 0,
-                }}
-              >
-                <X size={10} strokeWidth={3} />
-              </span>
-            )}
-          </button>
-
-          {locationMode === 'city' && (() => {
-            const q = cityInput.trim();
-            const matched = (q && !cities.includes(q))
-              ? cities.filter(c => c.includes(q)).slice(0, 8)
-              : cities.slice(0, 8);
-            const isValid = !q || cities.includes(q);
-            const showSuggestions = cityFocused && matched.length > 0;
-            return (
-              <div className="location-input-wrap" style={{ position: 'relative' }}>
-                <MapPin className="location-input-icon" size={14} strokeWidth={2} />
-                <input
-                  type="text"
-                  className="location-input"
-                  placeholder="הקלידי שם עיר..."
-                  value={cityInput}
-                  onChange={e => saveCity(e.target.value)}
-                  onFocus={() => setCityFocused(true)}
-                  onBlur={() => setTimeout(() => setCityFocused(false), 180)}
-                  autoFocus
-                  aria-label="עיר לסינון"
-                  style={{ borderColor: !isValid && q ? 'var(--red-400)' : undefined }}
-                />
-                {cityInput && (
-                  <button
-                    onMouseDown={() => { saveCity(''); setCityFocused(false); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer',
-                             color: 'var(--ink-400)', display: 'flex', padding: 4, flexShrink: 0 }}
-                    aria-label="נקה עיר"
-                  >
-                    <X size={13} strokeWidth={2.5} />
-                  </button>
-                )}
-                {/* City suggestions dropdown */}
-                {showSuggestions && (
-                  <div style={{
-                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-                    background: 'var(--surface-0)', border: '1.5px solid var(--line)',
-                    borderRadius: 'var(--r-lg)', boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-                    zIndex: 300, overflow: 'hidden',
-                    backdropFilter: 'none',
-                  }}>
-                    {matched.map((city, i) => (
-                      <button
-                        key={city}
-                        onMouseDown={() => selectCity(city)}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '10px 14px',
-                          borderBottom: i < matched.length - 1 ? '1px solid var(--line)' : 'none',
-                          border: 'none', background: 'transparent', cursor: 'pointer',
-                          textAlign: 'start', fontFamily: 'var(--font-sans)',
-                          fontSize: 14, color: 'var(--ink-900)',
-                        }}
-                      >
-                        <MapPin size={14} strokeWidth={2} color="var(--ink-400)" style={{ flexShrink: 0 }} />
-                        {city}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-
-        {cityInput && cities.includes(cityInput) && (
-          <div className="near-stores-note" role="status" style={{ marginBottom: 12 }}>
-            <MapPin size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-            <span>
-              מסנן חנויות ב-<strong>{cityInput}</strong> — הסינון יחול על כל מוצר שתפתחי
-            </span>
-            <button
-              onClick={() => saveCity('')}
-              style={{
-                marginInlineStart: 'auto', flexShrink: 0,
-                display: 'flex', alignItems: 'center',
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'inherit', opacity: 0.7, padding: 2,
-              }}
-              aria-label="הסר סינון עיר"
-            >
-              <X size={15} strokeWidth={2.5} />
-            </button>
-          </div>
-        )}
-
         {/* ── Search panel ──────────────────────────────────── */}
         <div style={{ position: 'relative' }}>
           <div className="search-panel-box">
-            {/* Tabs */}
+            {/* Text search */}
+            {(
+              <div className="search-hero">
+                <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
+                <input
+                  ref={inputRef}
+                  type="search"
+                  className="search-hero-input"
+                  placeholder="חפשי מוצר, מותג או ברקוד"
+                  value={query}
+                  onChange={e => handleInput(e.target.value)}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setTimeout(() => setFocused(false), 200)}
+                  autoFocus={!hasQuery}
+                  aria-label="חיפוש מוצר"
+                />
+                {hasQuery ? (
+                  <button className="search-hero-clear" onClick={clearSearch} aria-label="נקה חיפוש">
+                    <X size={14} strokeWidth={2.5} />
+                  </button>
+                ) : (
+                  <button className="search-hero-scan" onClick={() => navigate('/scan')} aria-label="סריקת ברקוד" title="סריקת ברקוד">
+                    <Barcode size={20} strokeWidth={1.8} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Quick searches, right under the input */}
+            {!hasQuery && (
+              <div className="suggestions-row search-panel-chips">
+                {POPULAR.map(({ label, q }) => (
+                  <button key={q} className="suggestion-pill" onClick={() => startSearch(q)}>
+                    <Search size={13} strokeWidth={2} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!hasQuery && showHow && (
+              <div className="search-steps-below">
+                <button className="search-steps-close" onClick={closeHow} aria-label="הבנתי, סגור">
+                  <X size={14} strokeWidth={2.5} />
+                </button>
             {/* How it works: three steps in order, so the flow itself carries the meaning */}
             <div className="search-steps">
               <div className="search-steps-label">איך זה עובד</div>
@@ -625,59 +394,15 @@ export function SearchPage() {
                 </li>
               </ol>
             </div>
-
-            <div className="search-tabs" role="tablist" aria-label="שיטת חיפוש">
-              {([
-                { id: 'text' as SearchTab,    icon: <Search size={14} strokeWidth={2} />,   label: 'חיפוש טקסט' },
-                { id: 'barcode' as SearchTab, icon: <Barcode size={14} strokeWidth={2} />,  label: 'ברקוד' },
-              ] as { id: SearchTab; icon: React.ReactNode; label: string }[]).map(t => (
-                <button
-                  key={t.id}
-                  role="tab"
-                  aria-selected={tab === t.id}
-                  className={`search-tab${tab === t.id ? ' active' : ''}`}
-                  onClick={() => setTab(t.id)}
-                >
-                  {t.icon}
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Text search */}
-            {tab === 'text' && (
-              <div className="search-hero">
-                <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
-                <input
-                  ref={inputRef}
-                  type="search"
-                  className="search-hero-input"
-                  placeholder="שם מוצר בעברית, מותג, או ברקוד..."
-                  value={query}
-                  onChange={e => handleInput(e.target.value)}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => setTimeout(() => setFocused(false), 200)}
-                  autoFocus={!hasQuery}
-                  aria-label="חיפוש מוצר"
-                />
-                {hasQuery && (
-                  <button className="search-hero-clear" onClick={clearSearch} aria-label="נקה חיפוש">
-                    <X size={14} strokeWidth={2.5} />
-                  </button>
-                )}
               </div>
             )}
-
-            {/* Barcode */}
-            {tab === 'barcode' && (
-              <BarcodePanel onSearch={q => { setTab('text'); startSearch(q); }} />
+            {!hasQuery && !showHow && (
+              <button className="how-link" onClick={() => setShowHow(true)}>איך זה עובד?</button>
             )}
-
-            {/* Image */}
           </div>
 
           {/* Skeleton dropdown while loading */}
-          {showDropdownSkeleton && tab === 'text' && (
+          {showDropdownSkeleton && (
             <div style={{
               position: 'absolute', top: '100%', left: 0, right: 0,
               background: 'var(--surface)', border: '1.5px solid var(--line)',
@@ -700,7 +425,7 @@ export function SearchPage() {
           )}
 
           {/* Autocomplete dropdown — outside search-panel-box to avoid overflow clipping */}
-          {showDropdown && tab === 'text' && (
+          {showDropdown && (
             <div ref={dropdownRef} style={{
               position: 'absolute', top: '100%', left: 0, right: 0,
               background: 'var(--surface)', border: '1.5px solid var(--line)',
@@ -772,6 +497,57 @@ export function SearchPage() {
         {/* ── Chains carousel ───────────────────────────────── */}
         {!hasQuery && (
           <>
+            {filledBaskets.length > 0 && (
+              <>
+                <div className="section-header" style={{ marginBottom: 12 }}>
+                  <div className="section-title">הסלים שלי</div>
+                </div>
+                <div className="recent-row">
+                  {filledBaskets.map(b => {
+                    const count = b.items.reduce((sum, i) => sum + i.quantity, 0);
+                    return (
+                      <button key={b.id} className="basket-card" onClick={() => { setActive(b.id); navigate('/basket'); }}>
+                        <span className="basket-card-top">
+                          <span className="basket-dot" style={{ background: b.color }} />
+                          <span className="basket-card-name">{b.name}</span>
+                        </span>
+                        <span className="basket-card-meta">{count === 1 ? 'פריט אחד' : `${count} פריטים`}</span>
+                        <span className="basket-card-price">
+                          {b.lastCompare ? `₪${b.lastCompare.total.toFixed(2)}` : 'השוואה ראשונה'}
+                        </span>
+                        <span className="basket-card-meta">
+                          {b.lastCompare ? `נבדק ${timeAgo(b.lastCompare.at)}` : 'לחצי להשוואה'}
+                        </span>
+                        {b.id === activeId && <span className="basket-card-active">פעיל</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {recent.length > 0 && (
+              <>
+                <div className="section-header" style={{ marginBottom: 12 }}>
+                  <div className="section-title">חיפשת לאחרונה</div>
+                </div>
+                <div className="recent-row">
+                  {recent.map(r => {
+                    const { displayName } = extractProductDisplay(r.name, r.brand, r.unit_of_measure);
+                    return (
+                      <button key={r.barcode} className="recent-card" onClick={() => navigate(`/product/${r.barcode}`)}>
+                        <ProductImage barcode={r.barcode} name={r.name} size={56} />
+                        <span className="recent-name">{displayName}</span>
+                        {recentPrices[r.barcode] != null && (
+                          <span className="recent-price">{fmt(recentPrices[r.barcode])}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
             <div className="section-header" style={{ marginBottom: 12 }}>
               <div>
                 <div className="section-title">רשתות מובילות</div>
@@ -800,21 +576,6 @@ export function SearchPage() {
               </div>
             )}
 
-            {/* Popular searches */}
-            <div className="section-header" style={{ marginBottom: 12 }}>
-              <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <TrendingUp size={18} strokeWidth={1.8} color="var(--green-600)" />
-                חיפושים פופולריים
-              </div>
-            </div>
-            <div className="suggestions-row">
-              {POPULAR.map(({ label, q }) => (
-                <button key={q} className="suggestion-pill" onClick={() => startSearch(q)}>
-                  <Search size={13} strokeWidth={2} />
-                  {label}
-                </button>
-              ))}
-            </div>
           </>
         )}
 
@@ -927,7 +688,6 @@ export function SearchPage() {
 
       </div>
 
-      <LocationPrompt problem={locationProblem} onRetry={locate} onClose={dismissLocation} />
     </div>
   );
 }
