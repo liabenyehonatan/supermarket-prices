@@ -2069,18 +2069,6 @@ img { max-width: 100%; display: block; }
   .chain-carousel-item  { transition: none; }
 }
 
-/* ============================================================
-   Store filters (basket page)
-   ============================================================ */
-.store-filters {
-  margin-bottom: var(--sp-4);
-}
-.store-filters-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-}
 .filter-chip {
   display: inline-flex;
   align-items: center;
@@ -2103,16 +2091,6 @@ img { max-width: 100%; display: block; }
   background: var(--mint);
   border-color: var(--mint-line);
   color: var(--green-700);
-}
-.filter-chip-x {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 2px;
-  color: inherit;
-  opacity: 0.7;
-  cursor: pointer;
 }
 .filter-city-input {
   position: relative;
@@ -2251,35 +2229,6 @@ img { max-width: 100%; display: block; }
 .city-picker-list button .city-picker-check { color: var(--green-700); margin-inline-start: auto; }
 .city-picker-empty { padding: 12px 14px; font-size: var(--fs-13); color: var(--ink-500); }
 
-.filter-chains {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: var(--sp-2);
-  padding: 8px;
-  background: var(--surface-0);
-  border: 1.5px solid var(--line);
-  border-radius: var(--r-lg);
-}
-.filter-chains button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 6px 8px;
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: var(--ink-600);
-  cursor: pointer;
-}
-.filter-chains button.selected {
-  border-color: var(--mint-line);
-  background: var(--mint);
-  font-weight: var(--fw-bold);
-}
 
 /* ============================================================
    Modal (location prompt)
@@ -2748,3 +2697,13 @@ img { max-width: 100%; display: block; }
   border-radius: var(--r-md); font-family: var(--font-sans); font-size: var(--fs-14); color: var(--red-500); cursor: pointer; text-align: start;
 }
 .basket-menu button:hover { background: var(--surface-100); }
+
+/* Basket results: header is the toggle; actions and breakdown live below */
+.basket-result-head-btn { width: 100%; border: none; background: none; text-align: start; font-family: inherit; cursor: pointer; color: inherit; }
+.basket-result-missing { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: var(--fs-12); font-weight: var(--fw-semibold); color: var(--orange-700); }
+.basket-result-actions { display: flex; gap: 6px; padding: 0 var(--sp-4) var(--sp-3); }
+.basket-result-actions a {
+  display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: var(--r-full);
+  background: var(--surface-100); color: var(--ink-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); text-decoration: none;
+}
+.basket-result-actions a:hover { background: var(--green-100); color: var(--green-700); }
