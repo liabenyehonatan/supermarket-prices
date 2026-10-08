@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, MapPin, Truck, Plus, Minus,
@@ -88,6 +88,10 @@ export function ProductPage() {
   const [chainFilter, setChainFilter] = useState(readChainFilter);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // Nearby mode is an explicit opt-in per visit — a position left over from an earlier
+  // session must never make the page claim these stores are "near you".
+  const [nearbyActive, setNearbyActive] = useState(false);
+  const nearbyRef = useRef(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   // Raw coordinates (not just the city) so each geocoded store can show its distance.
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
@@ -118,6 +122,7 @@ export function ProductPage() {
 
   const onLocatedCity = useCallback(async (found: string) => {
     const cities = await fetchCities().catch(() => [] as string[]);
+    if (nearbyRef.current) return;  // nearby mode filters by distance, not by city
     const city = matchCity(found, cities);
     setCityFilter(city);
     saveCityFilter(city);
@@ -128,14 +133,28 @@ export function ProductPage() {
   const matchingPrices = namedPrices
     .filter(row => !cityFilter || row.store_city?.includes(cityFilter))
     .filter(row => !chainFilter || row.chain_name === chainFilter);
-  // With a known position and no explicit city, lead with the stores close to the user.
-  // Only geocoded stores have coordinates, so "all stores" stays one tap away.
-  const nearbyPrices = myCoords && !cityFilter
-    ? matchingPrices.filter(row => row.latitude != null && row.longitude != null
-        && distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude) <= NEARBY_KM)
+  // Nearby mode: stores within NEARBY_KM of the user. Only geocoded stores have
+  // coordinates, so "all stores" stays one tap away.
+  const nearbyPrices = nearbyActive && myCoords
+    ? namedPrices
+        .filter(row => !chainFilter || row.chain_name === chainFilter)
+        .filter(row => row.latitude != null && row.longitude != null
+          && distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude) <= NEARBY_KM)
     : [];
   const nearbyMode = nearbyPrices.length > 0 && !showAll;
   const filteredPrices = nearbyMode ? nearbyPrices : matchingPrices;
+
+  function setNearby(on: boolean) {
+    nearbyRef.current = on;
+    setNearbyActive(on);
+    setShowAll(false);
+  }
+  function toggleNearby() {
+    if (nearbyActive) { setNearby(false); return; }
+    setNearby(true);
+    setCityFilter(''); saveCityFilter('');
+    if (!myCoords) handleGps();
+  }
 
   const savings     = data ? Number(data.most_expensive_price) - Number(data.cheapest_price) : 0;
   const savingsPct  = data ? Math.round((savings / Number(data.most_expensive_price)) * 100) : 0;
@@ -242,6 +261,14 @@ export function ProductPage() {
                 {(cityFilter || chainFilter) ? [cityFilter, chainFilter].filter(Boolean).join(' · ') : 'סינון לפי עיר או רשת'}
                 <ChevronDown size={13} strokeWidth={2.5} style={{ opacity: 0.6 }} />
               </button>
+              <button
+                className={`filter-chip${nearbyPrices.length > 0 ? ' active' : ''}`}
+                onClick={toggleNearby}
+                aria-pressed={nearbyActive}
+              >
+                <Navigation size={15} strokeWidth={2} />
+                {gpsLoading && nearbyActive ? 'מאתר...' : 'לידי'}
+              </button>
               {(cityFilter || chainFilter) && (
                 <button
                   className="filter-chip-clear"
@@ -252,6 +279,12 @@ export function ProductPage() {
                 </button>
               )}
             </div>
+
+            {nearbyActive && myCoords && !gpsLoading && nearbyPrices.length === 0 && (
+              <div className="compare-row-city" style={{ marginBottom: 10 }}>
+                לא נמצאו חנויות עד {NEARBY_KM} ק״מ ממך. מוצגות כל החנויות.
+              </div>
+            )}
 
             {filteredPrices.length === 0 && namedPrices.length > 0 && (cityFilter || chainFilter) && (
               <div className="empty-state" style={{ padding: '32px 0' }}>
@@ -357,7 +390,7 @@ export function ProductPage() {
                 הצג את כל {matchingPrices.length} החנויות
               </button>
             )}
-            {nearbyPrices.length > 0 && showAll && (
+            {nearbyActive && nearbyPrices.length > 0 && showAll && (
               <button className="btn btn-secondary btn-full" style={{ marginBottom: 20 }} onClick={() => setShowAll(false)}>
                 חזרה לחנויות קרובות
               </button>
@@ -412,9 +445,9 @@ export function ProductPage() {
           cities={cities}
           chain={chainFilter}
           locating={gpsLoading}
-          onCity={c => { setCityFilter(c); saveCityFilter(c); }}
+          onCity={c => { setNearby(false); setCityFilter(c); saveCityFilter(c); }}
           onChain={c => { setChainFilter(c); saveChainFilter(c); }}
-          onLocate={handleGps}
+          onLocate={() => { setNearby(false); handleGps(); }}
           onClose={() => setFilterOpen(false)}
         />
       )}
