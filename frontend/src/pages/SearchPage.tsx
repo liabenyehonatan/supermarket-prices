@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, ChevronLeft, Barcode,
-  MapPin, Plus, Check,
+  Plus, Check,
 } from 'lucide-react';
 
 function SearchProductIcon() {
@@ -325,7 +325,7 @@ export function SearchPage() {
   /* ── render ─────────────────────────────────────────────── */
   return (
     <div className="page-wrapper">
-      <div className="container">
+      <div className="container home-container">
 
         {/* ── Hero ─────────────────────────────────────────── */}
         {!hasQuery && (
@@ -541,16 +541,11 @@ export function SearchPage() {
 
             <div className="section-header" style={{ marginBottom: 12 }}>
               <div>
-                <div className="section-title">רשתות מובילות</div>
-                <div className="section-subtitle">לחץ לסינון מחירים לפי רשת</div>
+                <div className="section-title">מחירים לפי רשת</div>
+                <div className="section-subtitle">
+                  {chainFilter ? 'מציגים מחירים רק מהרשת שבחרת' : 'לחצי על רשת כדי לראות מחירים רק ממנה'}
+                </div>
               </div>
-              {chainFilter && (
-                <button className="btn btn-ghost btn-sm" onClick={() => selectChain('')}
-                  style={{ color: 'var(--ink-500)', fontSize: 12 }}>
-                  <X size={13} strokeWidth={2.5} />
-                  הסר סינון
-                </button>
-              )}
             </div>
             <ChainCarousel
               chains={FEATURED_CHAINS}
@@ -559,11 +554,12 @@ export function SearchPage() {
               style={{ marginBottom: chainFilter ? 8 : 32 }}
             />
             {chainFilter && (
-              <div className="near-stores-note" role="status" style={{ marginBottom: 16 }}>
-                <MapPin size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                <span>
-                  מסנן מחירים לפי רשת <strong>{chainFilter}</strong> — הסינון יחול על כל מוצר שתפתחי
-                </span>
+              <div className="chain-active-note" role="status">
+                <span>מחירים רק מ<strong>{chainFilter}</strong> בכל האפליקציה</span>
+                <button onClick={() => selectChain('')}>
+                  <X size={13} strokeWidth={2.5} />
+                  הצג את כל הרשתות
+                </button>
               </div>
             )}
 
