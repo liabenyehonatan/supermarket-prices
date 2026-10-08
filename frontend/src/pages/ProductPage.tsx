@@ -272,7 +272,7 @@ export function ProductPage() {
                 }}
                 onClick={e => e.stopPropagation()}
               >
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--green-600)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green-600)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   הכי זול בכל ישראל
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -390,7 +390,7 @@ export function ProductPage() {
                       }}
                     >
                       <ChainLogo name={name} size={36} />
-                      <span style={{ fontSize: 10, color: 'var(--ink-600)', fontWeight: chainFilter === name ? 700 : 400 }}>
+                      <span style={{ fontSize: 11, color: 'var(--ink-600)', fontWeight: chainFilter === name ? 700 : 400 }}>
                         {name}
                       </span>
                     </button>
@@ -526,7 +526,7 @@ export function ProductPage() {
                       )}
 
                       {!isCheapest && diff > 0 && (
-                        <span className="badge badge-neutral tabular" style={{ fontSize: 11 }}>
+                        <span className="badge badge-neutral tabular" style={{ fontSize: 12 }}>
                           +{fmt(diff)}
                         </span>
                       )}
