@@ -30,6 +30,7 @@ import { searchProducts, cheapestPricesBatch } from '../api/client';
 import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
 import { TrustLine } from '../components/TrustLine';
+import { ExampleComparisons } from '../components/ExampleComparisons';
 import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
@@ -535,6 +536,8 @@ export function SearchPage() {
                 </div>
               </>
             )}
+
+            <ExampleComparisons />
 
             <div className="section-header" style={{ marginBottom: 12 }}>
               <div>

@@ -18,6 +18,19 @@ class StatsResponse(BaseModel):
     last_updated: Optional[datetime] = None
 
 
+class ExampleComparison(BaseModel):
+    """A well-stocked product with a real price gap, shown on the home page."""
+    barcode: str
+    name: str
+    brand: Optional[str]
+    unit_of_measure: Optional[str]
+    cheapest_price: Decimal
+    cheapest_chain: str
+    priciest_price: Decimal
+    priciest_chain: str
+    stores_count: int
+
+
 class ChainResponse(BaseModel):
     id: int
     name: str
