@@ -51,6 +51,16 @@ export function fetchStats(): Promise<DataStats> {
   return statsRequest;
 }
 
+export interface ExampleComparison {
+  barcode: string; name: string; brand?: string; unit_of_measure?: string;
+  cheapest_price: number | string; cheapest_chain: string;
+  priciest_price: number | string; priciest_chain: string; stores_count: number;
+}
+
+export function fetchExamples(limit = 3): Promise<ExampleComparison[]> {
+  return request<ExampleComparison[]>(`/api/v1/products/examples?limit=${limit}`);
+}
+
 // The city list rarely changes, so share one request per page load.
 // (Dev StrictMode runs effects twice, which used to fire this call twice.)
 let citiesRequest: Promise<string[]> | null = null;
