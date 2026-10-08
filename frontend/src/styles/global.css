@@ -767,7 +767,6 @@ img { max-width: 100%; display: block; }
   letter-spacing: -0.02em;
   direction: ltr;
   unicode-bidi: isolate;
-  text-decoration: line-through;
 }
 .product-hero-savings {
   display: inline-flex;
