@@ -43,7 +43,6 @@ export function BasketOverlays() {
                 const count = b.items.reduce((s, i) => s + i.quantity, 0);
                 return (
                   <button key={b.id} className="basket-row basket-row-main" onClick={() => pickBasket(b.id)}>
-                    <span className="basket-dot" style={{ background: b.color }} />
                     <span className="basket-row-text">
                       <span className="basket-row-name">{b.name}</span>
                       <span className="basket-row-meta">

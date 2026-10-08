@@ -36,7 +36,6 @@ export function BasketSwitcher({ variant = 'title' }: { variant?: 'title' | 'pil
   return (
     <>
       <button className={variant === 'pill' ? 'basket-pill' : 'basket-switcher'} onClick={() => setOpen(true)} aria-label={`סל פעיל: ${active.name}. החלפה`}>
-        <span className="basket-dot" style={{ background: active.color }} />
         <span className={variant === 'pill' ? 'basket-pill-name' : 'basket-switcher-name'}>{active.name}</span>
         <ChevronDown size={variant === 'pill' ? 13 : 16} strokeWidth={2} />
       </button>
@@ -69,7 +68,6 @@ export function BasketSwitcher({ variant = 'title' }: { variant?: 'title' | 'pil
                       />
                     ) : (
                       <button className="basket-row-main" onClick={() => { setActive(b.id); close(); }}>
-                        <span className="basket-dot" style={{ background: b.color }} />
                         <span className="basket-row-text">
                           <span className="basket-row-name">{b.name}</span>
                           <span className="basket-row-meta">

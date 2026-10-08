@@ -2558,7 +2558,6 @@ img { max-width: 100%; display: block; }
   font-family: var(--font-sans); font-size: var(--fs-24); font-weight: 700; color: var(--ink-900); letter-spacing: -0.01em;
 }
 .basket-switcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.basket-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
 .basket-sheet { height: auto; max-height: 70vh; }
 .basket-row { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); min-height: 60px; }
 .basket-row.active .basket-row-name { color: var(--green-700); }
@@ -2677,3 +2676,14 @@ img { max-width: 100%; display: block; }
   .header-nav-link:hover { background: var(--surface-100); color: var(--ink-900); }
   .header-nav-link.active { color: var(--green-700); background: var(--green-100); }
 }
+
+/* Result ordering */
+.sort-row { display: flex; gap: 6px; margin-bottom: var(--sp-3); overflow-x: auto; scrollbar-width: none; }
+.sort-row::-webkit-scrollbar { display: none; }
+.sort-pill { flex-shrink: 0; padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line-strong); background: transparent; font-family: var(--font-sans); font-size: var(--fs-13); color: var(--ink-600); cursor: pointer; }
+.sort-pill.on { background: var(--green-700); border-color: var(--green-700); color: #fff; font-weight: var(--fw-semibold); }
+
+/* Price movement of a saved basket since it was last compared */
+.basket-card-delta { margin-top: 4px; padding: 2px 8px; border-radius: 99px; font-size: var(--fs-12); font-weight: var(--fw-semibold); white-space: nowrap; }
+.basket-card-delta.down { background: var(--green-100); color: var(--green-700); }
+.basket-card-delta.up { background: #FDECEA; color: #A32D2D; }
