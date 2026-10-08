@@ -260,6 +260,10 @@ export function BasketPage() {
   function toggleSelected(barcode: string) {
     setSelected(prev => { const n = new Set(prev); if (n.has(barcode)) n.delete(barcode); else n.add(barcode); return n; });
   }
+  // Long baskets show the first few items; the rest is one tap away (editing always shows all)
+  const COLLAPSED_COUNT = 5;
+  const [showAllItems, setShowAllItems] = useState(false);
+  useEffect(() => { setShowAllItems(false); }, [activeId]);
   const allSelected = items.length > 0 && selected.size === items.length;
   const resultsRef = useRef<HTMLDivElement>(null);
   const requestId  = useRef(0);
@@ -370,7 +374,7 @@ export function BasketPage() {
         {/* Item list */}
         {items.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-            {items.map(item => (
+            {(editing || showAllItems ? items : items.slice(0, COLLAPSED_COUNT)).map(item => (
               <div
                 key={item.barcode}
                 className={`basket-item${editing ? ' editing' : ''}${selected.has(item.barcode) ? ' selected' : ''}`}
@@ -433,6 +437,13 @@ export function BasketPage() {
                 </>)}
               </div>
             ))}
+            {!editing && items.length > COLLAPSED_COUNT && (
+              <button className="basket-more" onClick={() => setShowAllItems(v => !v)} aria-expanded={showAllItems}>
+                {showAllItems
+                  ? <><ChevronUp size={15} strokeWidth={2} /> הצג פחות</>
+                  : <><ChevronDown size={15} strokeWidth={2} /> הצג עוד {items.length - COLLAPSED_COUNT} מוצרים</>}
+              </button>
+            )}
           </div>
         )}
 
@@ -466,14 +477,10 @@ export function BasketPage() {
           </div>
         )}
 
-        {/* Add more */}
-        <button
-          className="btn btn-secondary btn-full"
-          style={{ marginBottom: 12 }}
-          onClick={() => navigate('/')}
-        >
-          <Search size={17} strokeWidth={2} />
-          הוסף מוצרים לסל
+        {/* Add more — a quiet row, so it does not compete with the compare action */}
+        <button className="basket-add-more" onClick={() => navigate('/')}>
+          <Plus size={16} strokeWidth={2.5} />
+          הוסף מוצר
         </button>
 
         {/* Store filters: the comparison only covers the chosen city / chain */}
