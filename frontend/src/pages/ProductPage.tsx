@@ -10,7 +10,6 @@ import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { pushRecent } from '../lib/recent';
 import { FEATURED_CHAINS, matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { CityPicker } from '../components/CityPicker';
@@ -94,7 +93,7 @@ export function ProductPage() {
     if (!barcode) return;
     setLoading(true); setError(null);
     compareProduct(barcode)
-      .then(d => { setData(d); pushRecent(d.product); })
+      .then(setData)
       .catch(() => setError('לא הצלחנו לטעון. תנסה שוב?'))
       .finally(() => setLoading(false));
   }, [barcode]);
