@@ -159,7 +159,7 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
             </span>
           )}
           {rank === 1 && (
-            <span className="badge badge-neutral" style={{ fontSize: 11 }}>מקום 2</span>
+            <span className="badge badge-neutral" style={{ fontSize: 12 }}>מקום 2</span>
           )}
         </div>
       </div>
