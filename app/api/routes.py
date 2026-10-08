@@ -25,6 +25,7 @@ from app.api.schemas import (
     StoreResponse,
     ChainResponse,
     StatsResponse,
+    ExampleComparison,
 )
 
 logger = logging.getLogger(__name__)
@@ -293,26 +294,120 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     return stats
 
 
+# ─── Endpoint: Example comparisons (home page) ───────────────────────────────
+
+_EXAMPLES_TTL_SECONDS = 3600
+_examples_cache: tuple[float, list[ExampleComparison]] | None = None
+
+
+@router.get(
+    "/products/examples",
+    response_model=List[ExampleComparison],
+    summary="A few widely stocked products with a real price gap",
+)
+async def example_comparisons(
+    limit: int = Query(3, ge=1, le=6),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Shows what the app does with real numbers: products sold in many stores whose
+    cheapest and priciest current prices differ noticeably. "Widely stocked" stands in
+    for "popular". Cached for an hour, since the aggregate scans every current price.
+    """
+    global _examples_cache
+    now = time.monotonic()
+    if _examples_cache and now - _examples_cache[0] < _EXAMPLES_TTL_SECONDS:
+        return _examples_cache[1][:limit]
+
+    candidates = (await db.execute(
+        select(
+            Price.product_id,
+            func.count().label("n"),
+            func.min(Price.price).label("lo"),
+            func.max(Price.price).label("hi"),
+        )
+        .where(Price.is_current.is_(True))
+        .group_by(Price.product_id)
+        .having(func.count() >= 20)
+        .order_by(func.count().desc())
+        .limit(80)
+    )).all()
+
+    picked = [
+        c for c in candidates
+        if c.lo > 0 and (c.hi - c.lo) >= Decimal("0.50") and (c.hi - c.lo) / c.lo >= Decimal("0.10")
+    ]
+
+    async def extreme(product_id: int, ascending: bool):
+        order = Price.price.asc() if ascending else Price.price.desc()
+        row = (await db.execute(
+            select(Price.price, Chain.name)
+            .join(Store, Store.id == Price.store_id)
+            .join(Chain, Chain.id == Store.chain_id)
+            .where(Price.product_id == product_id, Price.is_current.is_(True))
+            .order_by(order)
+            .limit(1)
+        )).first()
+        return row
+
+    # These cards are the first thing a visitor sees, so only products with a real picture qualify:
+    # use the stored one, or look it up once (and keep it). A cap keeps a cold start bounded.
+    lookups_left = 8
+    seen_lines: set[str] = set()   # first word of the name, so three flavours of one snack don't fill the row
+    results: list[ExampleComparison] = []
+    for c in picked:
+        if len(results) >= 6:
+            break
+        product = (await db.execute(select(Product).where(Product.id == c.product_id))).scalar_one_or_none()
+        if not product:
+            continue
+        line = (product.name.split() or [""])[0]
+        if line in seen_lines:
+            continue
+        if not product.image_url:
+            if lookups_left <= 0:
+                continue
+            lookups_left -= 1
+            found = await _lookup_image_url(product.barcode, product.name)
+            if not found:
+                continue
+            product.image_url = found
+            await db.commit()
+        cheap, pricey = await extreme(c.product_id, True), await extreme(c.product_id, False)
+        if not cheap or not pricey:
+            continue
+        seen_lines.add(line)
+        results.append(ExampleComparison(
+            barcode=product.barcode,
+            name=product.name,
+            brand=product.brand,
+            unit_of_measure=product.unit_of_measure,
+            cheapest_price=cheap[0],
+            cheapest_chain=cheap[1],
+            priciest_price=pricey[0],
+            priciest_chain=pricey[1],
+            stores_count=c.n,
+        ))
+
+    _examples_cache = (now, results)
+    return results[:limit]
+
+
 # ─── Endpoint: Product image (via Shufersal CDN) ─────────────────────────────
 
 SHUFERSAL_SEARCH = "https://www.shufersal.co.il/online/he/search/results"
 SHUFERSAL_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
-@router.get("/products/{barcode}/image", summary="Redirect to product image")
-async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Product).where(Product.barcode == barcode))
-    product = result.scalar_one_or_none()
+def _names_similar(our_name: str, their_name: str) -> bool:
+    our_words = set(our_name.split())
+    their_words = set(their_name.split())
+    if not our_words:
+        return False
+    return len(our_words & their_words) / len(our_words) >= 0.6
 
-    if product and product.image_url:
-        return RedirectResponse(product.image_url, status_code=302)
 
-    def _names_similar(our_name: str, their_name: str) -> bool:
-        our_words = set(our_name.split())
-        their_words = set(their_name.split())
-        if not our_words:
-            return False
-        return len(our_words & their_words) / len(our_words) >= 0.6
-
+async def _lookup_image_url(barcode: str, name: Optional[str]) -> Optional[str]:
+    """Ask Shufersal's catalogue for a product picture (by barcode, then by similar name)."""
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             resp = await client.get(
@@ -322,21 +417,29 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
             )
             results = resp.json().get("results", [])
 
-            if not results and product:
+            if not results and name:
                 resp2 = await client.get(
                     SHUFERSAL_SEARCH,
-                    params={"q": product.name, "format": "json"},
+                    params={"q": name, "format": "json"},
                     headers=SHUFERSAL_HEADERS,
                 )
                 name_results = resp2.json().get("results", [])
-                results = [
-                    r for r in name_results
-                    if _names_similar(product.name, r.get("name", ""))
-                ]
+                results = [r for r in name_results if _names_similar(name, r.get("name", ""))]
 
-        image_url = results[0].get("baseProductImageMedium") if results else None
+        return results[0].get("baseProductImageMedium") if results else None
     except Exception:
-        image_url = None
+        return None
+
+
+@router.get("/products/{barcode}/image", summary="Redirect to product image")
+async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Product).where(Product.barcode == barcode))
+    product = result.scalar_one_or_none()
+
+    if product and product.image_url:
+        return RedirectResponse(product.image_url, status_code=302)
+
+    image_url = await _lookup_image_url(barcode, product.name if product else None)
 
     if image_url and product:
         product.image_url = image_url
