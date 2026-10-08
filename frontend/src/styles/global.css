@@ -2719,3 +2719,12 @@ img { max-width: 100%; display: block; }
 /* Basket page: count next to the compare label */
 .compare-bar-count { font-size: var(--fs-13); font-weight: var(--fw-medium); opacity: 0.85; }
 .add-to-basket-bar .btn-compare { margin: 0; }
+
+/* Basket page: collapse toggle and the quiet "add product" row */
+.basket-more, .basket-add-more {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  min-height: 44px; border: none; background: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--green-700);
+}
+.basket-more { border-radius: var(--r-lg); background: var(--surface-100); color: var(--ink-700); }
+.basket-add-more { border: 1.5px dashed var(--line-strong); border-radius: var(--r-lg); margin-bottom: var(--sp-3); }
