@@ -7,3 +7,11 @@ __pycache__/
 .pytest_cache/
 dumps/
 *.egg-info/
+*_cookies.txt
+celerybeat-schedule*
+logging.log
+shufersal_page.html
+gov_chains.html
+docs/
+tests/
+pytest.ini
