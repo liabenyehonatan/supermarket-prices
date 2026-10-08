@@ -45,14 +45,13 @@ const STORAGE_KEY = 'sali_baskets_v1';
 const LEGACY_KEY = 'sali_basket';
 // Set once the user has consciously picked a basket during this visit (tab session)
 const CHOSEN_KEY = 'sali_basket_chosen';
-export const BASKET_COLORS = ['#4D6B39', '#8A5A3C', '#3F7F7A', '#B08A2E', '#7C5A7A', '#5C6F8A'];
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function newBasket(name: string, colorIndex: number, items: LocalBasketItem[] = []): Basket {
-  return { id: uid(), name, color: BASKET_COLORS[colorIndex % BASKET_COLORS.length], items };
+function newBasket(name: string, items: LocalBasketItem[] = []): Basket {
+  return { id: uid(), name, items };
 }
 
 interface Stored { activeId: string; baskets: Basket[] }
@@ -70,7 +69,7 @@ function load(): Stored {
   // First run with baskets: carry over the old single basket
   let legacy: LocalBasketItem[] = [];
   try { legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? '[]') as LocalBasketItem[]; } catch { /* ignore */ }
-  const first = newBasket('הסל שלי', 0, legacy);
+  const first = newBasket('הסל שלי', legacy);
   return { baskets: [first], activeId: first.id };
 }
 
@@ -162,7 +161,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   const createBasket = useCallback((name?: string) => {
     const id = uid();
     const label = name?.trim() || 'סל חדש';
-    setState(s => ({ baskets: [...s.baskets, { ...newBasket(label, s.baskets.length), id }], activeId: id }));
+    setState(s => ({ baskets: [...s.baskets, { ...newBasket(label), id }], activeId: id }));
     markChosen();
     showNotice({ text: `מוסיפים עכשיו ל"${label}"` });
     return id;
@@ -192,7 +191,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     const basket = cur.baskets[index];
     setState(s => {
       let rest = s.baskets.filter(b => b.id !== id);
-      if (!rest.length) rest = [newBasket('הסל שלי', 0)];
+      if (!rest.length) rest = [newBasket('הסל שלי')];
       return { baskets: rest, activeId: s.activeId === id ? rest[0].id : s.activeId };
     });
     showNotice({
@@ -262,7 +261,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
       // A new basket made for a move should not steal the active basket from the page being edited
       const id = uid();
       const label = name.trim() || 'סל חדש';
-      setState(s => ({ ...s, baskets: [...s.baskets, { ...newBasket(label, s.baskets.length), id }] }));
+      setState(s => ({ ...s, baskets: [...s.baskets, { ...newBasket(label), id }] }));
       moveTo(p.items, p.fromId, id, label);
       return;
     }
