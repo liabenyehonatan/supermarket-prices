@@ -313,7 +313,7 @@ export function ProductPage() {
                         {isCheapest && (
                           <span className="badge badge-cheapest" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                             <Tag size={10} strokeWidth={2.5} />
-                            הכי זול
+                            {nearbyMode ? 'הכי זול לידך' : 'הכי זול'}
                           </span>
                         )}
                         {!isCheapest && diff > 0 && (

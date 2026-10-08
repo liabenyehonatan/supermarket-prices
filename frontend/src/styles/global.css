@@ -2587,6 +2587,12 @@ img { max-width: 100%; display: block; }
 .basket-card.is-active .basket-card-name { color: var(--ink-900); }
 .basket-card-cta { margin-top: auto; padding-top: 4px; font-size: var(--fs-13); font-weight: var(--fw-semibold); color: var(--green-700); }
 .basket-card-cta::after { content: " ‹"; }
+/* Home basket card: wrapper holds the card (navigates) and a small delete button (removes, with undo) */
+.basket-card-wrap { position: relative; flex: 0 0 108px; display: flex; }
+.basket-card-wrap .basket-card { flex: 1 1 auto; min-width: 0; }
+.basket-card-wrap .basket-card-name { padding-inline-end: 18px; }
+.basket-card-remove { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2; width: 24px; height: 24px; border: none; background: none; border-radius: 50%; color: var(--ink-400); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.basket-card-remove:hover { background: var(--surface-100); color: var(--red-500); }
 .basket-card-new { flex: 0 0 72px; background: transparent; border: 1.5px dashed var(--line-strong); align-items: center; justify-content: center; border-style: dashed; color: var(--green-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
 
 /* Header pill: always shows which basket new items go to */
