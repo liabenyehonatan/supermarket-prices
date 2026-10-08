@@ -4,7 +4,11 @@ import type { Basket, BasketSnapshot, LocalBasketItem } from '../types';
 // Several named baskets; one is "active" and is the one every "add to basket" button feeds,
 // the same model as an active cart in grocery apps.
 export interface Notice { text: string; actionLabel?: string; onAction?: () => void }
-export type PickerState = { mode: 'add'; item: LocalBasketItem } | { mode: 'create' } | null;
+export type PickerState =
+  | { mode: 'add'; item: LocalBasketItem }
+  | { mode: 'move'; items: LocalBasketItem[]; fromId: string }
+  | { mode: 'create' }
+  | null;
 
 interface BasketContextValue {
   baskets: Basket[];
@@ -28,6 +32,8 @@ interface BasketContextValue {
   dismissNotice: () => void;
   picker: PickerState;
   openCreate: () => void;
+  /** Opens the picker to send items of one basket to another. */
+  openMove: (items: LocalBasketItem[], fromId: string) => void;
   closePicker: () => void;
   pickBasket: (id: string) => void;
   pickNew: (name: string) => void;
@@ -201,6 +207,43 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openCreate = useCallback(() => setPicker({ mode: 'create' }), []);
+  const openMove = useCallback((items: LocalBasketItem[], fromId: string) => setPicker({ mode: 'move', items, fromId }), []);
+
+  /** Moves `item.quantity` of an item between baskets, leaving the active basket alone. */
+  const shift = useCallback((item: LocalBasketItem, fromId: string, toId: string) => {
+    setState(s => ({
+      ...s,
+      baskets: s.baskets.map(b => {
+        if (b.id === fromId) {
+          return {
+            ...b,
+            items: b.items
+              .map(i => (i.barcode === item.barcode ? { ...i, quantity: i.quantity - item.quantity } : i))
+              .filter(i => i.quantity > 0),
+          };
+        }
+        if (b.id === toId) {
+          const existing = b.items.find(i => i.barcode === item.barcode);
+          return {
+            ...b,
+            items: existing
+              ? b.items.map(i => (i.barcode === item.barcode ? { ...i, quantity: i.quantity + item.quantity } : i))
+              : [...b.items, item],
+          };
+        }
+        return b;
+      }),
+    }));
+  }, []);
+
+  const moveTo = useCallback((moved: LocalBasketItem[], fromId: string, toId: string, toName: string) => {
+    moved.forEach(item => shift(item, fromId, toId));
+    showNotice({
+      text: moved.length === 1 ? `הועבר ל"${toName}"` : `${moved.length} מוצרים הועברו ל"${toName}"`,
+      actionLabel: 'ביטול',
+      onAction: () => { moved.forEach(item => shift(item, toId, fromId)); setNotice(null); },
+    });
+  }, [shift, showNotice]);
   const closePicker = useCallback(() => setPicker(null), []);
 
   const pickBasket = useCallback((id: string) => {
@@ -208,15 +251,24 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     setPicker(null);
     const target = stateRef.current.baskets.find(b => b.id === id);
     if (!target || !p || p.mode === 'create') return;
-    addTo(target.id, p.item);
-  }, [picker, addTo]);
+    if (p.mode === 'move') moveTo(p.items, p.fromId, target.id, target.name);
+    else addTo(target.id, p.item);
+  }, [picker, addTo, moveTo]);
 
   const pickNew = useCallback((name: string) => {
     const p = picker;
     setPicker(null);
+    if (p && p.mode === 'move') {
+      // A new basket made for a move should not steal the active basket from the page being edited
+      const id = uid();
+      const label = name.trim() || 'סל חדש';
+      setState(s => ({ ...s, baskets: [...s.baskets, { ...newBasket(label, s.baskets.length), id }] }));
+      moveTo(p.items, p.fromId, id, label);
+      return;
+    }
     const id = createBasket(name);
     if (p && p.mode === 'add') addTo(id, p.item);
-  }, [picker, createBasket, addTo]);
+  }, [picker, createBasket, addTo, moveTo]);
 
   const active = state.baskets.find(b => b.id === state.activeId) ?? state.baskets[0];
   const totalItems = active.items.reduce((sum, i) => sum + i.quantity, 0);
@@ -225,10 +277,10 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     baskets: state.baskets, activeId: active.id, active, items: active.items,
     addItem, removeItem, updateQty, clearBasket, totalItems,
     setActive, createBasket, renameBasket, deleteBasket, recordCompare,
-    notice, dismissNotice, picker, openCreate, closePicker, pickBasket, pickNew,
+    notice, dismissNotice, picker, openCreate, openMove, closePicker, pickBasket, pickNew,
   }), [state.baskets, active, totalItems, addItem, removeItem, updateQty, clearBasket,
        setActive, createBasket, renameBasket, deleteBasket, recordCompare,
-       notice, dismissNotice, picker, openCreate, closePicker, pickBasket, pickNew]);
+       notice, dismissNotice, picker, openCreate, openMove, closePicker, pickBasket, pickNew]);
 
   return <BasketContext.Provider value={value}>{children}</BasketContext.Provider>;
 }
