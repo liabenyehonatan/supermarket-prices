@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, MapPin, Truck, Plus, Minus,
-  Check, Tag, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
+  Check, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
-import { ChainLogo } from '../components/ChainLogo';
+import { StoreRow } from '../components/StoreRow';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
@@ -314,73 +314,44 @@ export function ProductPage() {
                 const isCheapest = idx === 0;
                 const diff = Number(row.price) - Number(filteredPrices[0]?.price ?? row.price);
                 const key = `${row.store_id}-${idx}`;
-                const open = expandedRow === key;
                 const name = row.store_name || row.chain_name;
                 const km = myCoords && row.latitude != null && row.longitude != null
                   ? distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude)
                   : null;
                 return (
-                  <div
+                  <StoreRow
                     key={key}
-                    className={`compare-row${isCheapest ? ' cheapest' : ''}`}
-                    onClick={() => setExpandedRow(open ? null : key)}
-                    aria-expanded={open}
+                    chain={row.chain_name}
+                    name={name}
+                    city={row.store_city}
+                    warning={isStale(row.price_updated_at) ? `מחיר ישן · עודכן לפני ${timeAgo(row.price_updated_at)}` : undefined}
+                    price={row.price}
+                    isCheapest={isCheapest}
+                    cheapestLabel={nearbyMode ? 'הכי זול לידך' : 'הכי זול'}
+                    diff={diff}
+                    open={expandedRow === key}
+                    onToggle={() => setExpandedRow(expandedRow === key ? null : key)}
                   >
-                    <div className="compare-row-main">
-                      <ChainLogo name={row.chain_name} size={44} />
-
-                      <div className="compare-row-info">
-                        <div className="compare-row-store">{name}</div>
-                        {row.store_city && <div className="compare-row-city">{row.store_city}</div>}
-                        {isStale(row.price_updated_at) && (
-                          <div className="compare-row-city" style={{ color: 'var(--orange-700)', fontWeight: 600 }}>
-                            מחיר ישן · עודכן לפני {timeAgo(row.price_updated_at)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="compare-row-right">
-                        <span className={`compare-row-price tabular${isCheapest ? ' text-green' : ''}`}>
-                          {fmt(row.price)}
-                        </span>
-                        {isCheapest && (
-                          <span className="badge badge-cheapest" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <Tag size={10} strokeWidth={2.5} />
-                            {nearbyMode ? 'הכי זול לידך' : 'הכי זול'}
-                          </span>
-                        )}
-                        {!isCheapest && diff > 0 && (
-                          <span className="compare-row-diff tabular">+{fmt(diff)}</span>
-                        )}
-                      </div>
+                    {km != null && <div className="store-row-sub">{km.toFixed(1)} ק״מ ממך</div>}
+                    {row.store_address && <div className="store-row-sub">{row.store_address}</div>}
+                    <div className="store-row-actions">
+                      <a href={wazeUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
+                        <Navigation size={12} strokeWidth={2} />
+                        Waze
+                      </a>
+                      <a href={googleMapsUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בגוגל מפות ל-${name}`}>
+                        <MapPin size={12} strokeWidth={2} />
+                        Maps
+                      </a>
+                      {row.delivery_url && (
+                        <a href={row.delivery_url} target="_blank" rel="noopener noreferrer" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
+                          <Truck size={12} strokeWidth={2} />
+                          משלוח
+                          <ExternalLink size={10} strokeWidth={2} />
+                        </a>
+                      )}
                     </div>
-
-                    {open && (
-                      <div className="compare-row-more" onClick={e => e.stopPropagation()}>
-                        {km != null && (
-                          <div className="compare-row-city">{km.toFixed(1)} ק״מ ממך</div>
-                        )}
-                        {row.store_address && <div className="compare-row-city">{row.store_address}</div>}
-                        <div className="compare-row-nav">
-                          <a href={wazeUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
-                            <Navigation size={10} strokeWidth={2} />
-                            Waze
-                          </a>
-                          <a href={googleMapsUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בגוגל מפות ל-${name}`}>
-                            <MapPin size={10} strokeWidth={2} />
-                            Maps
-                          </a>
-                          {row.delivery_url && (
-                            <a href={row.delivery_url} target="_blank" rel="noopener noreferrer" className="compare-row-delivery" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
-                              <Truck size={10} strokeWidth={2} />
-                              משלוח
-                              <ExternalLink size={9} strokeWidth={2} />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  </StoreRow>
                 );
               })}
             </div>

@@ -866,46 +866,6 @@ img { max-width: 100%; display: block; }
 /* ============================================================
    Basket results
    ============================================================ */
-.basket-result-card {
-  background: var(--bg-card);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-  border: 1px solid transparent;
-  transition: box-shadow var(--dur-fast);
-}
-.basket-result-card.winner {
-  border-color: var(--green-200);
-  box-shadow: var(--shadow-md);
-}
-.basket-result-header {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-5) var(--sp-5) var(--sp-4);
-}
-.basket-result-chain { flex: 1; }
-.basket-result-chain-name {
-  font-size: var(--fs-16);
-  font-weight: var(--fw-bold);
-  color: var(--ink-900);
-}
-.basket-result-store-info {
-  font-size: var(--fs-13);
-  color: var(--ink-500);
-  margin-top: 2px;
-}
-.basket-result-total {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-black);
-  color: var(--ink-900);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
-  direction: ltr;
-  unicode-bidi: isolate;
-}
-.basket-result-card.winner .basket-result-total { color: var(--green-700); }
-
 .basket-result-savings {
   display: flex;
   align-items: center;
@@ -919,31 +879,6 @@ img { max-width: 100%; display: block; }
   font-weight: var(--fw-semibold);
   color: var(--green-700);
 }
-
-.basket-result-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 20px;
-  border: none;
-  border-top: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink-500);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  outline: none;
-  /* Replace the browser's blue tap flash with our own green press state */
-  -webkit-tap-highlight-color: transparent;
-  transition: background var(--dur-fast), color var(--dur-fast);
-}
-.basket-result-toggle:hover,
-.basket-result-toggle[aria-expanded="true"] { color: var(--green-700); }
-.basket-result-toggle:active { background: var(--mint); color: var(--green-700); }
-.basket-result-toggle:focus-visible { box-shadow: inset 0 0 0 2px var(--green-600); }
 
 .basket-result-breakdown {
   border-top: 1px solid var(--line);
@@ -1909,12 +1844,6 @@ img { max-width: 100%; display: block; }
   color: #0284C7;
 }
 
-/* ============================================================
-   Basket result — winner highlight
-   ============================================================ */
-.basket-result-card.winner { background: var(--mint); }
-.basket-result-card.winner .basket-result-header { background: none; }
-.basket-result-card.winner .basket-result-actions a { background: var(--bg-card); }
 .basket-result-breakdown { background: var(--bg-card); }
 
 /* ============================================================
@@ -2699,12 +2628,37 @@ img { max-width: 100%; display: block; }
 }
 .basket-menu button:hover { background: var(--surface-100); }
 
-/* Basket results: header is the toggle; actions and breakdown live below */
-.basket-result-head-btn { width: 100%; border: none; background: none; text-align: start; font-family: inherit; cursor: pointer; color: inherit; }
-.basket-result-missing { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: var(--fs-12); font-weight: var(--fw-semibold); color: var(--orange-700); }
-.basket-result-actions { display: flex; gap: 6px; padding: 0 var(--sp-4) var(--sp-3); }
-.basket-result-actions a {
+
+/* ============================================================
+   Store row — shared by the product page and the basket results
+   ============================================================ */
+.store-row {
+  background: var(--bg-card); border-radius: var(--r-lg); box-shadow: var(--shadow-xs);
+  border: 1px solid transparent; overflow: hidden;
+}
+.store-row.cheapest { background: var(--mint); border-color: var(--mint-line); }
+.store-row-main {
+  width: 100%; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-4);
+  border: none; background: none; cursor: pointer; text-align: start; font-family: inherit; color: inherit;
+}
+.store-row-info { flex: 1; min-width: 0; }
+.store-row-name { font-size: var(--fs-14); font-weight: var(--fw-medium); color: var(--ink-900); }
+.store-row-sub { font-size: var(--fs-12); color: var(--ink-500); margin-top: 1px; }
+.store-row-warning { color: var(--orange-700); font-weight: var(--fw-semibold); }
+.store-row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.store-row-price {
+  font-size: var(--fs-20); font-weight: var(--fw-bold); color: var(--ink-900); line-height: 1;
+  letter-spacing: -0.02em; direction: ltr; unicode-bidi: isolate;
+}
+.store-row.cheapest .store-row-price { color: var(--green-700); }
+.store-row-badge { display: inline-flex; align-items: center; gap: 3px; }
+.store-row-chevron { color: var(--ink-400); }
+.store-row-more { padding: 0 var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+.store-row-more .basket-result-breakdown { margin-inline: calc(var(--sp-4) * -1); }
+.store-row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.store-row-actions a {
   display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: var(--r-full);
   background: var(--surface-100); color: var(--ink-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); text-decoration: none;
 }
-.basket-result-actions a:hover { background: var(--green-100); color: var(--green-700); }
+.store-row.cheapest .store-row-actions a { background: var(--bg-card); }
+.store-row-actions a:hover { background: var(--green-100); color: var(--green-700); }
