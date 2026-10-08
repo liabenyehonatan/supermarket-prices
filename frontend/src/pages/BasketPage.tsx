@@ -3,14 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
   ChevronDown, ChevronUp, TrendingUp, AlertCircle,
-  Tag, Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal,
+  Tag, Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal, SlidersHorizontal, X,
 } from 'lucide-react';
-import { compareBasket } from '../api/client';
+import { compareBasket, fetchCities } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
-import { StoreFilters } from '../components/StoreFilters';
+import { FilterSheet } from '../components/FilterSheet';
+import { LocationPrompt } from '../components/LocationPrompt';
+import { useCurrentCity } from '../lib/location';
 import { useBasket } from '../context/BasketContext';
-import { onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
+import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { BasketSwitcher } from '../components/BasketSwitcher';
 import { snapshotFrom, timeAgo } from '../lib/basketCompare';
 import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal } from '../types';
@@ -55,10 +57,11 @@ function googleMapsUrl(store: Parameters<typeof storeNavQuery>[0]): string {
 function ResultCard({ store, rank, maxTotal, minTotal }: {
   store: BasketStoreTotal; rank: number; maxTotal: number; minTotal: number;
 }) {
-  const [open, setOpen] = useState(rank === 0);
+  const [open, setOpen] = useState(false);
   const isWinner  = rank === 0;
   const savings   = maxTotal - store.total_price;
   const savingsPct = maxTotal > 0 ? Math.round((savings / maxTotal) * 100) : 0;
+  const diff = store.total_price - minTotal;
 
   return (
     <div className={`basket-result-card${isWinner ? ' winner' : ''}`}>
@@ -76,131 +79,83 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
         </div>
       )}
 
-      <div className="basket-result-header">
-        <div style={{ position: 'relative' }}>
-          <ChainLogo name={store.store.chain.name} size={52} />
-          {isWinner && (
-            <span
-              style={{
-                position: 'absolute', top: -6, insetInlineEnd: -6,
-                background: 'var(--mint)', color: 'var(--green-700)',
-                border: '1px solid var(--mint-line)',
-                borderRadius: '50%', width: 20, height: 20,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-              aria-label="הכי זול"
-            >
-              <Tag size={11} strokeWidth={2.5} />
-            </span>
-          )}
-        </div>
+      {/* The whole header toggles the details: logo, store, total — nothing else competes */}
+      <button className="basket-result-header basket-result-head-btn" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+        <ChainLogo name={store.store.chain.name} size={52} />
 
         <div className="basket-result-chain">
           <div className="basket-result-chain-name">{store.store.chain.name}</div>
           <div className="basket-result-store-info">
             {[store.store.name, store.store.city].filter(Boolean).join(' · ')}
           </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-            {isWinner && (
-              <span className="badge badge-cheapest" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Tag size={10} strokeWidth={2.5} />
-                הכי זול
-              </span>
-            )}
-            {store.store.delivery_url && (
-              <a
-                href={store.store.delivery_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="compare-row-delivery"
-                onClick={e => e.stopPropagation()}
-              >
-                <Truck size={10} strokeWidth={2} />
-                משלוח
-                <ExternalLink size={9} strokeWidth={2} />
-              </a>
-            )}
-            {store.items_missing > 0 && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, color: 'var(--red-500)' }}>
-                <AlertCircle size={12} strokeWidth={2} />
-                {store.items_missing} חסר
-              </span>
-            )}
-          </div>
-          <div className="compare-row-nav">
-            <a
-              href={wazeUrl(store.store)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              aria-label={`נווט בוויז ל-${store.store.name}`}
-            >
-              <Navigation size={10} strokeWidth={2} />
-              Waze
-            </a>
-            <a
-              href={googleMapsUrl(store.store)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              aria-label={`נווט בגוגל מפות ל-${store.store.name}`}
-            >
-              <MapPin size={10} strokeWidth={2} />
-              Maps
-            </a>
-          </div>
+          {isWinner && (
+            <span className="badge badge-cheapest" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 4 }}>
+              <Tag size={10} strokeWidth={2.5} />
+              הכי זול
+            </span>
+          )}
+          {store.items_missing > 0 && (
+            <div className="basket-result-missing">
+              <AlertCircle size={12} strokeWidth={2} />
+              חסרים {store.items_missing} מוצרים
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <div className="basket-result-total tabular">{fmt(store.total_price)}</div>
-          {!isWinner && store.total_price - minTotal > 0.01 && (
-            <span style={{ fontSize: 12, color: 'var(--red-500)', fontWeight: 600 }} className="tabular">
-              +{fmt(store.total_price - minTotal)}
-            </span>
+          {!isWinner && diff > 0.01 && (
+            <span className="compare-row-diff tabular">+{fmt(diff)}</span>
           )}
-          {rank === 1 && (
-            <span className="badge badge-neutral" style={{ fontSize: 12 }}>מקום 2</span>
-          )}
+          {open ? <ChevronUp size={16} strokeWidth={2} color="var(--ink-400)" /> : <ChevronDown size={16} strokeWidth={2} color="var(--ink-400)" />}
         </div>
-      </div>
-
-      {/* Expand/collapse */}
-      <button
-        className="basket-result-toggle"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-      >
-        {open
-          ? <><ChevronUp size={15} strokeWidth={2} /> הסתר פירוט</>
-          : <><ChevronDown size={15} strokeWidth={2} /> פירוט פריטים ({store.item_prices.filter(i => !i.missing).length}/{store.item_prices.length})</>
-        }
       </button>
 
       {open && (
-        <div className="basket-result-breakdown">
-          {store.item_prices.map((item, i) => (
-            <div key={i} className="basket-breakdown-row">
-              <div className="basket-breakdown-name" title={item.product_name}>
-                {item.product_name}
-                {item.quantity > 1 && (
-                  <span style={{ color: 'var(--ink-400)', marginInlineStart: 4 }}>×{item.quantity}</span>
-                )}
-              </div>
-              {item.missing
-                ? <span className="basket-breakdown-missing">לא זמין</span>
-                : <span className="basket-breakdown-line tabular">{fmt(item.line_total)}</span>
-              }
-            </div>
-          ))}
-
-          <div className="basket-breakdown-row"
-            style={{ background: 'var(--surface-50)', borderTop: '2px solid var(--line)' }}>
-            <div className="basket-breakdown-name" style={{ fontWeight: 700 }}>סה״כ</div>
-            <span className="basket-breakdown-line tabular" style={{ fontSize: 17, fontWeight: 800 }}>
-              {fmt(store.total_price)}
-            </span>
+        <>
+          <div className="basket-result-actions">
+            <a href={wazeUrl(store.store)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${store.store.name}`}>
+              <Navigation size={12} strokeWidth={2} />
+              Waze
+            </a>
+            <a href={googleMapsUrl(store.store)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בגוגל מפות ל-${store.store.name}`}>
+              <MapPin size={12} strokeWidth={2} />
+              Maps
+            </a>
+            {store.store.delivery_url && (
+              <a href={store.store.delivery_url} target="_blank" rel="noopener noreferrer" className="compare-row-delivery">
+                <Truck size={12} strokeWidth={2} />
+                משלוח
+                <ExternalLink size={9} strokeWidth={2} />
+              </a>
+            )}
           </div>
-        </div>
+
+          <div className="basket-result-breakdown">
+            {store.item_prices.map((item, i) => (
+              <div key={i} className="basket-breakdown-row">
+                <div className="basket-breakdown-name" title={item.product_name}>
+                  {item.product_name}
+                  {item.quantity > 1 && (
+                    <span style={{ color: 'var(--ink-400)', marginInlineStart: 4 }}>×{item.quantity}</span>
+                  )}
+                </div>
+                {item.missing
+                  ? <span className="basket-breakdown-missing">לא זמין</span>
+                  : <span className="basket-breakdown-line tabular">{fmt(item.line_total)}</span>
+                }
+              </div>
+            ))}
+
+            <div className="basket-breakdown-row"
+              style={{ background: 'var(--surface-50)', borderTop: '2px solid var(--line)' }}>
+              <div className="basket-breakdown-name" style={{ fontWeight: 700 }}>סה״כ</div>
+              <span className="basket-breakdown-line tabular" style={{ fontSize: 17, fontWeight: 800 }}>
+                {fmt(store.total_price)}
+              </span>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -312,6 +267,9 @@ export function BasketPage() {
   }
   // Long baskets show the first few items; the rest is one tap away (editing always shows all)
   const COLLAPSED_COUNT = 5;
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [cities, setCities] = useState<string[]>([]);
+  useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
   const [showAllItems, setShowAllItems] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -360,6 +318,9 @@ export function BasketPage() {
     setChain(next); saveChainFilter(next);
     if (results || loading) void runCompare({ city, chain: next });
   }
+
+  const onLocatedCity = (found: string) => changeCity(matchCity(found, cities));
+  const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity);
 
   const completeStores = results ? results.stores.filter(s => s.items_missing === 0) : [];
   const maxTotal = completeStores.length >= 2
@@ -545,10 +506,43 @@ export function BasketPage() {
           הוסף מוצר
         </button>
 
-        {/* Store filters: the comparison only covers the chosen city / chain */}
+        {/* One chip for city / chain; the comparison only covers what is chosen here */}
         {items.length > 0 && (
-          <StoreFilters city={city} chain={chain} onCityChange={changeCity} onChainChange={changeChain} />
+          <div className="filter-bar">
+            <button
+              className={`filter-chip${(city || chain) ? ' active' : ''}`}
+              onClick={() => setFilterOpen(true)}
+              aria-label="סינון חנויות"
+            >
+              <SlidersHorizontal size={15} strokeWidth={2} />
+              {(city || chain) ? [city, chain].filter(Boolean).join(' · ') : 'סינון לפי עיר או רשת'}
+              <ChevronDown size={13} strokeWidth={2.5} style={{ opacity: 0.6 }} />
+            </button>
+            {(city || chain) && (
+              <button
+                className="filter-chip-clear"
+                onClick={() => { changeCity(''); changeChain(''); }}
+                aria-label="נקי סינון"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
         )}
+
+        {filterOpen && (
+          <FilterSheet
+            city={city}
+            cities={cities}
+            chain={chain}
+            locating={locating}
+            onCity={changeCity}
+            onChain={changeChain}
+            onLocate={locate}
+            onClose={() => setFilterOpen(false)}
+          />
+        )}
+        <LocationPrompt problem={problem} onRetry={locate} onConfirm={request} onPickCity={pickCity} suggestedCity={suggestedCity} onClose={dismiss} />
 
         {/* Error */}
         {error && (
