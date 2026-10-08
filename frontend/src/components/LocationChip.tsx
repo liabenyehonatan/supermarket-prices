@@ -65,12 +65,13 @@ export function LocationChip() {
   return (
     <>
       <button
-        className={`location-chip${city ? ' active' : ''}`}
+        className={`location-chip${city ? ' active' : ' icon-only'}`}
         onClick={() => { setQ(''); setDragY(0); setOpen(true); }}
-        aria-label={city ? `עיר: ${city}. שינוי` : 'בחירת עיר'}
+        aria-label={city ? `עיר: ${city}. שינוי` : 'כל הארץ. בחירת עיר'}
+        title={city || 'כל הארץ'}
       >
         <MapPin size={15} strokeWidth={2} />
-        <span className="location-chip-label">{city || 'כל הארץ'}</span>
+        {city && <span className="location-chip-label">{city}</span>}
         <ChevronDown size={14} strokeWidth={2} />
       </button>
 

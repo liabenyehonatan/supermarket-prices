@@ -36,6 +36,21 @@ export function cheapestPricesBatch(barcodes: string[]): Promise<Record<string, 
   });
 }
 
+export interface DataStats { chains: number; stores: number; products: number; last_updated: string | null }
+
+let statsRequest: Promise<DataStats> | null = null;
+
+/** Totals and the last refresh time, shared by one request per page load. */
+export function fetchStats(): Promise<DataStats> {
+  if (!statsRequest) {
+    statsRequest = request<DataStats>('/api/v1/stats').catch(err => {
+      statsRequest = null;
+      throw err;
+    });
+  }
+  return statsRequest;
+}
+
 // The city list rarely changes, so share one request per page load.
 // (Dev StrictMode runs effects twice, which used to fire this call twice.)
 let citiesRequest: Promise<string[]> | null = null;

@@ -2585,25 +2585,22 @@ img { max-width: 100%; display: block; }
 .compare-delta strong.down { color: var(--green-700); }
 .compare-delta strong.up { color: var(--red-500); }
 .basket-card {
-  position: relative; flex: 0 0 122px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
-  min-height: 100px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-lg);
-  background: var(--surface-0); cursor: pointer; font-family: var(--font-sans); text-align: start;
+  position: relative; flex: 0 0 108px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-height: 78px; padding: 10px 12px; border: 1px solid transparent; border-radius: var(--r-lg);
+  background: var(--surface-100); cursor: pointer; font-family: var(--font-sans); text-align: start;
   transition: transform var(--dur-base, 0.2s) var(--ease-out, ease-out), box-shadow var(--dur-base, 0.2s) var(--ease-out, ease-out);
 }
-.basket-card-name { font-size: var(--fs-15, 15px); font-weight: var(--fw-semibold); color: var(--ink-900); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.basket-card-name { font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--ink-700); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .basket-card-meta { font-size: var(--fs-12); color: var(--ink-500); }
-.basket-card-quiet { margin-top: auto; font-size: var(--fs-13); color: var(--ink-400); }
-/* The active basket: lifted, deeper shadow, green top edge, and the only filled button */
+/* The active basket: white and lifted with a green top edge; the others sit back, slightly dimmed */
 .basket-card.is-active {
-  transform: scale(1.04); z-index: 1; border-color: transparent; border-top: 3px solid var(--green-700);
+  background: var(--surface-0); transform: scale(1.05); z-index: 1; border-top: 3px solid var(--green-700);
   box-shadow: 0 8px 20px rgba(30, 60, 40, 0.16);
 }
-.basket-card-cta {
-  margin-top: auto; align-self: stretch; height: 30px; border-radius: 9px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--green-700); color: #fff; font-size: var(--fs-13); font-weight: var(--fw-semibold);
-}
-.basket-card-new { flex: 0 0 80px; align-items: center; justify-content: center; border-style: dashed; color: var(--green-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
+.basket-card.is-active .basket-card-name { color: var(--ink-900); }
+.basket-card-cta { margin-top: auto; padding-top: 4px; font-size: var(--fs-13); font-weight: var(--fw-semibold); color: var(--green-700); }
+.basket-card-cta::after { content: " ‹"; }
+.basket-card-new { flex: 0 0 72px; background: transparent; border: 1.5px dashed var(--line-strong); align-items: center; justify-content: center; border-style: dashed; color: var(--green-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
 
 /* Header pill: always shows which basket new items go to */
 .basket-pill {
@@ -2616,7 +2613,7 @@ img { max-width: 100%; display: block; }
 @media (max-width: 420px) {
   .header-actions { gap: 6px; }
   .location-chip { max-width: 88px; padding: 0 8px; gap: 3px; }
-  .basket-pill { max-width: 100px; padding: 0 8px; gap: 5px; }
+  .basket-pill { max-width: 132px; padding: 0 8px; gap: 5px; }
 }
 /* The header search is only a shortcut home; on phones the logo and bottom nav already do that */
 @media (max-width: 480px) { .header-search { display: none; } }
@@ -2635,3 +2632,15 @@ img { max-width: 100%; display: block; }
 .edit-bar-all input { width: 18px; height: 18px; accent-color: var(--green-600); }
 /* The whole row is the tap target, not just the basket name */
 .basket-row.basket-row-main { width: 100%; }
+
+/* Home first screen: slimmer header, shorter banner, a visible trust line */
+.location-chip.icon-only { padding: 0 10px; }
+@media (max-width: 767px) { .header-basket-btn { display: none; } }  /* the bottom nav already has the basket tab */
+.hero-banner { height: clamp(128px, 26vw, 170px); }
+.hero-banner-title .hero-title { font-size: var(--fs-18, 18px); }
+.trust-line {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: var(--sp-3) 0 0; font-size: var(--fs-13); color: var(--ink-600);
+}
+.trust-line svg { color: var(--green-600); flex-shrink: 0; }
+.hero-section { padding-top: var(--sp-1, 4px); padding-bottom: var(--sp-4); }

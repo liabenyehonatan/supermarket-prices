@@ -29,6 +29,7 @@ function BuildBasketIcon() {
 import { searchProducts, cheapestPricesBatch } from '../api/client';
 import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
+import { TrustLine } from '../components/TrustLine';
 import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
@@ -329,7 +330,6 @@ export function SearchPage() {
         {!hasQuery && (
           <div className="hero-section">
             <HeroBanner title="השוואת מחירי סופרמרקט" />
-            <p className="hero-tagline">34 רשתות · עדכון יומי</p>
           </div>
         )}
 
@@ -375,6 +375,8 @@ export function SearchPage() {
                 ))}
               </div>
             )}
+
+            {!hasQuery && <TrustLine />}
 
             {!hasQuery && showHow && (
               <div className="search-steps-below">
@@ -526,9 +528,7 @@ export function SearchPage() {
                       >
                         <span className="basket-card-name">{b.name}</span>
                         <span className="basket-card-meta">{count === 0 ? 'ריק' : count === 1 ? 'פריט אחד' : `${count} פריטים`}</span>
-                        {isActive
-                          ? <span className="basket-card-cta">{count === 0 ? 'להוספת מוצרים' : 'להשוואה'}</span>
-                          : <span className="basket-card-quiet">לצפייה</span>}
+                        {isActive && <span className="basket-card-cta">{count === 0 ? 'להוספה' : 'להשוואה'}</span>}
                       </button>
                     );
                   })}

@@ -1,6 +1,7 @@
 # app/api/routes.py
 
 import logging
+import time
 from decimal import Decimal
 from typing import List, Optional
 
@@ -23,6 +24,7 @@ from app.api.schemas import (
     BasketStoreTotal,
     StoreResponse,
     ChainResponse,
+    StatsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -261,6 +263,34 @@ async def list_cities(db: AsyncSession = Depends(get_db)):
         .order_by(Store.city)
     )
     return [row[0] for row in result.all()]
+
+
+# ─── Endpoint: Overall data stats (for the home page trust line) ─────────────
+
+_STATS_TTL_SECONDS = 600
+_stats_cache: tuple[float, StatsResponse] | None = None
+
+
+@router.get(
+    "/stats",
+    response_model=StatsResponse,
+    summary="How much data we hold and when prices were last refreshed",
+)
+async def get_stats(db: AsyncSession = Depends(get_db)):
+    """Counts and the latest scrape time. Cached for a few minutes: the numbers move at most daily."""
+    global _stats_cache
+    now = time.monotonic()
+    if _stats_cache and now - _stats_cache[0] < _STATS_TTL_SECONDS:
+        return _stats_cache[1]
+
+    chains = (await db.execute(select(func.count(func.distinct(Store.chain_id))))).scalar_one()
+    stores = (await db.execute(select(func.count(Store.id)))).scalar_one()
+    products = (await db.execute(select(func.count(Product.id)))).scalar_one()
+    last_updated = (await db.execute(select(func.max(Price.scraped_at)))).scalar_one()
+
+    stats = StatsResponse(chains=chains, stores=stores, products=products, last_updated=last_updated)
+    _stats_cache = (now, stats)
+    return stats
 
 
 # ─── Endpoint: Product image (via Shufersal CDN) ─────────────────────────────
