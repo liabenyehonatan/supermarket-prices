@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 from decimal import Decimal
-from datetime import datetime, date as date_type
+from datetime import datetime
 from typing import Optional, List
 
 
@@ -35,18 +35,6 @@ class UnitPriceInfo(BaseModel):
     """Cheapest current price per unit of measure (e.g. per 100 g) for one product."""
     unit_price: Decimal
     unit: Optional[str] = None
-
-
-class PricePoint(BaseModel):
-    date: date_type
-    price: Decimal
-
-
-class ProductHistoryResponse(BaseModel):
-    """Cheapest price across all stores on each date the cheapest price changed."""
-    barcode: str
-    days: int
-    points: List[PricePoint]
 
 
 class ChainResponse(BaseModel):

@@ -2,7 +2,6 @@
 
 import logging
 import time
-from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
@@ -28,10 +27,7 @@ from app.api.schemas import (
     StatsResponse,
     ExampleComparison,
     UnitPriceInfo,
-    PricePoint,
-    ProductHistoryResponse,
 )
-from app.history import build_cheapest_history
 
 logger = logging.getLogger(__name__)
 
@@ -252,42 +248,6 @@ async def cheapest_prices_batch(
         .group_by(Product.barcode)
     )
     return {barcode: price for barcode, price in rows.all()}
-
-
-# ─── Endpoint: Price history ────────────────────────────────────────────────
-
-@router.get(
-    "/products/{barcode}/history",
-    response_model=ProductHistoryResponse,
-    summary="Cheapest price across all stores over the last N days",
-)
-async def product_price_history(
-    barcode: str,
-    days: int = Query(90, ge=7, le=365),
-    db: AsyncSession = Depends(get_db),
-):
-    """Points appear only where the cheapest price changed; fewer than 2 points means no history yet."""
-    product = (await db.execute(
-        select(Product).where(Product.barcode == barcode)
-    )).scalar_one_or_none()
-    if not product:
-        raise HTTPException(status_code=404, detail=f"Product with barcode {barcode} not found")
-
-    result = await db.execute(
-        select(Price.store_id, Price.price_updated_at, Price.price)
-        .join(Store, Price.store_id == Store.id)
-        .where(
-            Price.product_id == product.id,
-            ~Store.name.ilike("%סיטונ%"),  # same wholesale exclusion as /compare
-        )
-    )
-    today = date.today()
-    points = build_cheapest_history(result.all(), today - timedelta(days=days), today)
-    return ProductHistoryResponse(
-        barcode=barcode,
-        days=days,
-        points=[PricePoint(date=d, price=p) for d, p in points],
-    )
 
 
 # ─── Endpoint: Cheapest unit price for many products at once ────────────────
