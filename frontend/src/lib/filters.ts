@@ -13,13 +13,24 @@ function read(key: string): string {
   try { return sessionStorage.getItem(key) ?? ''; } catch { return ''; }
 }
 
+const CITY_EVENT = 'cityfilterchange';
+
 function write(key: string, value: string) {
+  const changed = read(key) !== value;
   try {
     if (value) sessionStorage.setItem(key, value);
     else sessionStorage.removeItem(key);
   } catch {
     // storage blocked — the filter just won't carry over to other pages
   }
+  if (changed && key === CITY_KEY) window.dispatchEvent(new Event(CITY_EVENT));
+}
+
+/** Lets pages follow a city change made elsewhere (e.g. the header chip). Returns an unsubscribe. */
+export function onCityFilterChange(cb: (city: string) => void): () => void {
+  const handler = () => cb(read(CITY_KEY));
+  window.addEventListener(CITY_EVENT, handler);
+  return () => window.removeEventListener(CITY_EVENT, handler);
 }
 
 export const readCityFilter  = () => read(CITY_KEY);

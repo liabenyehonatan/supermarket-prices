@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
@@ -10,8 +10,10 @@ import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
 import { StoreFilters } from '../components/StoreFilters';
 import { useBasket } from '../context/BasketContext';
-import { readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
-import type { BasketCompareResponse, BasketStoreTotal } from '../types';
+import { onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
+import { BasketSwitcher } from '../components/BasketSwitcher';
+import { snapshotFrom, timeAgo } from '../lib/basketCompare';
+import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal } from '../types';
 
 function CartPercentIcon() {
   // Shopping cart with a clear percent sign inside, drawn in currentColor so it follows
@@ -164,13 +166,7 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
 
       {/* Expand/collapse */}
       <button
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          gap: 6, padding: '10px 20px', border: 'none',
-          borderTop: '1px solid var(--line)', background: 'transparent',
-          color: 'var(--ink-500)', fontSize: 13, fontWeight: 500,
-          cursor: 'pointer', fontFamily: 'var(--font-sans)',
-        }}
+        className="basket-result-toggle"
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
       >
@@ -210,15 +206,44 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
   );
 }
 
+/** "Last time you looked, it was X — now it is Y" for the same basket and filters. */
+function CompareDelta({ prev, now }: { prev: BasketSnapshot | null; now: BasketSnapshot }) {
+  if (!prev) return <div className="compare-delta">זו ההשוואה הראשונה לסל הזה. בפעם הבאה נראה לך מה השתנה.</div>;
+  const when = timeAgo(prev.at);
+  if (prev.sig !== now.sig) {
+    return <div className="compare-delta">בפעם הקודמת ({when}) הסל היה שונה: {fmt(prev.total)}. הוספת או הסרת מוצרים, אז אין השוואה ישירה.</div>;
+  }
+  if (prev.filterKey !== now.filterKey) {
+    return <div className="compare-delta">בפעם הקודמת ({when}) סיננת אחרת, אז אין השוואה ישירה.</div>;
+  }
+  const diff = now.total - prev.total;
+  if (Math.abs(diff) < 0.005) {
+    return <div className="compare-delta">מאז {when} המחיר לא השתנה: <strong>{fmt(now.total)}</strong></div>;
+  }
+  const down = diff < 0;
+  return (
+    <div className="compare-delta">
+      <span>
+        בפעם הקודמת ({when}) הסל היה {fmt(prev.total)}, עכשיו <strong>{fmt(now.total)}</strong>
+        {' '}— <strong className={down ? 'down' : 'up'}>{down ? 'ירד' : 'עלה'} ב-{fmt(Math.abs(diff))}</strong>
+      </span>
+    </div>
+  );
+}
+
 /* ── Main page ───────────────────────────────────────────── */
 export function BasketPage() {
   const navigate = useNavigate();
-  const { items, updateQty, removeItem, clearBasket } = useBasket();
+  const { items, updateQty, removeItem, clearBasket, activeId, active, recordCompare } = useBasket();
   const [results, setResults] = useState<BasketCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [city, setCity]       = useState(readCityFilter);
   const [chain, setChain]     = useState(readChainFilter);
+  // How the previous comparison of this basket looked, to say what changed since then
+  const [prevCompare, setPrevCompare] = useState<BasketSnapshot | null>(null);
+  const [nowCompare, setNowCompare] = useState<BasketSnapshot | null>(null);
+  useEffect(() => { setResults(null); setPrevCompare(null); setNowCompare(null); setError(null); }, [activeId]);
   const resultsRef = useRef<HTMLDivElement>(null);
   const requestId  = useRef(0);
 
@@ -230,6 +255,12 @@ export function BasketPage() {
       const data = await compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })), filters);
       if (id !== requestId.current) return;
       setResults(data);
+      const snap = snapshotFrom(data, items, filters);
+      if (snap) {
+        setPrevCompare(active.lastCompare ?? null);
+        setNowCompare(snap);
+        recordCompare(active.id, snap);
+      }
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch {
       if (id === requestId.current) setError('לא הצלחנו להשוות. בדוק שהשרת פעיל ונסה שוב.');
@@ -245,6 +276,8 @@ export function BasketPage() {
     setCity(next); saveCityFilter(next);
     if (results || loading) void runCompare({ city: next, chain });
   }
+  useEffect(() => onCityFilterChange(changeCity));  // header chip; resubscribes so it sees fresh state
+
   function changeChain(next: string) {
     setChain(next); saveChainFilter(next);
     if (results || loading) void runCompare({ city, chain: next });
@@ -262,7 +295,8 @@ export function BasketPage() {
     return (
       <div className="page-wrapper">
         <div className="container">
-          <div className="empty-state" style={{ paddingTop: 64 }}>
+          <BasketSwitcher />
+          <div className="empty-state" style={{ paddingTop: 32 }}>
             <div className="empty-state-icon">
               <ShoppingBasket size={32} strokeWidth={1.5} />
             </div>
@@ -287,9 +321,7 @@ export function BasketPage() {
         {/* Header */}
         <div className="section-header" style={{ marginBottom: 20 }}>
           <div>
-            <h1 style={{ fontSize: 'var(--fs-24)', fontWeight: 700, color: 'var(--ink-900)', letterSpacing: '-0.01em' }}>
-              הסל שלי
-            </h1>
+            <BasketSwitcher />
             <div className="section-subtitle">
               {items.length} מוצר{items.length !== 1 ? 'ים' : ''} · {totalItems} יח׳ בסך הכל
             </div>
@@ -413,6 +445,8 @@ export function BasketPage() {
         {results && !loading && (
           <>
             <div className="section-divider" ref={resultsRef}>תוצאות ההשוואה</div>
+
+            {nowCompare && <CompareDelta prev={prevCompare} now={nowCompare} />}
 
             <div className="section-header" style={{ marginBottom: 16 }}>
               <div>
