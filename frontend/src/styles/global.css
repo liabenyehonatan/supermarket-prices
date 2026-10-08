@@ -2709,3 +2709,13 @@ img { max-width: 100%; display: block; }
 .compare-row-more { width: 100%; display: flex; flex-direction: column; gap: 6px; padding-top: var(--sp-2); border-top: 1px dashed var(--line); }
 .compare-row-more .compare-row-nav { margin-top: 0; }
 .compare-row-diff { font-size: var(--fs-12); color: var(--ink-500); }
+
+/* Product page: price history */
+.price-history { background: var(--bg-card); border-radius: var(--r-xl); box-shadow: var(--shadow-xs); padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-4); color: var(--green-600); }
+.price-history-verdict { font-size: var(--fs-14); font-weight: var(--fw-semibold); margin-bottom: var(--sp-2); }
+.price-history-verdict.good { color: var(--green-700); }
+.price-history-verdict.bad { color: var(--orange-700); }
+.price-history-verdict.mid { color: var(--ink-700); }
+.price-history-svg { width: 100%; height: 72px; display: block; overflow: visible; }
+.price-history-axis { display: flex; justify-content: space-between; font-size: var(--fs-12); color: var(--ink-500); margin-top: var(--sp-1); }
+.price-history-note { font-size: var(--fs-13); color: var(--ink-500); margin: 0 var(--sp-1) var(--sp-3); }

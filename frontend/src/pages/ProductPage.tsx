@@ -4,14 +4,15 @@ import {
   ArrowRight, MapPin, Truck, Plus, Minus,
   Check, Tag, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
 } from 'lucide-react';
-import { compareProduct, fetchCities } from '../api/client';
+import { compareProduct, fetchCities, productHistory } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
-import type { ProductCompareResponse, PriceAtStore } from '../types';
+import type { ProductCompareResponse, PriceAtStore, PriceHistoryResponse } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
+import { PriceHistory } from '../components/PriceHistory';
 import { FilterSheet } from '../components/FilterSheet';
 import { LocationPrompt } from '../components/LocationPrompt';
 
@@ -75,6 +76,7 @@ export function ProductPage() {
   const navigate = useNavigate();
   const { addItem, items } = useBasket();
   const [data, setData]   = useState<ProductCompareResponse | null>(null);
+  const [history, setHistory] = useState<PriceHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty]     = useState(1);
@@ -98,6 +100,12 @@ export function ProductPage() {
       .then(setData)
       .catch(() => setError('לא הצלחנו לטעון. תנסה שוב?'))
       .finally(() => setLoading(false));
+  }, [barcode]);
+
+  useEffect(() => {
+    if (!barcode) return;
+    setHistory(null);
+    productHistory(barcode).then(setHistory).catch(() => {});  // optional extra; page works without it
   }, [barcode]);
 
   useEffect(() => {
@@ -207,6 +215,8 @@ export function ProductPage() {
                 </div>
               )}
             </div>
+
+            {history && <PriceHistory points={history.points} days={history.days} />}
 
             {/* ── Compare table ──────────────────────────────── */}
             <div className="section-header">
