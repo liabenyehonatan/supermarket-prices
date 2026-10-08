@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, ShoppingBasket } from 'lucide-react';
 import { SaliLogo } from './SaliLogo';
 import { LocationChip } from './LocationChip';
+import { BasketSwitcher } from './BasketSwitcher';
 import { useBasket } from '../context/BasketContext';
 
 export function Header() {
@@ -43,6 +44,7 @@ export function Header() {
 
         <div className="header-actions">
           <LocationChip />
+          {location.pathname !== '/basket' && <BasketSwitcher variant="pill" />}
           <button
             className="header-basket-btn"
             onClick={() => navigate('/basket')}

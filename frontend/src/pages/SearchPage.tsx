@@ -34,7 +34,6 @@ import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
 import { timeAgo } from '../lib/basketCompare';
-import { readRecent, type RecentProduct } from '../lib/recent';
 import { FEATURED_CHAINS, readChainFilter, saveChainFilter } from '../lib/filters';
 
 /* ── constants ────────────────────────────────────────────── */
@@ -131,14 +130,9 @@ export function SearchPage() {
     setShowHow(false);
     try { localStorage.setItem('sali_seen_how', '1'); } catch { /* storage blocked — card returns next visit */ }
   }
-  const { baskets, activeId, setActive } = useBasket();
-  const filledBaskets = baskets.filter(b => b.items.length > 0);
-  const [recent] = useState<RecentProduct[]>(readRecent);
-  const [recentPrices, setRecentPrices] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (!recent.length) return;
-    cheapestPricesBatch(recent.map(r => r.barcode)).then(setRecentPrices).catch(() => {});
-  }, [recent]);
+  const { baskets, activeId, setActive, openCreate } = useBasket();
+  // With one basket the card only appears once it has items; with several they are all listed
+  const shownBaskets = baskets.length > 1 ? baskets : baskets.filter(b => b.items.length > 0);
   const [query, setQuery]     = useState(searchParams.get('q') ?? '');
   const [results, setResults] = useState<Product[]>(() => initialSnap.current?.results ?? []);
   const [hasMore, setHasMore] = useState(() => initialSnap.current?.hasMore ?? false);
@@ -497,13 +491,17 @@ export function SearchPage() {
         {/* ── Chains carousel ───────────────────────────────── */}
         {!hasQuery && (
           <>
-            {filledBaskets.length > 0 && (
+            {shownBaskets.length > 0 && (
               <>
                 <div className="section-header" style={{ marginBottom: 12 }}>
                   <div className="section-title">הסלים שלי</div>
                 </div>
-                <div className="recent-row">
-                  {filledBaskets.map(b => {
+                <div className="card-row">
+                  <button className="basket-card basket-card-new" onClick={openCreate}>
+                    <Plus size={22} strokeWidth={2} />
+                    <span>סל חדש</span>
+                  </button>
+                  {shownBaskets.map(b => {
                     const count = b.items.reduce((sum, i) => sum + i.quantity, 0);
                     return (
                       <button key={b.id} className="basket-card" onClick={() => { setActive(b.id); navigate('/basket'); }}>
@@ -511,36 +509,14 @@ export function SearchPage() {
                           <span className="basket-dot" style={{ background: b.color }} />
                           <span className="basket-card-name">{b.name}</span>
                         </span>
-                        <span className="basket-card-meta">{count === 1 ? 'פריט אחד' : `${count} פריטים`}</span>
+                        <span className="basket-card-meta">{count === 0 ? 'ריק' : count === 1 ? 'פריט אחד' : `${count} פריטים`}</span>
                         <span className="basket-card-price">
-                          {b.lastCompare ? `₪${b.lastCompare.total.toFixed(2)}` : 'השוואה ראשונה'}
+                          {b.lastCompare ? `₪${b.lastCompare.total.toFixed(2)}` : count === 0 ? 'עוד אין מוצרים' : 'השוואה ראשונה'}
                         </span>
                         <span className="basket-card-meta">
-                          {b.lastCompare ? `נבדק ${timeAgo(b.lastCompare.at)}` : 'לחצי להשוואה'}
+                          {b.lastCompare ? `נבדק ${timeAgo(b.lastCompare.at)}` : count === 0 ? 'חפשי והוסיפי' : 'לחצי להשוואה'}
                         </span>
                         {b.id === activeId && <span className="basket-card-active">פעיל</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            {recent.length > 0 && (
-              <>
-                <div className="section-header" style={{ marginBottom: 12 }}>
-                  <div className="section-title">חיפשת לאחרונה</div>
-                </div>
-                <div className="recent-row">
-                  {recent.map(r => {
-                    const { displayName } = extractProductDisplay(r.name, r.brand, r.unit_of_measure);
-                    return (
-                      <button key={r.barcode} className="recent-card" onClick={() => navigate(`/product/${r.barcode}`)}>
-                        <ProductImage barcode={r.barcode} name={r.name} size={56} />
-                        <span className="recent-name">{displayName}</span>
-                        {recentPrices[r.barcode] != null && (
-                          <span className="recent-price">{fmt(recentPrices[r.barcode])}</span>
-                        )}
                       </button>
                     );
                   })}

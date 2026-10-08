@@ -2,7 +2,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { BasketProvider } from './context/BasketContext';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
-import { BasketUndoToast } from './components/BasketSwitcher';
+import { BasketOverlays } from './components/BasketOverlays';
 import { SearchPage } from './pages/SearchPage';
 import { ProductPage } from './pages/ProductPage';
 import { BasketPage } from './pages/BasketPage';
@@ -23,7 +23,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <BottomNav />
-        <BasketUndoToast />
+        <BasketOverlays />
       </HashRouter>
     </BasketProvider>
   );

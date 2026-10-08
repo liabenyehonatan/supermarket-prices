@@ -7,7 +7,7 @@ import { timeAgo } from '../lib/basketCompare';
 function fmt(p: number) { return `₪${p.toFixed(2)}`; }
 
 /** Header control on the basket page: shows the active basket and opens the list of all baskets. */
-export function BasketSwitcher() {
+export function BasketSwitcher({ variant = 'title' }: { variant?: 'title' | 'pill' }) {
   const { baskets, active, setActive, createBasket, renameBasket, deleteBasket } = useBasket();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -35,10 +35,10 @@ export function BasketSwitcher() {
 
   return (
     <>
-      <button className="basket-switcher" onClick={() => setOpen(true)} aria-label={`סל פעיל: ${active.name}. החלפה`}>
+      <button className={variant === 'pill' ? 'basket-pill' : 'basket-switcher'} onClick={() => setOpen(true)} aria-label={`סל פעיל: ${active.name}. החלפה`}>
         <span className="basket-dot" style={{ background: active.color }} />
-        <span className="basket-switcher-name">{active.name}</span>
-        <ChevronDown size={16} strokeWidth={2} />
+        <span className={variant === 'pill' ? 'basket-pill-name' : 'basket-switcher-name'}>{active.name}</span>
+        <ChevronDown size={variant === 'pill' ? 13 : 16} strokeWidth={2} />
       </button>
 
       {open && createPortal(
@@ -120,14 +120,3 @@ export function BasketSwitcher() {
   );
 }
 
-/** Lives at the app root so it survives the basket page switching between its empty and filled layouts. */
-export function BasketUndoToast() {
-  const { lastDeleted, undoDelete } = useBasket();
-  if (!lastDeleted) return null;
-  return (
-    <div className="undo-toast" role="status">
-      <span>הסל "{lastDeleted.basket.name}" נמחק</span>
-      <button onClick={undoDelete}>ביטול</button>
-    </div>
-  );
-}

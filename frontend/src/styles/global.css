@@ -2535,7 +2535,7 @@ img { max-width: 100%; display: block; }
 .location-row:disabled { opacity: 0.6; }
 .location-empty { text-align: center; color: var(--ink-400); font-size: var(--fs-14); padding: var(--sp-6) 0; }
 
-/* First-visit "how it works" card, its reopen link, and the recently-opened row */
+/* First-visit "how it works" card, its reopen link, and the horizontal basket-card row */
 .search-steps-below { position: relative; }
 .search-steps-close {
   position: absolute; top: var(--sp-3); inset-inline-end: 0;
@@ -2548,15 +2548,8 @@ img { max-width: 100%; display: block; }
   font-family: var(--font-sans); font-size: var(--fs-13); color: var(--ink-500);
   text-decoration: underline; cursor: pointer;
 }
-.recent-row { display: flex; gap: var(--sp-3); overflow-x: auto; margin-bottom: var(--sp-6); padding-bottom: 4px; scrollbar-width: none; }
-.recent-row::-webkit-scrollbar { display: none; }
-.recent-card {
-  flex: 0 0 104px; display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: var(--sp-3) var(--sp-2); border: 1px solid var(--line); border-radius: var(--r-lg);
-  background: var(--surface-0); cursor: pointer; font-family: var(--font-sans);
-}
-.recent-name { font-size: var(--fs-12); color: var(--ink-700); text-align: center; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.recent-price { font-size: var(--fs-13); font-weight: var(--fw-semibold); color: var(--green-700); }
+.card-row { display: flex; gap: var(--sp-3); overflow-x: auto; margin-bottom: var(--sp-6); padding-bottom: 4px; scrollbar-width: none; }
+.card-row::-webkit-scrollbar { display: none; }
 
 /* Named baskets */
 .basket-switcher {
@@ -2601,3 +2594,20 @@ img { max-width: 100%; display: block; }
 .basket-card-meta { font-size: var(--fs-12); color: var(--ink-500); }
 .basket-card-price { font-size: var(--fs-16); font-weight: 700; color: var(--green-700); }
 .basket-card-active { position: absolute; top: 8px; inset-inline-end: 8px; font-size: 10px; padding: 2px 6px; border-radius: 99px; background: var(--green-100); color: var(--green-700); }
+.basket-card-new { flex: 0 0 96px; align-items: center; justify-content: center; border-style: dashed; color: var(--green-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
+
+/* Header pill: always shows which basket new items go to */
+.basket-pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; max-width: 120px; padding: 0 var(--sp-3);
+  border: 1.5px solid var(--line-strong); border-radius: var(--r-full); background: transparent; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-13); font-weight: var(--fw-medium); color: var(--ink-700);
+}
+.basket-pill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.basket-pill:hover { border-color: var(--ink-400); }
+@media (max-width: 420px) {
+  .header-actions { gap: 6px; }
+  .location-chip { max-width: 88px; padding: 0 8px; gap: 3px; }
+  .basket-pill { max-width: 100px; padding: 0 8px; gap: 5px; }
+}
+/* The header search is only a shortcut home; on phones the logo and bottom nav already do that */
+@media (max-width: 480px) { .header-search { display: none; } }
