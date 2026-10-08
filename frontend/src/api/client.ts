@@ -51,6 +51,17 @@ export function fetchStats(): Promise<DataStats> {
   return statsRequest;
 }
 
+export interface UnitPriceInfo { unit_price: number | string; unit?: string | null }
+
+export function fetchUnitPrices(barcodes: string[]): Promise<Record<string, UnitPriceInfo>> {
+  if (barcodes.length === 0) return Promise.resolve({});
+  return request<Record<string, UnitPriceInfo>>('/api/v1/products/unit-prices-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ barcodes }),
+  });
+}
+
 export interface ExampleComparison {
   barcode: string; name: string; brand?: string; unit_of_measure?: string;
   cheapest_price: number | string; cheapest_chain: string;

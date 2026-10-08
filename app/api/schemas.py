@@ -31,6 +31,12 @@ class ExampleComparison(BaseModel):
     stores_count: int
 
 
+class UnitPriceInfo(BaseModel):
+    """Cheapest current price per unit of measure (e.g. per 100 g) for one product."""
+    unit_price: Decimal
+    unit: Optional[str] = None
+
+
 class ChainResponse(BaseModel):
     id: int
     name: str

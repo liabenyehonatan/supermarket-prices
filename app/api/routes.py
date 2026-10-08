@@ -26,6 +26,7 @@ from app.api.schemas import (
     ChainResponse,
     StatsResponse,
     ExampleComparison,
+    UnitPriceInfo,
 )
 
 logger = logging.getLogger(__name__)
@@ -247,6 +248,45 @@ async def cheapest_prices_batch(
         .group_by(Product.barcode)
     )
     return {barcode: price for barcode, price in rows.all()}
+
+
+# ─── Endpoint: Cheapest unit price for many products at once ────────────────
+
+@router.post(
+    "/products/unit-prices-batch",
+    response_model=dict[str, UnitPriceInfo],
+    summary="Cheapest current price per unit (per 100 g, per litre…) for a list of barcodes",
+)
+async def unit_prices_batch(
+    payload: CheapestPriceRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    For ordering different pack sizes of similar products by what a unit really costs.
+    A barcode with no unit price on record is left out. Prices are per the product's own
+    `unit_of_measure`, so only compare values that share the same unit.
+    """
+    barcodes = [b for b in payload.barcodes if b]
+    if not barcodes:
+        return {}
+
+    rows = await db.execute(
+        select(Product.barcode, Product.unit_of_measure, func.min(Price.unit_price))
+        .join(Price, Price.product_id == Product.id)
+        .join(Store, Price.store_id == Store.id)
+        .where(
+            Product.barcode.in_(barcodes),
+            Price.is_current == True,
+            Price.unit_price.isnot(None),
+            Price.unit_price > 0,
+            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores, same as /compare
+        )
+        .group_by(Product.barcode, Product.unit_of_measure)
+    )
+    return {
+        barcode: UnitPriceInfo(unit_price=unit_price, unit=unit)
+        for barcode, unit, unit_price in rows.all()
+    }
 
 
 # ─── Endpoint: List cities ───────────────────────────────────────────────────

@@ -93,7 +93,6 @@ export interface BasketSnapshot {
 export interface Basket {
   id: string;
   name: string;
-  color: string;
   items: LocalBasketItem[];
   lastCompare?: BasketSnapshot;
 }

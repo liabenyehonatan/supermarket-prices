@@ -26,10 +26,11 @@ function BuildBasketIcon() {
   return <img src="/icons/basket-plant.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
 }
 
-import { searchProducts, cheapestPricesBatch } from '../api/client';
+import { searchProducts, cheapestPricesBatch, fetchUnitPrices, type UnitPriceInfo } from '../api/client';
 import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
 import { TrustLine } from '../components/TrustLine';
+import { useBasketWatch } from '../lib/basketWatch';
 import { ExampleComparisons } from '../components/ExampleComparisons';
 import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
@@ -110,6 +111,10 @@ function QuickAddButton({ product, small }: { product: Product; small?: boolean 
       type="button"
       className={`quick-add-btn${small ? ' small' : ''}${added ? ' added' : ''}`}
       onMouseDown={handleAdd}
+      // The add happens on mousedown (so the dropdown's blur can't swallow it). The click that follows must
+      // not reach the card around the button, or the page jumps to the product. A keyboard press produces
+      // a click with no mousedown (detail 0), so add on that one.
+      onClick={e => { e.preventDefault(); e.stopPropagation(); if (e.detail === 0) handleAdd(e); }}
       aria-label={`הוסף ${product.name} לסל`}
       title="הוסף לסל"
     >
@@ -133,6 +138,7 @@ export function SearchPage() {
   }
   const { baskets, activeId, setActive, openCreate } = useBasket();
   const basketRowRef = useRef<HTMLDivElement>(null);
+  const watch = useBasketWatch();
   // With one basket the card only appears once it has items; with several they are all listed
   const shownBaskets = baskets.length > 1 ? baskets : baskets.filter(b => b.items.length > 0);
 
@@ -289,6 +295,40 @@ export function SearchPage() {
   }
 
   const hasQuery = query.trim().length > 0;
+
+  // Ordering of the full results list. "unit" needs one extra request, made only when it is chosen.
+  const [sortMode, setSortMode] = useState<'relevance' | 'price' | 'unit'>('relevance');
+  const [unitPrices, setUnitPrices] = useState<Record<string, UnitPriceInfo>>({});
+  const unitAsked = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (sortMode !== 'unit') return;
+    const missing = results.map(r => r.barcode).filter(b => !unitAsked.current.has(b));
+    if (!missing.length) return;
+    missing.forEach(b => unitAsked.current.add(b));
+    fetchUnitPrices(missing).then(map => setUnitPrices(prev => ({ ...prev, ...map }))).catch(() => {});
+  }, [sortMode, results]);
+
+  const orderedResults = (() => {
+    if (sortMode === 'price') {
+      return [...results].sort((a, b) => (cheapest[a.barcode] ?? Infinity) - (cheapest[b.barcode] ?? Infinity));
+    }
+    if (sortMode === 'unit') {
+      // A price per 100 g and a price per litre can't be ranked against each other, so group by unit
+      // (largest group first) and order each group by what one unit costs.
+      const unitOf = (b: string) => unitPrices[b]?.unit ?? '';
+      const groupSize: Record<string, number> = {};
+      results.forEach(r => { if (unitPrices[r.barcode]) groupSize[unitOf(r.barcode)] = (groupSize[unitOf(r.barcode)] ?? 0) + 1; });
+      return [...results].sort((a, b) => {
+        const ua = unitPrices[a.barcode]; const ub = unitPrices[b.barcode];
+        if (!ua || !ub) return ua ? -1 : ub ? 1 : 0;
+        const ga = groupSize[unitOf(a.barcode)]; const gb = groupSize[unitOf(b.barcode)];
+        if (ga !== gb) return gb - ga;
+        if (unitOf(a.barcode) !== unitOf(b.barcode)) return unitOf(a.barcode).localeCompare(unitOf(b.barcode), 'he');
+        return Number(ua.unit_price) - Number(ub.unit_price);
+      });
+    }
+    return results;
+  })();
 
   // Sort: names starting with query come first
   const sortedResults = [...results].sort((a, b) => {
@@ -529,6 +569,11 @@ export function SearchPage() {
                       >
                         <span className="basket-card-name">{b.name}</span>
                         <span className="basket-card-meta">{count === 0 ? 'ריק' : count === 1 ? 'פריט אחד' : `${count} פריטים`}</span>
+                        {watch[b.id] && Math.abs(watch[b.id].diff) >= 0.5 && (
+                          <span className={`basket-card-delta ${watch[b.id].diff < 0 ? 'down' : 'up'}`}>
+                            {watch[b.id].diff < 0 ? 'ירד' : 'עלה'} <bdi dir="ltr">₪{Math.abs(watch[b.id].diff).toFixed(2)}</bdi>
+                          </span>
+                        )}
                         {isActive && <span className="basket-card-cta">{count === 0 ? 'להוספה' : 'להשוואה'}</span>}
                       </button>
                     );
@@ -603,9 +648,20 @@ export function SearchPage() {
                   </button>
                 </div>
 
+                {results.length > 1 && (
+                  <div className="sort-row" role="group" aria-label="מיון תוצאות">
+                    {([['relevance', 'רלוונטיות'], ['price', 'הכי זול'], ['unit', 'מחיר ליחידה']] as const).map(([id, label]) => (
+                      <button key={id} className={`sort-pill${sortMode === id ? ' on' : ''}`} aria-pressed={sortMode === id} onClick={() => setSortMode(id)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="results-list" style={{ paddingBottom: 80 }}>
-                  {results.map(product => {
+                  {orderedResults.map(product => {
                     const price = cheapest[product.barcode];
+                    const unit = sortMode === 'unit' ? unitPrices[product.barcode] : undefined;
                     return (
                       <div
                         key={product.barcode}
@@ -642,7 +698,10 @@ export function SearchPage() {
                               <div className="product-card-price-value tabular savings-pop">
                                 {fmt(price)}
                               </div>
-                              <div className="product-card-price-label">הכי זול</div>
+                              <div className="product-card-price-label">
+                                {unit ? <bdi dir="ltr">{`₪${Number(unit.unit_price).toFixed(2)}`}</bdi> : 'הכי זול'}
+                                {unit ? ` ל-${(unit.unit ?? 'יחידה').replace(/^1 /, '')}` : ''}
+                              </div>
                             </>
                           ) : (
                             <div className="skeleton" style={{ width: 60, height: 24 }} />
