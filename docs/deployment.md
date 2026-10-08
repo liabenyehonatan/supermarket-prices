@@ -32,6 +32,16 @@ Outbound FTP (port 21) must be open; some hosts block it.
 
 ## 2. First start
 
+On a fresh Debian/Ubuntu server, one script does steps 1 and 2 (installs Docker, creates `.env`
+with random passwords, builds, runs the preflight and **stops if a chain is unreachable**, then
+starts everything):
+
+```bash
+bash deploy/setup-server.sh
+```
+
+By hand:
+
 ```bash
 cp .env.example .env
 # set POSTGRES_PASSWORD and API_DB_PASSWORD to two different long random values
