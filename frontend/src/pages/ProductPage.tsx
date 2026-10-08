@@ -4,17 +4,18 @@ import {
   ArrowRight, MapPin, Truck, Plus, Minus,
   Check, Tag, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
 } from 'lucide-react';
-import { compareProduct, fetchCities, productHistory } from '../api/client';
+import { compareProduct, fetchCities } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
-import type { ProductCompareResponse, PriceAtStore, PriceHistoryResponse } from '../types';
+import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
-import { PriceHistory } from '../components/PriceHistory';
 import { FilterSheet } from '../components/FilterSheet';
 import { LocationPrompt } from '../components/LocationPrompt';
+
+const NEARBY_KM = 15;
 
 function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
 
@@ -76,7 +77,6 @@ export function ProductPage() {
   const navigate = useNavigate();
   const { addItem, items } = useBasket();
   const [data, setData]   = useState<ProductCompareResponse | null>(null);
-  const [history, setHistory] = useState<PriceHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty]     = useState(1);
@@ -87,6 +87,7 @@ export function ProductPage() {
   useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
   const [chainFilter, setChainFilter] = useState(readChainFilter);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   // Raw coordinates (not just the city) so each geocoded store can show its distance.
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
@@ -100,12 +101,6 @@ export function ProductPage() {
       .then(setData)
       .catch(() => setError('לא הצלחנו לטעון. תנסה שוב?'))
       .finally(() => setLoading(false));
-  }, [barcode]);
-
-  useEffect(() => {
-    if (!barcode) return;
-    setHistory(null);
-    productHistory(barcode).then(setHistory).catch(() => {});  // optional extra; page works without it
   }, [barcode]);
 
   useEffect(() => {
@@ -130,9 +125,17 @@ export function ProductPage() {
   const { locate: handleGps, request: confirmLocation, pickCity: pickLocationCity, suggestedCity, locating: gpsLoading, problem: locationProblem, dismiss: dismissLocation } = useCurrentCity(onLocatedCity, setMyCoords);
 
   const namedPrices = data ? data.prices.filter(row => row.store_name) : [];
-  const filteredPrices = namedPrices
+  const matchingPrices = namedPrices
     .filter(row => !cityFilter || row.store_city?.includes(cityFilter))
     .filter(row => !chainFilter || row.chain_name === chainFilter);
+  // With a known position and no explicit city, lead with the stores close to the user.
+  // Only geocoded stores have coordinates, so "all stores" stays one tap away.
+  const nearbyPrices = myCoords && !cityFilter
+    ? matchingPrices.filter(row => row.latitude != null && row.longitude != null
+        && distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude) <= NEARBY_KM)
+    : [];
+  const nearbyMode = nearbyPrices.length > 0 && !showAll;
+  const filteredPrices = nearbyMode ? nearbyPrices : matchingPrices;
 
   const savings     = data ? Number(data.most_expensive_price) - Number(data.cheapest_price) : 0;
   const savingsPct  = data ? Math.round((savings / Number(data.most_expensive_price)) * 100) : 0;
@@ -216,13 +219,13 @@ export function ProductPage() {
               )}
             </div>
 
-            {history && <PriceHistory points={history.points} days={history.days} />}
-
             {/* ── Compare table ──────────────────────────────── */}
             <div className="section-header">
               <div>
                 <div className="section-title">
-                  {filteredPrices.length}{filteredPrices.length !== namedPrices.length ? ` מתוך ${namedPrices.length}` : ''} חנויות · מחיר נוכחי
+                  {nearbyMode
+                    ? `${filteredPrices.length} חנויות ליד המיקום שלך`
+                    : `${filteredPrices.length}${filteredPrices.length !== namedPrices.length ? ` מתוך ${namedPrices.length}` : ''} חנויות · מחיר נוכחי`}
                 </div>
                 <div className="section-subtitle">ממוין מהזול ליקר</div>
               </div>
@@ -349,6 +352,17 @@ export function ProductPage() {
               })}
             </div>
 
+            {nearbyMode && (
+              <button className="btn btn-secondary btn-full" style={{ marginBottom: 20 }} onClick={() => setShowAll(true)}>
+                הצג את כל {matchingPrices.length} החנויות
+              </button>
+            )}
+            {nearbyPrices.length > 0 && showAll && (
+              <button className="btn btn-secondary btn-full" style={{ marginBottom: 20 }} onClick={() => setShowAll(false)}>
+                חזרה לחנויות קרובות
+              </button>
+            )}
+
             {/* Bottom spacing for sticky bar */}
             <div style={{ height: 88 }} />
           </>
@@ -386,7 +400,7 @@ export function ProductPage() {
             {added ? (
               <><Check size={18} strokeWidth={2.5} /> נוסף לסל</>
             ) : (
-              'הוסף לסל'
+              <>הוסף לסל · <span className="tabular" dir="ltr">{fmt(Number(data.cheapest_price) * qty)}</span></>
             )}
           </button>
         </div>
