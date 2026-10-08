@@ -2,6 +2,7 @@ import type {
   Product,
   ProductCompareResponse,
   BasketCompareResponse,
+  PriceHistoryResponse,
 } from '../types';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000';
@@ -19,6 +20,10 @@ export function searchProducts(q: string, limit = 20, offset = 0): Promise<Produ
   return request<Product[]>(
     `/api/v1/products/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`
   );
+}
+
+export function productHistory(barcode: string, days = 90): Promise<PriceHistoryResponse> {
+  return request<PriceHistoryResponse>(`/api/v1/products/${barcode}/history?days=${days}`);
 }
 
 export function compareProduct(barcode: string): Promise<ProductCompareResponse> {
