@@ -745,7 +745,7 @@ img { max-width: 100%; display: block; }
   flex-wrap: wrap;
 }
 .product-hero-price-min {
-  font-size: var(--fs-28);
+  font-size: 40px;
   font-weight: var(--fw-black);
   color: var(--green-700);
   font-variant-numeric: tabular-nums;
@@ -754,32 +754,21 @@ img { max-width: 100%; display: block; }
   direction: ltr;
   unicode-bidi: isolate;
 }
-.product-hero-price-dash {
-  font-size: var(--fs-24);
-  color: var(--ink-300);
-  font-weight: var(--fw-light);
-}
-.product-hero-price-max {
-  font-size: var(--fs-24);
+.product-hero-price-from {
+  font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
-  color: var(--ink-400);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  direction: ltr;
-  unicode-bidi: isolate;
+  color: var(--ink-500);
+}
+.product-hero-range {
+  font-size: var(--fs-13);
+  color: var(--ink-500);
+  margin-top: var(--sp-2);
 }
 .product-hero-savings {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--savings-bg);
-  color: var(--orange-700);
-  border: 1.5px solid var(--savings-border);
-  border-radius: var(--r-full);
-  padding: var(--sp-2) var(--sp-3);
   font-size: var(--fs-14);
   font-weight: var(--fw-semibold);
-  margin-top: var(--sp-3);
+  color: var(--orange-700);
+  margin-top: var(--sp-1);
 }
 
 /* ============================================================
