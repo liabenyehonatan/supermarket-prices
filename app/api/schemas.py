@@ -11,6 +11,13 @@ from typing import Optional, List
 # - Converts Python objects to JSON
 # - Documents your API automatically
 
+class StatsResponse(BaseModel):
+    chains: int
+    stores: int
+    products: int
+    last_updated: Optional[datetime] = None
+
+
 class ChainResponse(BaseModel):
     id: int
     name: str
