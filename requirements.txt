@@ -7,15 +7,14 @@ sqlalchemy==2.0.30
 asyncpg==0.29.0
 alembic==1.13.1
 
-# Israeli supermarket scraper & parser (let pip pick compatible versions)
-il-supermarket-scraper
-il-supermarket-parser
-
-# Task scheduling
-celery==5.4.0
-redis==5.0.6
+# Israeli supermarket scraper & parser. Pinned to the versions this was tested
+# with so a rebuild cannot change behaviour; chains change their sites often, so
+# bump them deliberately (see docs/deployment.md, "The scraper library").
+il-supermarket-scraper==1.0.8
+il-supermarket-parser==1.0.6
 
 # Utilities
 python-dotenv==1.0.1
 httpx==0.27.0
 pydantic-settings==2.3.0
+tzdata  # IANA zones for the worker schedule on slim images
