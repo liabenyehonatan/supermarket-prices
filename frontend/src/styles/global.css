@@ -1912,9 +1912,10 @@ img { max-width: 100%; display: block; }
 /* ============================================================
    Basket result — winner highlight
    ============================================================ */
-.basket-result-card.winner .basket-result-header {
-  background: var(--mint);
-}
+.basket-result-card.winner { background: var(--mint); }
+.basket-result-card.winner .basket-result-header { background: none; }
+.basket-result-card.winner .basket-result-actions a { background: var(--bg-card); }
+.basket-result-breakdown { background: var(--bg-card); }
 
 /* ============================================================
    "Add more" floating search
