@@ -17,7 +17,7 @@ export function BasketOverlays() {
     return () => document.removeEventListener('keydown', onKey);
   }, [picker, closePicker]);
 
-  const title = picker?.mode === 'create' ? 'סל חדש' : 'להוסיף לאיזה סל?';
+  const title = picker?.mode === 'create' ? 'סל חדש' : picker?.mode === 'move' ? 'להעביר לאיזה סל?' : 'להוסיף לאיזה סל?';
 
   return (
     <>
@@ -39,7 +39,7 @@ export function BasketOverlays() {
               <button className="location-sheet-close" onClick={closePicker} aria-label="סגור"><X size={18} strokeWidth={2.5} /></button>
             </div>
             <div className="location-list">
-              {picker.mode !== 'create' && baskets.map(b => {
+              {picker.mode !== 'create' && baskets.filter(b => picker.mode !== 'move' || b.id !== picker.fromId).map(b => {
                 const count = b.items.reduce((s, i) => s + i.quantity, 0);
                 return (
                   <button key={b.id} className="basket-row basket-row-main" onClick={() => pickBasket(b.id)}>
