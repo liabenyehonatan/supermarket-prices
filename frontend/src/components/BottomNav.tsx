@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Search, ShoppingBasket } from 'lucide-react';
+import { Home, ScanLine, ShoppingBasket } from 'lucide-react';
 import { useBasket } from '../context/BasketContext';
 
 export function BottomNav() {
@@ -17,13 +17,9 @@ export function BottomNav() {
         <span className="bottom-nav-item-label">בית</span>
       </NavLink>
 
-      <NavLink
-        to="/search"
-        className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}
-        aria-label="חיפוש"
-      >
-        <Search size={22} strokeWidth={1.8} />
-        <span className="bottom-nav-item-label">חיפוש</span>
+      <NavLink to="/scan" className="bottom-nav-scan" aria-label="סריקת ברקוד">
+        <span className="bottom-nav-scan-btn"><ScanLine size={26} strokeWidth={2} /></span>
+        <span className="bottom-nav-item-label">סריקה</span>
       </NavLink>
 
       <NavLink

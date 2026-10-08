@@ -10,8 +10,10 @@ import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { FEATURED_CHAINS, matchCity, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
+import { pushRecent } from '../lib/recent';
+import { FEATURED_CHAINS, matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
+import { CityPicker } from '../components/CityPicker';
 import { LocationPrompt } from '../components/LocationPrompt';
 
 function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
@@ -74,6 +76,9 @@ export function ProductPage() {
   const [qty, setQty]     = useState(1);
   const [added, setAdded] = useState(false);
   const [cityFilter, setCityFilter] = useState(readCityFilter);
+  useEffect(() => onCityFilterChange(setCityFilter), []);  // header chip
+  const [cities, setCities] = useState<string[]>([]);
+  useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
   const [chainFilter, setChainFilter] = useState(readChainFilter);
   const [chainPickerOpen, setChainPickerOpen] = useState(false);
   const chainPickerRef = useRef<HTMLDivElement>(null);
@@ -89,7 +94,7 @@ export function ProductPage() {
     if (!barcode) return;
     setLoading(true); setError(null);
     compareProduct(barcode)
-      .then(setData)
+      .then(d => { setData(d); pushRecent(d.product); })
       .catch(() => setError('לא הצלחנו לטעון. תנסה שוב?'))
       .finally(() => setLoading(false));
   }, [barcode]);
@@ -131,7 +136,7 @@ export function ProductPage() {
     setCityFilter(city);
     saveCityFilter(city);
   }, []);
-  const { locate: handleGps, locating: gpsLoading, problem: locationProblem, dismiss: dismissLocation } = useCurrentCity(onLocatedCity, setMyCoords);
+  const { locate: handleGps, request: confirmLocation, pickCity: pickLocationCity, suggestedCity, locating: gpsLoading, problem: locationProblem, dismiss: dismissLocation } = useCurrentCity(onLocatedCity, setMyCoords);
 
   const namedPrices = data ? data.prices.filter(row => row.store_name) : [];
   const filteredPrices = namedPrices
@@ -395,45 +400,14 @@ export function ProductPage() {
               )}
             </div>
 
-            {/* City filter — a single input, always editable. It used to switch to a
-                read-only "chip" display the instant cityFilter became truthy, which
-                happened after the very first keystroke — so typing a second letter was
-                impossible. The clear button now just overlays the input instead. */}
+            {/* City filter — type to narrow, or scroll the full A–Z list */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <MapPin size={15} strokeWidth={2} style={{
-                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                  color: 'var(--ink-400)', pointerEvents: 'none',
-                }} />
-                <input
-                  type="text"
-                  placeholder="סנן לפי עיר..."
-                  value={cityFilter}
-                  onChange={e => { setCityFilter(e.target.value); saveCityFilter(e.target.value); }}
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    padding: cityFilter ? '10px 36px' : '10px 36px 10px 12px',
-                    border: '1.5px solid var(--line)', borderRadius: 'var(--r-lg)',
-                    fontSize: 14, background: 'var(--surface)', color: 'var(--ink-900)',
-                    fontFamily: 'var(--font-sans)', outline: 'none',
-                  }}
-                />
-                {cityFilter && (
-                  <button
-                    onClick={() => { setCityFilter(''); saveCityFilter(''); }}
-                    style={{
-                      position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 20, height: 20, borderRadius: '50%',
-                      background: 'var(--surface-200)', border: 'none', cursor: 'pointer',
-                      color: 'var(--ink-500)', padding: 0,
-                    }}
-                    aria-label="הסר סינון עיר"
-                  >
-                    <X size={12} strokeWidth={2.5} />
-                  </button>
-                )}
-              </div>
+              <CityPicker
+                value={cityFilter}
+                cities={cities}
+                onChange={c => { setCityFilter(c); saveCityFilter(c); }}
+                placeholder="סנן לפי עיר..."
+              />
               <button
                 onClick={handleGps}
                 disabled={gpsLoading}
@@ -629,7 +603,7 @@ export function ProductPage() {
         </div>
       )}
 
-      <LocationPrompt problem={locationProblem} onRetry={handleGps} onClose={dismissLocation} />
+      <LocationPrompt problem={locationProblem} onRetry={handleGps} onConfirm={confirmLocation} onPickCity={pickLocationCity} suggestedCity={suggestedCity} onClose={dismissLocation} />
     </div>
   );
 }

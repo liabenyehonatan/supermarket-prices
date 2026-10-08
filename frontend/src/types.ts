@@ -80,3 +80,20 @@ export interface LocalBasketItem {
   brand?: string;
   unit?: string;
 }
+
+/** What the cheapest comparison looked like the last time a basket was compared. */
+export interface BasketSnapshot {
+  at: number;          // epoch ms
+  total: number;       // cheapest complete store total (falls back to the cheapest overall)
+  chain: string;
+  sig: string;         // basket contents at the time — a delta only makes sense for the same contents
+  filterKey: string;   // city + chain filter at the time
+}
+
+export interface Basket {
+  id: string;
+  name: string;
+  color: string;
+  items: LocalBasketItem[];
+  lastCompare?: BasketSnapshot;
+}
