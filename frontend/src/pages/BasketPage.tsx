@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
   ChevronDown, ChevronUp, TrendingUp, AlertCircle,
-  Tag, Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check,
+  Tag, Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal,
 } from 'lucide-react';
 import { compareBasket } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
@@ -231,10 +231,60 @@ function CompareDelta({ prev, now }: { prev: BasketSnapshot | null; now: BasketS
   );
 }
 
+/** Drag a row sideways far enough and it is removed (an undo notice follows). */
+function SwipeRow({ onRemove, disabled, className, children }: {
+  onRemove: () => void; disabled?: boolean; className: string; children: React.ReactNode;
+}) {
+  const [dx, setDx] = useState(0);
+  const start = useRef<{ x: number; y: number; id: number } | null>(null);
+  const dragging = useRef(false);
+  const THRESHOLD = 90;
+
+  function down(e: React.PointerEvent) {
+    if (disabled || (e.target as HTMLElement).closest('button, input, a')) return;
+    start.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    dragging.current = false;
+  }
+  function move(e: React.PointerEvent) {
+    const st = start.current;
+    if (!st) return;
+    const mx = e.clientX - st.x;
+    if (!dragging.current) {
+      if (Math.abs(mx) < 8 || Math.abs(mx) < Math.abs(e.clientY - st.y)) return;  // vertical scroll wins
+      dragging.current = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(st.id);
+    }
+    setDx(mx);
+  }
+  function up() {
+    const wasDragging = dragging.current;
+    start.current = null;
+    dragging.current = false;
+    if (wasDragging && Math.abs(dx) >= THRESHOLD) { onRemove(); }
+    setDx(0);
+  }
+
+  const progress = Math.min(1, Math.abs(dx) / THRESHOLD);
+  return (
+    <div className="swipe-row">
+      <div className="swipe-row-bg" style={{ opacity: progress }} aria-hidden>
+        <Trash2 size={18} strokeWidth={2} />
+      </div>
+      <div
+        className={className}
+        style={{ transform: `translateX(${dx}px)`, transition: dx === 0 ? 'transform 0.2s' : 'none', touchAction: 'pan-y' }}
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ───────────────────────────────────────────── */
 export function BasketPage() {
   const navigate = useNavigate();
-  const { items, updateQty, removeItem, clearBasket, activeId, active, recordCompare, openMove } = useBasket();
+  const { items, updateQty, removeItem, removeItems, clearBasket, activeId, active, recordCompare, openMove } = useBasket();
   const [results, setResults] = useState<BasketCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
@@ -263,6 +313,13 @@ export function BasketPage() {
   // Long baskets show the first few items; the rest is one tap away (editing always shows all)
   const COLLAPSED_COUNT = 5;
   const [showAllItems, setShowAllItems] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [menuOpen]);
   useEffect(() => { setShowAllItems(false); }, [activeId]);
   const allSelected = items.length > 0 && selected.size === items.length;
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -358,14 +415,24 @@ export function BasketPage() {
                 {editing ? 'סיום' : 'עריכה'}
               </button>
               {!editing && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ color: 'var(--red-500)' }}
-                  onClick={() => { setResults(null); clearBasket(); }}
-                >
-                  <Trash2 size={15} strokeWidth={1.8} />
-                  נקה סל
-                </button>
+                <div style={{ position: 'relative' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
+                    aria-label="עוד פעולות"
+                    aria-expanded={menuOpen}
+                  >
+                    <MoreHorizontal size={18} strokeWidth={2} />
+                  </button>
+                  {menuOpen && (
+                    <div className="basket-menu" role="menu">
+                      <button role="menuitem" onClick={() => { setResults(null); clearBasket(); setMenuOpen(false); }}>
+                        <Trash2 size={15} strokeWidth={1.8} />
+                        נקה את כל הסל
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -375,11 +442,13 @@ export function BasketPage() {
         {items.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
             {(editing || showAllItems ? items : items.slice(0, COLLAPSED_COUNT)).map(item => (
-              <div
+              <SwipeRow
                 key={item.barcode}
                 className={`basket-item${editing ? ' editing' : ''}${selected.has(item.barcode) ? ' selected' : ''}`}
-                onClick={editing ? () => toggleSelected(item.barcode) : undefined}
+                disabled={editing}
+                onRemove={() => { setResults(null); removeItem(item.barcode); }}
               >
+                <div style={{ display: 'contents' }} onClick={editing ? () => toggleSelected(item.barcode) : undefined}>
                 {editing && (
                   <input
                     type="checkbox"
@@ -405,37 +474,30 @@ export function BasketPage() {
                     {[item.brand, item.unit].filter(Boolean).join(' · ')}
                   </div>
                 </div>
-                {!editing && (<>
-                <button
-                  className="qty-btn"
-                  onClick={() => openMove([item], activeId)}
-                  aria-label={`העברת ${item.name} לסל אחר`}
-                  title="העברה לסל אחר"
-                >
-                  <ArrowLeftRight size={13} strokeWidth={2} />
-                </button>
-                <div className="basket-item-controls">
-                  <button
-                    className="qty-btn"
-                    onClick={() => item.quantity <= 1 ? removeItem(item.barcode) : updateQty(item.barcode, item.quantity - 1)}
-                    aria-label="הפחת כמות"
-                  >
-                    {item.quantity <= 1
-                      ? <Trash2 size={13} strokeWidth={2} color="var(--red-500)" />
-                      : <Minus size={13} strokeWidth={2.5} />
-                    }
-                  </button>
-                  <span className="qty-value">{item.quantity}</span>
-                  <button
-                    className="qty-btn"
-                    onClick={() => updateQty(item.barcode, item.quantity + 1)}
-                    aria-label="הגדל כמות"
-                  >
-                    <Plus size={13} strokeWidth={2.5} />
-                  </button>
+                {!editing && (
+                  <div className="basket-item-controls">
+                    <button
+                      className="qty-btn"
+                      onClick={() => item.quantity <= 1 ? removeItem(item.barcode) : updateQty(item.barcode, item.quantity - 1)}
+                      aria-label={item.quantity <= 1 ? 'הסר מהסל' : 'הפחת כמות'}
+                    >
+                      {item.quantity <= 1
+                        ? <Trash2 size={13} strokeWidth={2} color="var(--red-500)" />
+                        : <Minus size={13} strokeWidth={2.5} />
+                      }
+                    </button>
+                    <span className="qty-value">{item.quantity}</span>
+                    <button
+                      className="qty-btn"
+                      onClick={() => updateQty(item.barcode, item.quantity + 1)}
+                      aria-label="הגדל כמות"
+                    >
+                      <Plus size={13} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                )}
                 </div>
-                </>)}
-              </div>
+              </SwipeRow>
             ))}
             {!editing && items.length > COLLAPSED_COUNT && (
               <button className="basket-more" onClick={() => setShowAllItems(v => !v)} aria-expanded={showAllItems}>
@@ -469,7 +531,7 @@ export function BasketPage() {
               className="btn btn-secondary btn-sm"
               style={{ color: 'var(--red-500)' }}
               disabled={selected.size === 0}
-              onClick={() => { setResults(null); [...selected].forEach(b => removeItem(b)); }}
+              onClick={() => { setResults(null); removeItems([...selected]); }}
             >
               <Trash2 size={15} strokeWidth={1.8} />
               מחיקה ({selected.size})
