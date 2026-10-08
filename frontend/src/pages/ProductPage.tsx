@@ -49,6 +49,11 @@ function timeAgo(iso?: string): string {
 }
 
 
+// Prices older than a week get flagged; fresh ones need no label.
+function isStale(iso?: string): boolean {
+  return !!iso && Date.now() - new Date(iso).getTime() > 7 * 24 * 3_600_000;
+}
+
 function SkeletonRow() {
   return (
     <div className="compare-row" style={{ pointerEvents: 'none' }}>
@@ -81,9 +86,6 @@ export function ProductPage() {
   const [chainFilter, setChainFilter] = useState(readChainFilter);
   const [chainPickerOpen, setChainPickerOpen] = useState(false);
   const chainPickerRef = useRef<HTMLDivElement>(null);
-  const cheapestRowRef = useRef<HTMLDivElement>(null);
-  const [highlight, setHighlight] = useState(false);
-  const [showCheapestPopup, setShowCheapestPopup] = useState(false);
   // Raw coordinates (not just the city) so each geocoded store can show its distance.
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
 
@@ -102,13 +104,6 @@ export function ProductPage() {
     const ex = items.find(i => i.barcode === barcode);
     if (ex) setQty(ex.quantity);
   }, [items, barcode]);
-
-  useEffect(() => {
-    if (!showCheapestPopup) return;
-    const close = () => setShowCheapestPopup(false);
-    const timer = setTimeout(() => document.addEventListener('click', close), 0);
-    return () => { clearTimeout(timer); document.removeEventListener('click', close); };
-  }, [showCheapestPopup]);
 
   useEffect(() => {
     if (!chainPickerOpen) return;
@@ -144,9 +139,6 @@ export function ProductPage() {
 
   const savings     = data ? Number(data.most_expensive_price) - Number(data.cheapest_price) : 0;
   const savingsPct  = data ? Math.round((savings / Number(data.most_expensive_price)) * 100) : 0;
-  const avgPrice    = data
-    ? data.prices.reduce((s, p) => s + Number(p.price), 0) / data.prices.length
-    : 0;
 
   return (
     <div className="page-wrapper">
@@ -221,102 +213,11 @@ export function ProductPage() {
                 )}
               </div>
 
+              {savings > 0.01 && (
+                <div className="product-hero-savings">
+                  חיסכון של עד {fmt(savings)} ({savingsPct}%)                </div>
+              )}
             </div>
-
-            {/* ── Quick stats ────────────────────────────────── */}
-            <div className="stats-bar">
-              <div
-                className="stat-item highlight savings-with-icon"
-                style={{ cursor: 'pointer' }}
-                onClick={() => setShowCheapestPopup(v => !v)}
-                title="לחץ לראות את הסניף"
-              >
-                <div className="stat-item-text">
-                  <div className="stat-label">הכי זול ↓</div>
-                  <div className="stat-value">{fmt(data.cheapest_price)}</div>
-                  <div className="stat-sub">{namedPrices[0]?.chain_name}</div>
-                </div>
-                <span className="stat-icon-wrap stat-icon-wrap-cheapest">
-                  <img src="/icons/cheapest-tag.webp" alt="" aria-hidden />
-                </span>
-              </div>
-              <div className="stat-item savings-with-icon">
-                <div className="stat-item-text">
-                  <div className="stat-label">ממוצע</div>
-                  <div className="stat-value">{fmt(avgPrice)}</div>
-                  <div className="stat-sub">{data.prices.length} חנויות</div>
-                </div>
-                <span className="stat-icon-wrap stat-icon-wrap-plain">
-                  <img src="/icons/avg-calculator.png" alt="" aria-hidden />
-                </span>
-              </div>
-              <div className="stat-item savings savings-with-icon">
-                <div className="stat-item-text">
-                  <div className="stat-label">חסכון</div>
-                  <div className="stat-value">{fmt(savings)}</div>
-                  <div className="stat-sub">{savingsPct}%</div>
-                </div>
-                <span className="stat-icon-wrap">
-                  <img src="/icons/piggy-bank.webp" alt="" aria-hidden />
-                </span>
-              </div>
-            </div>
-
-            {/* Cheapest store popup */}
-            {showCheapestPopup && namedPrices[0] && (
-              <div
-                style={{
-                  background: 'var(--surface)', border: '1.5px solid var(--green-500)',
-                  borderRadius: 'var(--r-lg)', boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
-                  padding: '14px 16px', marginBottom: 12,
-                }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green-600)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  הכי זול בכל ישראל
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <ChainLogo name={namedPrices[0].chain_name} size={44} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {namedPrices[0].store_name}
-                    </div>
-                    {namedPrices[0].store_city && (
-                      <div style={{ fontSize: 12, color: 'var(--ink-400)', display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                        <MapPin size={11} strokeWidth={1.8} />
-                        {namedPrices[0].store_city}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--green-600)' }}>
-                    {fmt(namedPrices[0].price)}
-                  </div>
-                </div>
-                {cityFilter && (
-                  <button
-                    style={{
-                      marginTop: 12, width: '100%', padding: '8px 0',
-                      background: 'var(--green-600)', color: '#fff',
-                      border: 'none', borderRadius: 'var(--r-md)',
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                    onClick={() => {
-                      setShowCheapestPopup(false);
-                      setCityFilter('');
-                      saveCityFilter('');
-                      setTimeout(() => {
-                        cheapestRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        setHighlight(true);
-                        setTimeout(() => setHighlight(false), 2000);
-                      }, 100);
-                    }}
-                  >
-                    הסר סינון עיר וגלול אליו
-                  </button>
-                )}
-              </div>
-            )}
 
             {/* ── Compare table ──────────────────────────────── */}
             <div className="section-header">
@@ -456,16 +357,8 @@ export function ProductPage() {
                 return (
                   <div
                     key={`${row.store_id}-${idx}`}
-                    ref={isCheapest ? cheapestRowRef : undefined}
                     className={`compare-row${isCheapest ? ' cheapest' : ''}`}
-                    style={isCheapest && highlight ? {
-                      outline: '2.5px solid var(--green-400)',
-                      borderRadius: 'var(--r-lg)',
-                      transition: 'outline 0.3s',
-                    } : undefined}
                   >
-                    <span className="compare-row-rank">{idx + 1}</span>
-
                     <ChainLogo name={row.chain_name} size={44} />
 
                     <div className="compare-row-info">
@@ -476,9 +369,9 @@ export function ProductPage() {
                           {row.store_city}
                         </div>
                       )}
-                      {row.price_updated_at && (
-                        <div className="compare-row-city" style={{ color: 'var(--ink-300)' }}>
-                          עודכן לפני {timeAgo(row.price_updated_at)}
+                      {isStale(row.price_updated_at) && (
+                        <div className="compare-row-city" style={{ color: 'var(--orange-700)', fontWeight: 600 }}>
+                          מחיר ישן · עודכן לפני {timeAgo(row.price_updated_at)}
                         </div>
                       )}
                       {/* Distance needs the store's own coordinates, which aren't geocoded
@@ -559,14 +452,6 @@ export function ProductPage() {
         {/* Loading skeleton */}
         {loading && (
           <>
-            <div className="stats-bar" style={{ marginBottom: 8 }}>
-              {[0,1,2].map(i => (
-                <div key={i} className="stat-item">
-                  <div className="skeleton" style={{ height: 11, width: '60%' }} />
-                  <div className="skeleton" style={{ height: 22, width: '70%', marginTop: 4 }} />
-                </div>
-              ))}
-            </div>
             <div className="compare-table" style={{ marginBottom: 20 }}>
               {Array.from({ length: 7 }).map((_, i) => <SkeletonRow key={i} />)}
             </div>
