@@ -96,14 +96,3 @@ export interface Basket {
   items: LocalBasketItem[];
   lastCompare?: BasketSnapshot;
 }
-
-export interface PriceHistoryPoint {
-  date: string;   // YYYY-MM-DD
-  price: string;  // Decimal serialized as string
-}
-
-export interface PriceHistoryResponse {
-  barcode: string;
-  days: number;
-  points: PriceHistoryPoint[];
-}
