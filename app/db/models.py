@@ -14,6 +14,8 @@ from sqlalchemy import (
     ForeignKey,  # → Creates a link between two tables
     Index,       # → Creates a database index for faster searching
     func,        # → Lets us use SQL functions like NOW()
+    text,        # → Raw SQL fragments (used for partial-index conditions)
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 # Mapped and mapped_column are the modern way (SQLAlchemy 2.0+) to define columns.
@@ -189,9 +191,9 @@ class Product(Base):
         "Promotion", back_populates="product"
     )
 
-    # INDEX on barcode for fast lookups (searching by barcode is very common).
+    # Barcode lookups use the index behind `unique=True` on the column above, so
+    # no separate barcode index is declared (it would duplicate that one).
     __table_args__ = (
-    Index("ix_products_barcode", "barcode"),
     # gin_trgm_ops tells PostgreSQL to use the trigram operator
     # from pg_trgm for this index. Without this, PostgreSQL
     # doesn't know HOW to build a GIN index on plain text.
@@ -263,12 +265,24 @@ class Price(Base):
     store: Mapped["Store"] = relationship("Store", back_populates="prices")
 
     __table_args__ = (
-        # Speeds up the basket query: "get current price of product X in store Y"
-        Index("ix_prices_product_store", "product_id", "store_id"),
-        # Speeds up filtering to only current prices
-        Index("ix_prices_is_current", "is_current"),
-        # Speeds up scrape date filtering
-        Index("ix_prices_scraped_at", "scraped_at"),
+        # THE integrity rule of the price history: a (store, product) pair has at
+        # most one current row. Also serves the loader's per-store lookups.
+        Index(
+            "uq_prices_current_store_product",
+            "store_id",
+            "product_id",
+            unique=True,
+            postgresql_where=text("is_current"),
+        ),
+        # Serves every API read ("current prices of product X in all stores") and
+        # carries store_id + price so the cheapest-price queries can skip the heap.
+        Index(
+            "ix_prices_current_product",
+            "product_id",
+            postgresql_include=["store_id", "price"],
+            postgresql_where=text("is_current"),
+        ),
+        # Fillfactor/autovacuum are applied by the migration (ALTER TABLE ... SET).
     )
 
     def __repr__(self):
@@ -327,3 +341,78 @@ class Promotion(Base):
 
     def __repr__(self):
         return f"<Promotion {self.promotion_id}: {self.description}>"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# TABLE 6: ingested_files
+# Ledger of every XML file the parser has handled. This (not "does the file
+# exist on disk") is how we know a file was loaded, so files can be deleted
+# after loading without ever being parsed twice.
+# ════════════════════════════════════════════════════════════════════════════
+class IngestedFile(Base):
+    __tablename__ = "ingested_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # dumps/<source_folder>/<file_name>  (e.g. "Shufersal", "PriceFull729...xml")
+    source_folder: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # "store" | "price_full" | "price"
+    file_type: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    # "done" | "failed" | "quarantined"
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    rows_total: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    rows_applied: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    rows_skipped: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_error: Mapped[Optional[str]] = mapped_column(Text)
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("source_folder", "file_name", name="uq_ingested_files_source_name"),
+    )
+
+    def __repr__(self):
+        return f"<IngestedFile {self.source_folder}/{self.file_name} {self.status}>"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# TABLE 7: ingest_runs
+# One row per worker cycle (chain = NULL) and one per chain and phase inside it.
+# This is the source of truth for "is the pipeline healthy".
+# ════════════════════════════════════════════════════════════════════════════
+class IngestRun(Base):
+    __tablename__ = "ingest_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("ingest_runs.id", ondelete="CASCADE")
+    )
+
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    # NULL for a whole cycle, otherwise the scraper name (e.g. "SHUFERSAL").
+    chain: Mapped[Optional[str]] = mapped_column(String(100))
+    # "cycle" | "scrape" | "parse"
+    phase: Mapped[str] = mapped_column(String(10), nullable=False)
+    # "running" | "ok" | "partial" | "failed"
+    status: Mapped[str] = mapped_column(String(10), nullable=False)
+
+    files_ok: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    files_failed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    rows_applied: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("ix_ingest_runs_started", "started_at"),
+        Index("ix_ingest_runs_phase_status", "phase", "status", "finished_at"),
+    )
+
+    def __repr__(self):
+        return f"<IngestRun {self.phase} {self.chain or 'ALL'} {self.status}>"
