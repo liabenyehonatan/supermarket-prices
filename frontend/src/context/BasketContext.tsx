@@ -19,6 +19,8 @@ interface BasketContextValue {
   /** Adds to the active basket; with several baskets, the first add of a visit asks which one. */
   addItem: (item: LocalBasketItem) => void;
   removeItem: (barcode: string) => void;
+  /** Removes several items at once; one "undo" brings them all back. */
+  removeItems: (barcodes: string[]) => void;
   updateQty: (barcode: string, qty: number) => void;
   clearBasket: () => void;
   totalItems: number;
@@ -143,7 +145,38 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     addTo(target.id, item);
   }, [addTo]);
 
-  const removeItem = useCallback((barcode: string) => mapActive(prev => prev.filter(i => i.barcode !== barcode)), [mapActive]);
+  const restoreItems = useCallback((basketId: string, entries: { item: LocalBasketItem; index: number }[]) => {
+    setState(st => ({
+      ...st,
+      baskets: st.baskets.map(b => {
+        if (b.id !== basketId) return b;
+        const items = [...b.items];
+        [...entries].sort((a, c) => a.index - c.index).forEach(({ item, index }) => {
+          if (items.some(i => i.barcode === item.barcode)) return;
+          items.splice(Math.min(index, items.length), 0, item);
+        });
+        return { ...b, items };
+      }),
+    }));
+  }, []);
+
+  // Removal is always undoable: the removed items go back where they were
+  const removeItems = useCallback((barcodes: string[]) => {
+    const cur = stateRef.current;
+    const basket = cur.baskets.find(b => b.id === cur.activeId);
+    if (!basket) return;
+    const gone = basket.items
+      .map((item, index) => ({ item, index }))
+      .filter(e => barcodes.includes(e.item.barcode));
+    if (!gone.length) return;
+    mapActive(prev => prev.filter(i => !barcodes.includes(i.barcode)));
+    showNotice({
+      text: gone.length === 1 ? `"${gone[0].item.name}" הוסר מהסל` : `${gone.length} מוצרים הוסרו מהסל`,
+      actionLabel: 'ביטול',
+      onAction: () => { restoreItems(basket.id, gone); setNotice(null); },
+    }, 6000);
+  }, [mapActive, showNotice, restoreItems]);
+  const removeItem = useCallback((barcode: string) => removeItems([barcode]), [removeItems]);
 
   const updateQty = useCallback((barcode: string, qty: number) => {
     mapActive(prev => qty <= 0
@@ -151,7 +184,12 @@ export function BasketProvider({ children }: { children: ReactNode }) {
       : prev.map(i => (i.barcode === barcode ? { ...i, quantity: qty } : i)));
   }, [mapActive]);
 
-  const clearBasket = useCallback(() => mapActive(() => []), [mapActive]);
+  const clearBasket = useCallback(() => {
+    const cur = stateRef.current;
+    const basket = cur.baskets.find(b => b.id === cur.activeId);
+    if (!basket || !basket.items.length) return;
+    removeItems(basket.items.map(i => i.barcode));
+  }, [removeItems]);
 
   const setActive = useCallback((id: string) => {
     setState(s => (s.baskets.some(b => b.id === id) ? { ...s, activeId: id } : s));
@@ -274,10 +312,10 @@ export function BasketProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<BasketContextValue>(() => ({
     baskets: state.baskets, activeId: active.id, active, items: active.items,
-    addItem, removeItem, updateQty, clearBasket, totalItems,
+    addItem, removeItem, removeItems, updateQty, clearBasket, totalItems,
     setActive, createBasket, renameBasket, deleteBasket, recordCompare,
     notice, dismissNotice, picker, openCreate, openMove, closePicker, pickBasket, pickNew,
-  }), [state.baskets, active, totalItems, addItem, removeItem, updateQty, clearBasket,
+  }), [state.baskets, active, totalItems, addItem, removeItem, removeItems, updateQty, clearBasket,
        setActive, createBasket, renameBasket, deleteBasket, recordCompare,
        notice, dismissNotice, picker, openCreate, openMove, closePicker, pickBasket, pickNew]);
 
