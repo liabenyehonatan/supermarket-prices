@@ -333,7 +333,8 @@ export function BasketPage() {
 
   return (
     <div className="page-wrapper">
-      <div className="container">
+      {/* Room for the sticky compare bar so the last item / result is never hidden under it */}
+      <div className="container" style={{ paddingBottom: items.length > 0 ? 96 : 0 }}>
 
         {/* Header */}
         <div className="section-header" style={{ marginBottom: 20 }}>
@@ -480,24 +481,6 @@ export function BasketPage() {
           <StoreFilters city={city} chain={chain} onCityChange={changeCity} onChainChange={changeChain} />
         )}
 
-        {/* Compare CTA */}
-        {items.length > 0 && (
-          <button
-            className="btn btn-primary btn-compare btn-lg btn-full"
-            style={{ marginBottom: 32 }}
-            onClick={handleCompare}
-            disabled={loading}
-          >
-            {loading
-              ? 'משווה מחירים...'
-              : <>
-                  <CartPercentIcon />
-                  השווה מחירים עבור {totalItems} פריטים
-                </>
-            }
-          </button>
-        )}
-
         {/* Error */}
         {error && (
           <div style={{ background: 'var(--red-100)', color: 'var(--red-600)', borderRadius: 'var(--r-lg)', padding: '12px 16px', fontSize: 14, marginBottom: 16 }}>
@@ -573,6 +556,30 @@ export function BasketPage() {
           </>
         )}
       </div>
+
+      {/* Sticky compare bar: the page's main action stays reachable however long the list is */}
+      {items.length > 0 && (
+        <div className="add-to-basket-bar">
+          <button
+            className="btn btn-primary btn-compare btn-lg btn-full"
+            onClick={handleCompare}
+            disabled={loading}
+          >
+            {loading
+              ? 'משווה מחירים...'
+              : <>
+                  <CartPercentIcon />
+                  השווה מחירים
+                  <span className="compare-bar-count">
+                    {items.length === totalItems
+                      ? `${totalItems} מוצרים`
+                      : `${items.length} מוצרים · ${totalItems} יח׳`}
+                  </span>
+                </>
+            }
+          </button>
+        </div>
+      )}
     </div>
   );
 }

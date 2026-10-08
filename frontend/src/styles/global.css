@@ -2715,3 +2715,7 @@ img { max-width: 100%; display: block; }
 .compare-row-more { width: 100%; display: flex; flex-direction: column; gap: 6px; padding-top: var(--sp-2); border-top: 1px dashed var(--line); }
 .compare-row-more .compare-row-nav { margin-top: 0; }
 .compare-row-diff { font-size: var(--fs-12); color: var(--ink-500); }
+
+/* Basket page: count next to the compare label */
+.compare-bar-count { font-size: var(--fs-13); font-weight: var(--fw-medium); opacity: 0.85; }
+.add-to-basket-bar .btn-compare { margin: 0; }
