@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, ChevronLeft, Barcode,
-  Plus, Check,
+  Plus, Check, Trash2,
 } from 'lucide-react';
 
 function SearchProductIcon() {
@@ -136,7 +136,7 @@ export function SearchPage() {
     setShowHow(false);
     try { localStorage.setItem('sali_seen_how', '1'); } catch { /* storage blocked — card returns next visit */ }
   }
-  const { baskets, activeId, setActive, openCreate } = useBasket();
+  const { baskets, activeId, setActive, openCreate, deleteBasket } = useBasket();
   const basketRowRef = useRef<HTMLDivElement>(null);
   const watch = useBasketWatch();
   // With one basket the card only appears once it has items; with several they are all listed
@@ -561,8 +561,8 @@ export function SearchPage() {
                     const count = b.items.reduce((sum, i) => sum + i.quantity, 0);
                     const isActive = b.id === activeId;
                     return (
+                      <div key={b.id} className="basket-card-wrap">
                       <button
-                        key={b.id}
                         className={`basket-card${isActive ? ' is-active' : ''}`}
                         onClick={() => { setActive(b.id); navigate('/basket'); }}
                         aria-current={isActive ? 'true' : undefined}
@@ -576,6 +576,10 @@ export function SearchPage() {
                         )}
                         {isActive && <span className="basket-card-cta">{count === 0 ? 'להוספה' : 'להשוואה'}</span>}
                       </button>
+                      <button className="basket-card-remove" aria-label={`מחיקת ${b.name}`} onClick={() => deleteBasket(b.id)}>
+                        <Trash2 size={14} strokeWidth={1.8} />
+                      </button>
+                      </div>
                     );
                   })}
                 </div>
