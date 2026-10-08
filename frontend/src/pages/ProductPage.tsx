@@ -182,7 +182,7 @@ export function ProductPage() {
             {/* Product card */}
             <div className="product-hero">
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <ProductImage barcode={data.product.barcode} name={data.product.name} size={72} />
+                <ProductImage barcode={data.product.barcode} name={data.product.name} size={112} borderRadius={16} />
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {(() => {
@@ -202,20 +202,20 @@ export function ProductPage() {
                 </div>
               </div>
 
-              {/* Price range */}
+              {/* One headline price; the range and savings are supporting detail */}
               <div className="product-hero-price-row">
+                <span className="product-hero-price-from">מ־</span>
                 <span className="product-hero-price-min tabular">{fmt(data.cheapest_price)}</span>
-                {data.price_difference > 0.01 && (
-                  <>
-                    <span className="product-hero-price-dash">–</span>
-                    <span className="product-hero-price-max tabular">{fmt(data.most_expensive_price)}</span>
-                  </>
-                )}
               </div>
-
+              {data.price_difference > 0.01 && (
+                <div className="product-hero-range">
+                  טווח מחירים <bdi dir="ltr">{fmt(data.cheapest_price)} – {fmt(data.most_expensive_price)}</bdi> · {data.prices.length} חנויות
+                </div>
+              )}
               {savings > 0.01 && (
                 <div className="product-hero-savings">
-                  חיסכון של עד {fmt(savings)} ({savingsPct}%)                </div>
+                  חיסכון של עד <bdi dir="ltr">{fmt(savings)}</bdi> ({savingsPct}%)
+                </div>
               )}
             </div>
 
