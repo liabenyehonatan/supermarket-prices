@@ -2611,3 +2611,18 @@ img { max-width: 100%; display: block; }
 }
 /* The header search is only a shortcut home; on phones the logo and bottom nav already do that */
 @media (max-width: 480px) { .header-search { display: none; } }
+
+/* Basket edit mode: select several items, then move or delete them together */
+.basket-item.editing { cursor: pointer; }
+.basket-item.selected { border-color: var(--green-600); background: var(--green-50, #F3F8EF); }
+.basket-check { width: 20px; height: 20px; accent-color: var(--green-600); flex-shrink: 0; cursor: pointer; }
+.edit-bar {
+  position: sticky; bottom: calc(var(--bottom-nav-h) + var(--sp-3)); z-index: 50;
+  display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3);
+  margin-bottom: var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: var(--surface-0); box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+.edit-bar-all { display: inline-flex; align-items: center; gap: 6px; margin-inline-end: auto; font-size: var(--fs-14); font-weight: var(--fw-medium); cursor: pointer; }
+.edit-bar-all input { width: 18px; height: 18px; accent-color: var(--green-600); }
+/* The whole row is the tap target, not just the basket name */
+.basket-row.basket-row-main { width: 100%; }

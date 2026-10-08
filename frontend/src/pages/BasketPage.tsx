@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
   ChevronDown, ChevronUp, TrendingUp, AlertCircle,
-  Tag, Truck, CheckCircle2, ExternalLink, Navigation, MapPin,
+  Tag, Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check,
 } from 'lucide-react';
 import { compareBasket } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
@@ -234,7 +234,7 @@ function CompareDelta({ prev, now }: { prev: BasketSnapshot | null; now: BasketS
 /* ── Main page ───────────────────────────────────────────── */
 export function BasketPage() {
   const navigate = useNavigate();
-  const { items, updateQty, removeItem, clearBasket, activeId, active, recordCompare } = useBasket();
+  const { items, updateQty, removeItem, clearBasket, activeId, active, recordCompare, openMove } = useBasket();
   const [results, setResults] = useState<BasketCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
@@ -244,6 +244,23 @@ export function BasketPage() {
   const [prevCompare, setPrevCompare] = useState<BasketSnapshot | null>(null);
   const [nowCompare, setNowCompare] = useState<BasketSnapshot | null>(null);
   useEffect(() => { setResults(null); setPrevCompare(null); setNowCompare(null); setError(null); }, [activeId]);
+  // Edit mode: pick several items and move or delete them in one go
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEffect(() => { setEditing(false); setSelected(new Set()); }, [activeId]);
+  useEffect(() => {
+    // Drop selections whose item has left this basket (moved or deleted); finish editing once nothing is left selected
+    setSelected(prev => {
+      const next = new Set([...prev].filter(b => items.some(i => i.barcode === b)));
+      if (next.size === prev.size) return prev;
+      if (next.size === 0) setEditing(false);
+      return next;
+    });
+  }, [items]);
+  function toggleSelected(barcode: string) {
+    setSelected(prev => { const n = new Set(prev); if (n.has(barcode)) n.delete(barcode); else n.add(barcode); return n; });
+  }
+  const allSelected = items.length > 0 && selected.size === items.length;
   const resultsRef = useRef<HTMLDivElement>(null);
   const requestId  = useRef(0);
 
@@ -327,14 +344,25 @@ export function BasketPage() {
             </div>
           </div>
           {items.length > 0 && (
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ color: 'var(--red-500)' }}
-              onClick={() => { setResults(null); clearBasket(); }}
-            >
-              <Trash2 size={15} strokeWidth={1.8} />
-              נקה סל
-            </button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setEditing(e => !e); setSelected(new Set()); }}
+              >
+                {editing ? <Check size={15} strokeWidth={2} /> : <Pencil size={15} strokeWidth={1.8} />}
+                {editing ? 'סיום' : 'עריכה'}
+              </button>
+              {!editing && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: 'var(--red-500)' }}
+                  onClick={() => { setResults(null); clearBasket(); }}
+                >
+                  <Trash2 size={15} strokeWidth={1.8} />
+                  נקה סל
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -342,7 +370,21 @@ export function BasketPage() {
         {items.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
             {items.map(item => (
-              <div key={item.barcode} className="basket-item">
+              <div
+                key={item.barcode}
+                className={`basket-item${editing ? ' editing' : ''}${selected.has(item.barcode) ? ' selected' : ''}`}
+                onClick={editing ? () => toggleSelected(item.barcode) : undefined}
+              >
+                {editing && (
+                  <input
+                    type="checkbox"
+                    className="basket-check"
+                    checked={selected.has(item.barcode)}
+                    onChange={() => toggleSelected(item.barcode)}
+                    onClick={e => e.stopPropagation()}
+                    aria-label={`בחירת ${item.name}`}
+                  />
+                )}
                 <ProductImage barcode={item.barcode} name={item.name} size={48} />
                 <div
                   className="basket-item-body"
@@ -358,6 +400,15 @@ export function BasketPage() {
                     {[item.brand, item.unit].filter(Boolean).join(' · ')}
                   </div>
                 </div>
+                {!editing && (<>
+                <button
+                  className="qty-btn"
+                  onClick={() => openMove([item], activeId)}
+                  aria-label={`העברת ${item.name} לסל אחר`}
+                  title="העברה לסל אחר"
+                >
+                  <ArrowLeftRight size={13} strokeWidth={2} />
+                </button>
                 <div className="basket-item-controls">
                   <button
                     className="qty-btn"
@@ -378,8 +429,39 @@ export function BasketPage() {
                     <Plus size={13} strokeWidth={2.5} />
                   </button>
                 </div>
+                </>)}
               </div>
             ))}
+          </div>
+        )}
+
+        {editing && (
+          <div className="edit-bar" role="toolbar" aria-label="פעולות על מוצרים נבחרים">
+            <label className="edit-bar-all">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={() => setSelected(allSelected ? new Set() : new Set(items.map(i => i.barcode)))}
+              />
+              הכל
+            </label>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={selected.size === 0}
+              onClick={() => openMove(items.filter(i => selected.has(i.barcode)), activeId)}
+            >
+              <ArrowLeftRight size={15} strokeWidth={2} />
+              העברה ({selected.size})
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ color: 'var(--red-500)' }}
+              disabled={selected.size === 0}
+              onClick={() => { setResults(null); [...selected].forEach(b => removeItem(b)); }}
+            >
+              <Trash2 size={15} strokeWidth={1.8} />
+              מחיקה ({selected.size})
+            </button>
           </div>
         )}
 
