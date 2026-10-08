@@ -2675,3 +2675,37 @@ img { max-width: 100%; display: block; }
 .basket-card-delta { margin-top: 4px; padding: 2px 8px; border-radius: 99px; font-size: var(--fs-12); font-weight: var(--fw-semibold); white-space: nowrap; }
 .basket-card-delta.down { background: var(--green-100); color: var(--green-700); }
 .basket-card-delta.up { background: #FDECEA; color: #A32D2D; }
+
+/* Product page: single filter chip + its sheet */
+.filter-bar { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); flex-wrap: wrap; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 var(--sp-3);
+  border: 1.5px solid var(--line-strong); border-radius: var(--r-full); background: var(--surface);
+  color: var(--ink-700); font-family: var(--font-sans); font-size: var(--fs-13); font-weight: var(--fw-medium); cursor: pointer;
+}
+.filter-chip.active { border-color: var(--green-200); background: var(--green-50); color: var(--green-700); }
+.filter-chip-clear { display: inline-flex; border: none; background: none; color: var(--ink-400); cursor: pointer; padding: 6px; }
+.filter-sheet { height: auto; max-height: 85vh; overflow-y: auto; }
+.filter-sheet-label { font-size: var(--fs-13); font-weight: var(--fw-semibold); color: var(--ink-500); margin: var(--sp-3) 0 var(--sp-2); }
+.filter-sheet-city { display: flex; flex-direction: column; gap: var(--sp-2); }
+.filter-sheet-locate {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 8px 12px;
+  border: none; background: none; color: var(--green-700); font-family: var(--font-sans);
+  font-size: var(--fs-14); font-weight: var(--fw-semibold); cursor: pointer;
+}
+.filter-sheet-chains { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); }
+.filter-chain {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px;
+  border: 1.5px solid transparent; border-radius: 12px; background: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: 12px; color: var(--ink-600);
+}
+.filter-chain.selected { border-color: var(--green-500); background: var(--green-50); font-weight: var(--fw-semibold); }
+.filter-chain-check { position: absolute; top: 4px; inset-inline-end: 4px; color: var(--green-700); }
+.filter-sheet-done { margin-top: var(--sp-4); }
+
+/* Store row: tap to expand secondary details */
+.compare-row { cursor: pointer; flex-wrap: wrap; }
+.compare-row-main { display: flex; align-items: center; gap: var(--sp-3); width: 100%; }
+.compare-row-more { width: 100%; display: flex; flex-direction: column; gap: 6px; padding-top: var(--sp-2); border-top: 1px dashed var(--line); }
+.compare-row-more .compare-row-nav { margin-top: 0; }
+.compare-row-diff { font-size: var(--fs-12); color: var(--ink-500); }

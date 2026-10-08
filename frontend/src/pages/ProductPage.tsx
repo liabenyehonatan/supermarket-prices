@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, MapPin, Truck, Plus, Minus,
-  Check, Tag, ExternalLink, Navigation, X, ChevronDown,
+  Check, Tag, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
 import { ChainLogo } from '../components/ChainLogo';
@@ -10,9 +10,9 @@ import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { FEATURED_CHAINS, matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
+import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
-import { CityPicker } from '../components/CityPicker';
+import { FilterSheet } from '../components/FilterSheet';
 import { LocationPrompt } from '../components/LocationPrompt';
 
 function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
@@ -84,8 +84,8 @@ export function ProductPage() {
   const [cities, setCities] = useState<string[]>([]);
   useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
   const [chainFilter, setChainFilter] = useState(readChainFilter);
-  const [chainPickerOpen, setChainPickerOpen] = useState(false);
-  const chainPickerRef = useRef<HTMLDivElement>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   // Raw coordinates (not just the city) so each geocoded store can show its distance.
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
 
@@ -104,17 +104,6 @@ export function ProductPage() {
     const ex = items.find(i => i.barcode === barcode);
     if (ex) setQty(ex.quantity);
   }, [items, barcode]);
-
-  useEffect(() => {
-    if (!chainPickerOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (chainPickerRef.current && !chainPickerRef.current.contains(e.target as Node)) {
-        setChainPickerOpen(false);
-      }
-    };
-    const timer = setTimeout(() => document.addEventListener('click', handleClick), 0);
-    return () => { clearTimeout(timer); document.removeEventListener('click', handleClick); };
-  }, [chainPickerOpen]);
 
   function handleAdd() {
     if (!data) return;
@@ -223,108 +212,32 @@ export function ProductPage() {
             <div className="section-header">
               <div>
                 <div className="section-title">
-                  {filteredPrices.length}{(cityFilter || chainFilter) ? ` מתוך ${namedPrices.length}` : ''} חנויות · מחיר נוכחי
+                  {filteredPrices.length}{filteredPrices.length !== namedPrices.length ? ` מתוך ${namedPrices.length}` : ''} חנויות · מחיר נוכחי
                 </div>
                 <div className="section-subtitle">ממוין מהזול ליקר</div>
               </div>
             </div>
 
-            {/* Chain filter picker */}
-            <div ref={chainPickerRef} style={{ position: 'relative', marginBottom: 10 }}>
+            {/* One chip opens the filter sheet (city, chain, my location) */}
+            <div className="filter-bar">
               <button
-                onClick={() => setChainPickerOpen(v => !v)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  background: chainFilter ? 'var(--green-50)' : 'var(--surface)',
-                  border: `1.5px solid ${chainFilter ? 'var(--green-200)' : 'var(--line)'}`,
-                  borderRadius: 20, padding: '5px 10px 5px 8px',
-                  fontSize: 13, fontWeight: 600,
-                  color: chainFilter ? 'var(--green-700)' : 'var(--ink-500)',
-                  cursor: 'pointer', fontFamily: 'var(--font-sans)',
-                }}
-                aria-label="בחרי רשת לסינון"
+                className={`filter-chip${(cityFilter || chainFilter) ? ' active' : ''}`}
+                onClick={() => setFilterOpen(true)}
+                aria-label="סינון חנויות"
               >
-                {chainFilter
-                  ? <><ChainLogo name={chainFilter} size={20} />{chainFilter}</>
-                  : 'כל הרשתות'
-                }
-                <ChevronDown size={13} strokeWidth={2.5} style={{ marginInlineStart: 2, opacity: 0.6 }} />
+                <SlidersHorizontal size={15} strokeWidth={2} />
+                {(cityFilter || chainFilter) ? [cityFilter, chainFilter].filter(Boolean).join(' · ') : 'סינון לפי עיר או רשת'}
+                <ChevronDown size={13} strokeWidth={2.5} style={{ opacity: 0.6 }} />
               </button>
-
-              {chainFilter && (
+              {(cityFilter || chainFilter) && (
                 <button
-                  onClick={() => { setChainFilter(''); saveChainFilter(''); }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--ink-400)', padding: '4px 6px', marginInlineStart: 4,
-                  }}
-                  aria-label="הסר סינון רשת"
+                  className="filter-chip-clear"
+                  onClick={() => { setCityFilter(''); setChainFilter(''); saveCityFilter(''); saveChainFilter(''); }}
+                  aria-label="נקי סינון"
                 >
-                  <X size={13} strokeWidth={2.5} />
+                  <X size={15} strokeWidth={2.5} />
                 </button>
               )}
-
-              {chainPickerOpen && (
-                <div style={{
-                  position: 'absolute', top: 'calc(100% + 6px)', insetInlineStart: 0,
-                  background: 'var(--surface-0)', border: '1.5px solid var(--line)',
-                  borderRadius: 'var(--r-lg)', boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
-                  zIndex: 300, padding: '10px 8px',
-                  display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 320,
-                }}>
-                  {FEATURED_CHAINS.map(name => (
-                    <button
-                      key={name}
-                      onClick={() => {
-                        const next = chainFilter === name ? '' : name;
-                        setChainFilter(next);
-                        saveChainFilter(next);
-                        setChainPickerOpen(false);
-                      }}
-                      style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                        padding: '6px 8px', borderRadius: 10, cursor: 'pointer',
-                        border: chainFilter === name ? '2px solid var(--green-500)' : '2px solid transparent',
-                        background: chainFilter === name ? 'var(--green-50)' : 'transparent',
-                        fontFamily: 'var(--font-sans)',
-                      }}
-                    >
-                      <ChainLogo name={name} size={36} />
-                      <span style={{ fontSize: 11, color: 'var(--ink-600)', fontWeight: chainFilter === name ? 700 : 400 }}>
-                        {name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* City filter — type to narrow, or scroll the full A–Z list */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-              <CityPicker
-                value={cityFilter}
-                cities={cities}
-                onChange={c => { setCityFilter(c); saveCityFilter(c); }}
-                placeholder="סנן לפי עיר..."
-              />
-              <button
-                onClick={handleGps}
-                disabled={gpsLoading}
-                title="מצא את העיר שלי"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '10px 14px', borderRadius: 'var(--r-lg)',
-                  border: '1.5px solid var(--line)', background: 'var(--surface)',
-                  color: gpsLoading ? 'var(--ink-300)' : 'var(--green-600)',
-                  cursor: gpsLoading ? 'default' : 'pointer',
-                  fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-sans)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <Navigation size={15} strokeWidth={2} />
-                {gpsLoading ? 'מאתר...' : 'לפי מיקום נוכחי'}
-              </button>
             </div>
 
             {filteredPrices.length === 0 && namedPrices.length > 0 && (cityFilter || chainFilter) && (
@@ -354,91 +267,73 @@ export function ProductPage() {
               {filteredPrices.map((row, idx) => {
                 const isCheapest = idx === 0;
                 const diff = Number(row.price) - Number(filteredPrices[0]?.price ?? row.price);
+                const key = `${row.store_id}-${idx}`;
+                const open = expandedRow === key;
+                const name = row.store_name || row.chain_name;
+                const km = myCoords && row.latitude != null && row.longitude != null
+                  ? distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude)
+                  : null;
                 return (
                   <div
-                    key={`${row.store_id}-${idx}`}
+                    key={key}
                     className={`compare-row${isCheapest ? ' cheapest' : ''}`}
+                    onClick={() => setExpandedRow(open ? null : key)}
+                    aria-expanded={open}
                   >
-                    <ChainLogo name={row.chain_name} size={44} />
+                    <div className="compare-row-main">
+                      <ChainLogo name={row.chain_name} size={44} />
 
-                    <div className="compare-row-info">
-                      <div className="compare-row-store">{row.store_name || row.chain_name}</div>
-                      {row.store_city && (
-                        <div className="compare-row-city">
-                          <MapPin size={11} strokeWidth={1.8} style={{ display: 'inline', verticalAlign: 'middle', marginInlineEnd: 3 }} />
-                          {row.store_city}
-                        </div>
-                      )}
-                      {isStale(row.price_updated_at) && (
-                        <div className="compare-row-city" style={{ color: 'var(--orange-700)', fontWeight: 600 }}>
-                          מחיר ישן · עודכן לפני {timeAgo(row.price_updated_at)}
-                        </div>
-                      )}
-                      {/* Distance needs the store's own coordinates, which aren't geocoded
-                          yet (see project notes) — this will start appearing on its own
-                          once that runs, with no further change needed here. */}
-                      {myCoords && row.latitude != null && row.longitude != null && (
-                        <div className="compare-row-city" style={{ color: 'var(--ink-400)' }}>
-                          {distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude).toFixed(1)} ק״מ ממך
-                        </div>
-                      )}
-                      <div className="compare-row-nav">
-                        <a
-                          href={wazeUrl(row)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          aria-label={`נווט בוויז ל-${row.store_name || row.chain_name}`}
-                        >
-                          <Navigation size={10} strokeWidth={2} />
-                          Waze
-                        </a>
-                        <a
-                          href={googleMapsUrl(row)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          aria-label={`נווט בגוגל מפות ל-${row.store_name || row.chain_name}`}
-                        >
-                          <MapPin size={10} strokeWidth={2} />
-                          Maps
-                        </a>
+                      <div className="compare-row-info">
+                        <div className="compare-row-store">{name}</div>
+                        {row.store_city && <div className="compare-row-city">{row.store_city}</div>}
+                        {isStale(row.price_updated_at) && (
+                          <div className="compare-row-city" style={{ color: 'var(--orange-700)', fontWeight: 600 }}>
+                            מחיר ישן · עודכן לפני {timeAgo(row.price_updated_at)}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="compare-row-right">
+                        <span className={`compare-row-price tabular${isCheapest ? ' text-green' : ''}`}>
+                          {fmt(row.price)}
+                        </span>
+                        {isCheapest && (
+                          <span className="badge badge-cheapest" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <Tag size={10} strokeWidth={2.5} />
+                            הכי זול
+                          </span>
+                        )}
+                        {!isCheapest && diff > 0 && (
+                          <span className="compare-row-diff tabular">+{fmt(diff)}</span>
+                        )}
                       </div>
                     </div>
 
-                    <div className="compare-row-right">
-                      <span className={`compare-row-price tabular${isCheapest ? ' text-green' : ''}`}>
-                        {fmt(row.price)}
-                      </span>
-
-                      {isCheapest && (
-                        <span className="badge badge-cheapest" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <Tag size={10} strokeWidth={2.5} />
-                          הכי זול
-                        </span>
-                      )}
-
-                      {!isCheapest && diff > 0 && (
-                        <span className="badge badge-neutral tabular" style={{ fontSize: 12 }}>
-                          +{fmt(diff)}
-                        </span>
-                      )}
-
-                      {row.delivery_url && (
-                        <a
-                          href={row.delivery_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="compare-row-delivery"
-                          onClick={e => e.stopPropagation()}
-                          aria-label={`הזמן משלוח מ-${row.chain_name}`}
-                        >
-                          <Truck size={10} strokeWidth={2} />
-                          משלוח
-                          <ExternalLink size={9} strokeWidth={2} />
-                        </a>
-                      )}
-                    </div>
+                    {open && (
+                      <div className="compare-row-more" onClick={e => e.stopPropagation()}>
+                        {km != null && (
+                          <div className="compare-row-city">{km.toFixed(1)} ק״מ ממך</div>
+                        )}
+                        {row.store_address && <div className="compare-row-city">{row.store_address}</div>}
+                        <div className="compare-row-nav">
+                          <a href={wazeUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
+                            <Navigation size={10} strokeWidth={2} />
+                            Waze
+                          </a>
+                          <a href={googleMapsUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בגוגל מפות ל-${name}`}>
+                            <MapPin size={10} strokeWidth={2} />
+                            Maps
+                          </a>
+                          {row.delivery_url && (
+                            <a href={row.delivery_url} target="_blank" rel="noopener noreferrer" className="compare-row-delivery" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
+                              <Truck size={10} strokeWidth={2} />
+                              משלוח
+                              <ExternalLink size={9} strokeWidth={2} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -485,6 +380,19 @@ export function ProductPage() {
             )}
           </button>
         </div>
+      )}
+
+      {filterOpen && (
+        <FilterSheet
+          city={cityFilter}
+          cities={cities}
+          chain={chainFilter}
+          locating={gpsLoading}
+          onCity={c => { setCityFilter(c); saveCityFilter(c); }}
+          onChain={c => { setChainFilter(c); saveChainFilter(c); }}
+          onLocate={handleGps}
+          onClose={() => setFilterOpen(false)}
+        />
       )}
 
       <LocationPrompt problem={locationProblem} onRetry={handleGps} onConfirm={confirmLocation} onPickCity={pickLocationCity} suggestedCity={suggestedCity} onClose={dismissLocation} />
