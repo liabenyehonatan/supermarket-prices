@@ -1,7 +1,8 @@
 # app/parser/universal_parser.py
 #
-# Bridge layer: converts normalized row dicts (from il_supermarket_parsers)
-# into upserts against our PostgreSQL DB.
+# Bridge layer between normalized row dicts (from il_supermarket_parsers) and
+# our PostgreSQL DB: field-name helpers, chain and store upserts. Products and
+# prices are loaded in bulk by app/parser/price_loader.py.
 #
 # Row dicts come with the original XML field names.  Field names vary across
 # chains (e.g. ManufacturerName vs ManufactureName), so every lookup uses a
@@ -15,7 +16,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chain, Store, Product, Price, Promotion
+from app.db.models import Chain, Store
 
 logger = logging.getLogger(__name__)
 
@@ -218,101 +219,3 @@ async def upsert_store_from_row(
             store.longitude = lon
 
     return store
-
-
-# ── Product ───────────────────────────────────────────────────────────────────
-
-async def get_or_create_product(
-    session: AsyncSession,
-    row: dict,
-) -> Optional[Product]:
-    barcode = _get(row, "ItemCode", "itemcode", "ITEMCODE")
-    if not barcode:
-        return None
-
-    result = await session.execute(
-        select(Product).where(Product.barcode == barcode)
-    )
-    product = result.scalar_one_or_none()
-
-    if product is None:
-        product = Product(
-            barcode=barcode,
-            name=_get(row, "ItemName", "itemname", "ITEMNAME") or barcode,
-            brand=(
-                _get(row, "ManufacturerName", "ManufactureName",
-                     "manufacturername", "manufacturename")
-            ),
-            manufacturer=(
-                _get(row, "ManufacturerName", "ManufactureName",
-                     "manufacturername", "manufacturename")
-            ),
-            unit_of_measure=(
-                _get(row, "UnitOfMeasure", "UnitMeasure",
-                     "unitofmeasure", "unitmeasure")
-            ),
-            is_weighted=(
-                _get(row, "bIsWeighted", "BisWeighted",
-                     "bisweighted", default="0") == "1"
-            ),
-        )
-        session.add(product)
-        await session.flush()
-
-    return product
-
-
-# ── Price ─────────────────────────────────────────────────────────────────────
-
-async def upsert_price(
-    session: AsyncSession,
-    product: Product,
-    store: Store,
-    row: dict,
-) -> None:
-    price_value = _safe_decimal(
-        _get(row, "ItemPrice", "itemprice", "ITEMPRICE")
-    )
-    if price_value is None:
-        return
-
-    unit_price_value = _safe_decimal(
-        _get(row, "UnitOfMeasurePrice", "unitofmeasureprice",
-             "UnitMeasurePrice", "unitmeasureprice")
-    )
-    price_updated_at = (
-        _safe_datetime(_get(row, "PriceUpdateDate", "PriceUpdateTime",
-                            "priceupdatedate", "priceupdatetime"))
-        or datetime.now()
-    )
-
-    result = await session.execute(
-        select(Price).where(
-            Price.product_id == product.id,
-            Price.store_id == store.id,
-            Price.is_current == True,
-        )
-    )
-    existing = result.scalar_one_or_none()
-
-    if existing is None:
-        session.add(Price(
-            product_id=product.id,
-            store_id=store.id,
-            price=price_value,
-            unit_price=unit_price_value,
-            price_updated_at=price_updated_at,
-            is_current=True,
-        ))
-    elif existing.price != price_value:
-        existing.is_current = False
-        session.add(Price(
-            product_id=product.id,
-            store_id=store.id,
-            price=price_value,
-            unit_price=unit_price_value,
-            price_updated_at=price_updated_at,
-            is_current=True,
-        ))
-    else:
-        existing.scraped_at = datetime.now()

@@ -1,8 +1,14 @@
 # main.py
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import settings
 from app.api.routes import router
+from app.db.database import get_db
 
 # Create the FastAPI app instance
 app = FastAPI(
@@ -11,14 +17,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS middleware allows your frontend (running on a different
-# port or domain) to call this API.
-# Without this, browsers block cross-origin requests.
+# CORS lets a browser on another origin call this API. Behind the bundled nginx
+# the frontend and API share an origin and none of this is exercised; it matters
+# when the frontend is hosted elsewhere (set FRONTEND_URL, comma-separated).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.FRONTEND_URLS or settings.DEV_CORS_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 # Register our routes
@@ -35,39 +41,35 @@ async def root():
 
 
 @app.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(db: AsyncSession = Depends(get_db)):
+    """Liveness + database reachability. 503 when the database does not answer."""
+    try:
+        await db.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse({"status": "degraded", "db": False}, status_code=503)
+    return {"status": "ok", "db": True}
 
 
-# ── Task management endpoints ────────────────────────────────────────────────
+@app.get("/health/data")
+async def health_data():
+    """
+    Data freshness for an uptime monitor: 503 when the last successful ingest
+    cycle is older than MAX_DATA_AGE_HOURS (or there never was one). Kept apart
+    from /health so stale data never makes a container orchestrator restart a
+    perfectly healthy API.
+    """
+    from app.pipeline.runs import data_age_hours
 
-@app.post("/api/v1/tasks/scrape")
-async def trigger_scrape(chains: list[str] | None = None, skip_blocked: bool = True):
-    from app.tasks import scrape_all
-    task = scrape_all.delay(chains=chains, skip_blocked=skip_blocked)
-    return {"task_id": task.id, "status": "queued"}
-
-
-@app.post("/api/v1/tasks/parse")
-async def trigger_parse(chains: list[str] | None = None):
-    from app.tasks import parse_all
-    task = parse_all.delay(chains=chains)
-    return {"task_id": task.id, "status": "queued"}
-
-
-@app.post("/api/v1/tasks/scrape-and-parse")
-async def trigger_pipeline(chains: list[str] | None = None, skip_blocked: bool = True):
-    from app.tasks import scrape_and_parse
-    task = scrape_and_parse.delay(chains=chains, skip_blocked=skip_blocked)
-    return {"task_id": task.id, "status": "queued"}
-
-
-@app.get("/api/v1/tasks/{task_id}")
-async def get_task_status(task_id: str):
-    from app.celery_app import app as celery_app
-    result = celery_app.AsyncResult(task_id)
-    return {
-        "task_id": task_id,
-        "status": result.status,
-        "result": result.result if result.ready() else None,
-    }
+    try:
+        age = await data_age_hours()
+    except Exception:
+        return JSONResponse({"status": "degraded", "db": False}, status_code=503)
+    fresh = age is not None and age <= settings.MAX_DATA_AGE_HOURS
+    return JSONResponse(
+        {
+            "status": "ok" if fresh else "stale",
+            "data_age_hours": None if age is None else round(age, 1),
+            "max_age_hours": settings.MAX_DATA_AGE_HOURS,
+        },
+        status_code=200 if fresh else 503,
+    )
