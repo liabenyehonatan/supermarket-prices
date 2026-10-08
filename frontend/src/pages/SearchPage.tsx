@@ -33,7 +33,6 @@ import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { timeAgo } from '../lib/basketCompare';
 import { FEATURED_CHAINS, readChainFilter, saveChainFilter } from '../lib/filters';
 
 /* ── constants ────────────────────────────────────────────── */
@@ -131,8 +130,22 @@ export function SearchPage() {
     try { localStorage.setItem('sali_seen_how', '1'); } catch { /* storage blocked — card returns next visit */ }
   }
   const { baskets, activeId, setActive, openCreate } = useBasket();
+  const basketRowRef = useRef<HTMLDivElement>(null);
   // With one basket the card only appears once it has items; with several they are all listed
   const shownBaskets = baskets.length > 1 ? baskets : baskets.filter(b => b.items.length > 0);
+
+  // Bring the active basket into view inside its row (without moving the page itself)
+  useEffect(() => {
+    const row = basketRowRef.current;
+    const card = row?.querySelector<HTMLElement>('.basket-card.is-active');
+    if (!row || !card) return;
+    const r = row.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    // Only scroll as far as needed to show the whole card, so the "new basket" card stays visible when it can
+    const pad = 8;
+    if (c.left < r.left + pad) row.scrollLeft += c.left - r.left - pad;
+    else if (c.right > r.right - pad) row.scrollLeft += c.right - r.right + pad;
+  }, [activeId, baskets.length]);
   const [query, setQuery]     = useState(searchParams.get('q') ?? '');
   const [results, setResults] = useState<Product[]>(() => initialSnap.current?.results ?? []);
   const [hasMore, setHasMore] = useState(() => initialSnap.current?.hasMore ?? false);
@@ -496,27 +509,26 @@ export function SearchPage() {
                 <div className="section-header" style={{ marginBottom: 12 }}>
                   <div className="section-title">הסלים שלי</div>
                 </div>
-                <div className="card-row">
+                <div className="card-row" ref={basketRowRef}>
                   <button className="basket-card basket-card-new" onClick={openCreate}>
                     <Plus size={22} strokeWidth={2} />
                     <span>סל חדש</span>
                   </button>
                   {shownBaskets.map(b => {
                     const count = b.items.reduce((sum, i) => sum + i.quantity, 0);
+                    const isActive = b.id === activeId;
                     return (
-                      <button key={b.id} className="basket-card" onClick={() => { setActive(b.id); navigate('/basket'); }}>
-                        <span className="basket-card-top">
-                          <span className="basket-dot" style={{ background: b.color }} />
-                          <span className="basket-card-name">{b.name}</span>
-                        </span>
+                      <button
+                        key={b.id}
+                        className={`basket-card${isActive ? ' is-active' : ''}`}
+                        onClick={() => { setActive(b.id); navigate('/basket'); }}
+                        aria-current={isActive ? 'true' : undefined}
+                      >
+                        <span className="basket-card-name">{b.name}</span>
                         <span className="basket-card-meta">{count === 0 ? 'ריק' : count === 1 ? 'פריט אחד' : `${count} פריטים`}</span>
-                        <span className="basket-card-price">
-                          {b.lastCompare ? `₪${b.lastCompare.total.toFixed(2)}` : count === 0 ? 'עוד אין מוצרים' : 'השוואה ראשונה'}
-                        </span>
-                        <span className="basket-card-meta">
-                          {b.lastCompare ? `נבדק ${timeAgo(b.lastCompare.at)}` : count === 0 ? 'חפשי והוסיפי' : 'לחצי להשוואה'}
-                        </span>
-                        {b.id === activeId && <span className="basket-card-active">פעיל</span>}
+                        {isActive
+                          ? <span className="basket-card-cta">{count === 0 ? 'להוספת מוצרים' : 'להשוואה'}</span>
+                          : <span className="basket-card-quiet">לצפייה</span>}
                       </button>
                     );
                   })}

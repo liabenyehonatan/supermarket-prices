@@ -2548,7 +2548,7 @@ img { max-width: 100%; display: block; }
   font-family: var(--font-sans); font-size: var(--fs-13); color: var(--ink-500);
   text-decoration: underline; cursor: pointer;
 }
-.card-row { display: flex; gap: var(--sp-3); overflow-x: auto; margin-bottom: var(--sp-6); padding-bottom: 4px; scrollbar-width: none; }
+.card-row { display: flex; gap: var(--sp-3); overflow-x: auto; margin: 0 calc(var(--sp-2) * -1) var(--sp-4); padding: var(--sp-2); padding-bottom: var(--sp-4); scrollbar-width: none; }
 .card-row::-webkit-scrollbar { display: none; }
 
 /* Named baskets */
@@ -2585,16 +2585,25 @@ img { max-width: 100%; display: block; }
 .compare-delta strong.down { color: var(--green-700); }
 .compare-delta strong.up { color: var(--red-500); }
 .basket-card {
-  position: relative; flex: 0 0 156px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-  padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-lg);
+  position: relative; flex: 0 0 122px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  min-height: 100px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-lg);
   background: var(--surface-0); cursor: pointer; font-family: var(--font-sans); text-align: start;
+  transition: transform var(--dur-base, 0.2s) var(--ease-out, ease-out), box-shadow var(--dur-base, 0.2s) var(--ease-out, ease-out);
 }
-.basket-card-top { display: flex; align-items: center; gap: 8px; max-width: 100%; }
-.basket-card-name { font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--ink-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.basket-card-name { font-size: var(--fs-15, 15px); font-weight: var(--fw-semibold); color: var(--ink-900); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .basket-card-meta { font-size: var(--fs-12); color: var(--ink-500); }
-.basket-card-price { font-size: var(--fs-16); font-weight: 700; color: var(--green-700); }
-.basket-card-active { position: absolute; top: 8px; inset-inline-end: 8px; font-size: 10px; padding: 2px 6px; border-radius: 99px; background: var(--green-100); color: var(--green-700); }
-.basket-card-new { flex: 0 0 96px; align-items: center; justify-content: center; border-style: dashed; color: var(--green-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
+.basket-card-quiet { margin-top: auto; font-size: var(--fs-13); color: var(--ink-400); }
+/* The active basket: lifted, deeper shadow, green top edge, and the only filled button */
+.basket-card.is-active {
+  transform: scale(1.04); z-index: 1; border-color: transparent; border-top: 3px solid var(--green-700);
+  box-shadow: 0 8px 20px rgba(30, 60, 40, 0.16);
+}
+.basket-card-cta {
+  margin-top: auto; align-self: stretch; height: 30px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--green-700); color: #fff; font-size: var(--fs-13); font-weight: var(--fw-semibold);
+}
+.basket-card-new { flex: 0 0 80px; align-items: center; justify-content: center; border-style: dashed; color: var(--green-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
 
 /* Header pill: always shows which basket new items go to */
 .basket-pill {
