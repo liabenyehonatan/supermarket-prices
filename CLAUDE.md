@@ -13,7 +13,7 @@ alembic upgrade head
 alembic revision --autogenerate -m "description"
 
 # Ingestion worker (scrape -> parse -> delete), the production entry point
-python -m app.worker                           # run forever, one cycle a day at RUN_AT (06:00)
+python -m app.worker                           # run forever, cycles at RUN_AT (06:00 and 18:00)
 python -m app.worker --once                    # one cycle, then exit
 python -m app.worker --once --chains SHUFERSAL --no-scrape   # only load what is in dumps/
 
@@ -71,7 +71,7 @@ Three endpoints under `/api/v1`:
 All DB access is async (`AsyncSession` via `asyncpg`). FastAPI dependency `get_db` provides a session per request.
 
 ### Ingestion worker (`app/worker.py`, `app/pipeline/`)
-One cycle a day (`RUN_AT`, default 06:00 Israel time; a failed or partial cycle is retried up to twice, 2 hours apart). One cycle = for every chain: scrape (subprocess, timeout, retries) then parse. Chains are isolated: a failure is recorded in `ingest_runs` and never stops the others. A Postgres advisory lock allows one cycle at a time across processes and hosts. `GET /health/data` is 503 when the last successful cycle is older than `MAX_DATA_AGE_HOURS`. Celery/Redis are no longer used; there are no `/tasks` API endpoints.
+Two cycles a day (`RUN_AT`, default 06:00 and 18:00 Israel time; a failed or partial cycle is retried up to twice, 2 hours apart). The evening cycle downloads only files published since the morning one. One cycle = for every chain: scrape (subprocess, timeout, retries) then parse. Chains are isolated: a failure is recorded in `ingest_runs` and never stops the others. A Postgres advisory lock allows one cycle at a time across processes and hosts. `GET /health/data` is 503 when the last successful cycle is older than `MAX_DATA_AGE_HOURS`. Celery/Redis are no longer used; there are no `/tasks` API endpoints.
 
 ## Rules
 

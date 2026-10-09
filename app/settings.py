@@ -73,9 +73,11 @@ SCRAPE_CONCURRENCY = _int("SCRAPE_CONCURRENCY", 3)
 PARSE_CONCURRENCY = _int("PARSE_CONCURRENCY", 2)
 SCRAPE_TIMEOUT_SECONDS = _int("SCRAPE_TIMEOUT_SECONDS", 3 * 3600)
 SCRAPE_ATTEMPTS = _int("SCRAPE_ATTEMPTS", 2)
-# One cycle per day, local time (SCHEDULE_TIMEZONE). Every cycle downloads the
-# chains' full price files; delta files are not used.
-RUN_AT = os.getenv("RUN_AT", "06:00")
+# Daily cycle times, local time (SCHEDULE_TIMEZONE), comma separated. Every cycle
+# downloads only the full price files published since the previous one; delta
+# files are not used. Chains that publish in the afternoon are picked up by the
+# evening cycle.
+RUN_AT = os.getenv("RUN_AT", "06:00,18:00")
 # A cycle that ended failed/partial is retried this many hours later, up to RETRY_MAX times.
 RETRY_AFTER_HOURS = _float("RETRY_AFTER_HOURS", 2)
 RETRY_MAX = _int("RETRY_MAX", 2)

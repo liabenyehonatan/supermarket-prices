@@ -133,6 +133,27 @@ def test_next_slot_is_the_next_daily_run_time(monkeypatch):
     assert worker.next_slot(datetime(2026, 5, 12, 10, 0)) == datetime(2026, 5, 12, 18, 30)
 
 
+def test_two_runs_a_day(monkeypatch):
+    monkeypatch.setattr(settings, "RUN_AT", "18:00, 06:00")        # order and spaces do not matter
+    assert worker.next_slot(datetime(2026, 5, 12, 5, 0)) == datetime(2026, 5, 12, 6, 0)
+    assert worker.next_slot(datetime(2026, 5, 12, 6, 0)) == datetime(2026, 5, 12, 18, 0)
+    assert worker.next_slot(datetime(2026, 5, 12, 12, 0)) == datetime(2026, 5, 12, 18, 0)
+    assert worker.next_slot(datetime(2026, 5, 12, 19, 0)) == datetime(2026, 5, 13, 6, 0)
+    assert worker.longest_gap_hours() == 12
+    monkeypatch.setattr(settings, "RUN_AT", "06:00")
+    assert worker.longest_gap_hours() == 24
+    monkeypatch.setattr(settings, "RUN_AT", "06:00,07:00")
+    assert worker.longest_gap_hours() == 23
+
+
+def test_run_at_needs_a_time(monkeypatch):
+    import pytest as _pytest
+
+    monkeypatch.setattr(settings, "RUN_AT", " , ")
+    with _pytest.raises(ValueError):
+        worker.next_slot(datetime(2026, 5, 12, 5, 0))
+
+
 async def test_failed_cycle_is_retried_a_limited_number_of_times(monkeypatch):
     from app.pipeline.shutdown import STOP
 

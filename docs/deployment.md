@@ -50,12 +50,12 @@ docker compose ps          # migrate exits 0; the rest are running/healthy
 docker compose logs -f worker
 ```
 
-The worker runs a cycle immediately (the database starts empty) and then once a day at
-`RUN_AT` (06:00 Israel time). Each cycle downloads the chains' new *full* price files (delta
-files are not used) and loads only the newest one per store; a failed or partial cycle is retried
+The worker runs a cycle immediately (the database starts empty) and then twice a day at
+`RUN_AT` (06:00 and 18:00 Israel time). Each cycle downloads only the *full* price files published
+since the previous one (delta files are not used) and loads only the newest one per store; a failed or partial cycle is retried
 up to twice, two hours apart. The first cycle downloads everything the portals still list
 (some list over a month of full files per store) and takes hours; later cycles are far smaller.
-A price published after 06:00 shows up the next morning. Watch progress with:
+Chains that publish in the afternoon (e.g. Rami Levy around 12:15) are picked up by the 18:00 cycle. Watch progress with:
 
 ```bash
 docker compose exec db psql -U supermarket supermarket_prices -c \
@@ -79,7 +79,7 @@ Why these numbers:
   [Always Free page](https://docs.oracle.com/en-us/iaas/Content/FreeTier/resourceref.htm)).
   The stack peaks around 35 GB of disk during the first load, so 100 GB is ample.
 - Oracle may **reclaim "idle" instances**: CPU (95th percentile), network *and* (A1 only) memory
-  all below 20% for 7 days. Our worker runs about half an hour a day, so CPU and network will be
+  all below 20% for 7 days. Our worker runs about an hour a day in total, so CPU and network will be
   low. With 6 GB allocated, the stack's roughly 2-3 GB keeps memory above 20%, so the instance
   should not count as idle. How Oracle measures memory is not documented; watch it (below).
 - Oracle's page does not say what a reclaimed instance becomes, or whether upgrading to Pay As You

@@ -291,24 +291,43 @@ async def run_cycle(
 
 # ── Schedule ──────────────────────────────────────────────────────────────────
 
+def _run_times() -> list[tuple[int, int]]:
+    """RUN_AT ("06:00,18:00") as sorted (hour, minute) pairs."""
+    times = sorted({tuple(int(p) for p in part.strip().split(":")) for part in settings.RUN_AT.split(",") if part.strip()})
+    if not times:
+        raise ValueError("RUN_AT must hold at least one HH:MM time")
+    return times
+
+
 def next_slot(now: datetime) -> datetime:
-    """The next occurrence of RUN_AT (HH:MM) after `now`, in now's timezone."""
-    hour, minute = (int(part) for part in settings.RUN_AT.split(":"))
-    slot = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    return slot if slot > now else slot + timedelta(days=1)
+    """The next RUN_AT time after `now`, in now's timezone."""
+    candidates = []
+    for day in (0, 1):
+        for hour, minute in _run_times():
+            slot = (now + timedelta(days=day)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if slot > now:
+                candidates.append(slot)
+    return min(candidates)
+
+
+def longest_gap_hours() -> float:
+    """Longest wait between two consecutive runs; older data than this means a run was missed."""
+    minutes = [h * 60 + m for h, m in _run_times()]
+    gaps = [b - a for a, b in zip(minutes, minutes[1:])] + [minutes[0] + 24 * 60 - minutes[-1]]
+    return max(gaps) / 60
 
 
 async def serve() -> None:
     tz = ZoneInfo(settings.SCHEDULE_TIMEZONE)
-    logger.info("Worker started: one cycle a day at %s (%s)", settings.RUN_AT, settings.SCHEDULE_TIMEZONE)
+    logger.info("Worker started: cycles daily at %s (%s)", settings.RUN_AT, settings.SCHEDULE_TIMEZONE)
 
-    # Run at startup if the data is more than a day old, otherwise wait for the next slot.
+    # Run at startup if a scheduled run was missed (data older than the longest gap), otherwise wait.
     try:
         age = await runs.data_age_hours()
     except Exception as exc:
         logger.warning("could not read data age (%s); running now", exc)
         age = None
-    run_now = age is None or age >= 24
+    run_now = age is None or age > longest_gap_hours() + 1
     retries = 0
 
     while not STOP.is_set():
