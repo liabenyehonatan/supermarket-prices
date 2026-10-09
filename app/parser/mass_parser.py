@@ -17,6 +17,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -143,6 +144,38 @@ def _sort_key(dump_file: DumpFile):
     return (dump_file.extracted_date, full_first, dump_file.file_name)
 
 
+def split_superseded(
+    pending: list[DumpFile], newest_loaded: dict[str, datetime]
+) -> tuple[list[DumpFile], list[DumpFile]]:
+    """
+    Keep only the newest full price file per store. A full file is the whole
+    store, so an older one for the same store changes nothing the newer one will
+    not overwrite. Returns (to_load, skipped). Store and delta files pass through.
+    """
+    newest_pending: dict[str, DumpFile] = {}
+    for f in pending:
+        if f.detected_filetype != FileTypesFilters.PRICE_FULL_FILE:
+            continue
+        store = f.extracted_store_number
+        if store not in newest_pending or (f.extracted_date, f.file_name) > (
+            newest_pending[store].extracted_date, newest_pending[store].file_name
+        ):
+            newest_pending[store] = f
+
+    keep, skipped = [], []
+    for f in pending:
+        if f.detected_filetype != FileTypesFilters.PRICE_FULL_FILE:
+            keep.append(f)
+            continue
+        store = f.extracted_store_number
+        loaded = newest_loaded.get(store)
+        if newest_pending[store] is not f or (loaded is not None and f.extracted_date < loaded):
+            skipped.append(f)
+        else:
+            keep.append(f)
+    return keep, skipped
+
+
 # ── One file ──────────────────────────────────────────────────────────────────
 
 async def _parse_store_file(dump_file: DumpFile, parser_cls, folder_name: str) -> tuple[int, int]:
@@ -244,13 +277,27 @@ async def parse_chain(chain_name: str) -> ChainParseResult:
         FileTypesFilters.PRICE_FULL_FILE,
         FileTypesFilters.PRICE_FILE,
     )
+    # Newest full file already loaded (or skipped as outdated) per store: nothing
+    # older than that may be applied, or it would roll the store back.
+    newest_loaded: dict[str, datetime] = {}
+    on_disk = _dump_files_in(folder)
+    for name, entry in ledger_rows.items():
+        if entry.file_type == "price_full" and entry.status == ledger.DONE:
+            try:
+                known = file_name_to_components(str(folder), name)
+            except Exception:
+                continue
+            store = known.extracted_store_number
+            if store not in newest_loaded or known.extracted_date > newest_loaded[store]:
+                newest_loaded[store] = known.extracted_date
+
     pending: list[DumpFile] = []
-    for dump_file in _dump_files_in(folder):
+    for dump_file in on_disk:
         if dump_file.detected_filetype not in wanted_types:
             continue
         entry = ledger_rows.get(dump_file.file_name)
         path = folder / dump_file.file_name
-        if entry and entry.status == ledger.DONE:
+        if entry and entry.status in (ledger.DONE, ledger.SUPERSEDED):
             # Loaded earlier; a crash between commit and delete leaves the file.
             result.files_skipped += 1
             ledger.delete_loaded_file(path)
@@ -259,6 +306,16 @@ async def parse_chain(chain_name: str) -> ChainParseResult:
             result.files_skipped += 1
         else:
             pending.append(dump_file)
+
+    pending, superseded = split_superseded(pending, newest_loaded)
+    if superseded:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                await ledger.record_superseded(session, folder_name, [f.file_name for f in superseded])
+        for dump_file in superseded:
+            ledger.delete_loaded_file(folder / dump_file.file_name)
+        result.files_skipped += len(superseded)
+        logger.info("%s: %d older full files skipped (a newer one exists per store)", folder_name, len(superseded))
 
     # Stores first (so price files find their store), then oldest-first.
     pending.sort(key=lambda f: (f.detected_filetype != FileTypesFilters.STORE_FILE, _sort_key(f)))
