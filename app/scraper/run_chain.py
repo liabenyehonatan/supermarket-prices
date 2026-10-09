@@ -2,7 +2,7 @@
 #
 # Scrape ONE chain in its own process:
 #
-#   python -m app.scraper.run_chain SHUFERSAL [--full] [--limit N]
+#   python -m app.scraper.run_chain SHUFERSAL [--limit N]
 #
 # The worker launches this as a subprocess per chain so a hang, crash or leak in
 # one chain's scraper can be killed on a timeout without touching the others.
@@ -17,7 +17,6 @@ import sys
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("chain")
-    parser.add_argument("--full", action="store_true", help="force a full sync")
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
@@ -29,7 +28,7 @@ def main() -> int:
         print(json.dumps({"chain": chain, "ok": False, "error": "unknown scraper for installed library"}))
         return 1
     try:
-        result = scrape_chain(chain, force_full=args.full, limit=args.limit)
+        result = scrape_chain(chain, limit=args.limit)
     except Exception as exc:
         logging.exception("scrape failed")
         print(json.dumps({"chain": chain, "ok": False, "error": f"{type(exc).__name__}: {exc}"}))

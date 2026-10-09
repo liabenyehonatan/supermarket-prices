@@ -8,12 +8,7 @@
 # is what lets the parser delete a file after loading it without the scraper
 # fetching it again. Keep dumps/status on persistent storage.
 
-import fcntl
-import json
 import logging
-import os
-from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -25,9 +20,6 @@ from app import settings
 
 logger = logging.getLogger(__name__)
 
-FULL_SYNC_INTERVAL_DAYS = settings.FULL_SYNC_INTERVAL_DAYS
-STATUS_DIR = settings.DUMPS_DIR / "status"
-FULL_SYNC_TRACKER = STATUS_DIR / "full_sync_tracker.json"
 
 # Chains served from FTP hosts (publishedprices.co.il) that refuse non-Israeli
 # addresses. They fail gracefully from abroad and work from an Israeli IP.
@@ -63,44 +55,6 @@ def get_enabled_scrapers(skip_blocked: bool = False) -> list[str]:
     return result
 
 
-# ── Full-sync tracker ─────────────────────────────────────────────────────────
-# Several chain scrapes may run at once (one process each), so every change is
-# a locked read-modify-write and the file is replaced atomically.
-
-@contextmanager
-def _tracker_lock():
-    STATUS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(STATUS_DIR / ".tracker.lock", "w") as lock_file:
-        fcntl.flock(lock_file, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
-
-
-def _load_tracker() -> dict:
-    try:
-        return json.loads(FULL_SYNC_TRACKER.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-
-def _mark_full_sync(chain: str) -> None:
-    with _tracker_lock():
-        tracker = _load_tracker()
-        tracker[chain] = datetime.now().isoformat()
-        tmp = FULL_SYNC_TRACKER.with_suffix(".tmp")
-        tmp.write_text(json.dumps(tracker, indent=2))
-        os.replace(tmp, FULL_SYNC_TRACKER)
-
-
-def _needs_full_sync(chain: str, tracker: dict) -> bool:
-    last = tracker.get(chain)
-    if last is None:
-        return True
-    return (datetime.now() - datetime.fromisoformat(last)).days >= FULL_SYNC_INTERVAL_DAYS
-
-
 # ── Runner helper ─────────────────────────────────────────────────────────────
 
 def _run_runner(
@@ -131,13 +85,12 @@ def _run_runner(
     )
 
 
-def _file_types(full: bool) -> list[str]:
-    types = [
-        FileTypesFilters.STORE_FILE.name,
-        (FileTypesFilters.PRICE_FULL_FILE if full else FileTypesFilters.PRICE_FILE).name,
-    ]
+def _file_types() -> list[str]:
+    """Store lists and full price files. Delta (Price) files are deliberately not used:
+    a daily full file is self-correcting, a delta stream can miss changes."""
+    types = [FileTypesFilters.STORE_FILE.name, FileTypesFilters.PRICE_FULL_FILE.name]
     if settings.SCRAPE_PROMOS:
-        types.append((FileTypesFilters.PROMO_FULL_FILE if full else FileTypesFilters.PROMO_FILE).name)
+        types.append(FileTypesFilters.PROMO_FULL_FILE.name)
     return types
 
 
@@ -155,27 +108,16 @@ def _prune_status(chain: str) -> None:
         logger.warning("could not prune scraper status for %s: %s", chain, exc)
 
 
-def scrape_chain(
-    chain: str,
-    *,
-    force_full: bool = False,
-    limit: Optional[int] = None,
-) -> dict:
+def scrape_chain(chain: str, *, limit: Optional[int] = None) -> dict:
     """
-    Download one chain. Full files if it has none yet or the last full sync is
-    older than FULL_SYNC_INTERVAL_DAYS (or force_full), otherwise only deltas.
-
-    The chain is recorded as fully synced only when the download completed
-    without raising; a crash or timeout leaves it due for a full sync again.
+    Download the new store and full price files of one chain. Files already
+    downloaded earlier are skipped by the library's own status database.
     Raises on failure.
     """
-    full = force_full or _needs_full_sync(chain, _load_tracker())
     _prune_status(chain)
-    logger.info("Scraping %s (%s)", chain, "full" if full else "delta")
-    _run_runner([chain], 1, limit, _file_types(full))
-    if full:
-        _mark_full_sync(chain)
-    return {"chain": chain, "mode": "full" if full else "delta"}
+    logger.info("Scraping %s", chain)
+    _run_runner([chain], 1, limit, _file_types())
+    return {"chain": chain}
 
 
 def run_mass_scraper(
@@ -183,7 +125,6 @@ def run_mass_scraper(
     limit: Optional[int] = None,
     skip_blocked: bool = False,
     workers: int = 1,  # kept for backwards compatibility; chains run one by one
-    force_full: bool = False,
 ) -> dict[str, Optional[str]]:
     """
     Scrape the given chains one after another. A failing chain is logged and
@@ -193,7 +134,7 @@ def run_mass_scraper(
     outcome: dict[str, Optional[str]] = {}
     for chain in enabled:
         try:
-            scrape_chain(chain, force_full=force_full, limit=limit)
+            scrape_chain(chain, limit=limit)
             outcome[chain] = None
         except Exception as exc:
             logger.exception("Scrape of %s failed", chain)
@@ -209,16 +150,13 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
     # Usage:
-    #   python -m app.scraper.mass_scraper                  # all chains, smart delta/full
-    #   python -m app.scraper.mass_scraper local            # skip FTP chains
-    #   python -m app.scraper.mass_scraper full             # force full sync for all
+    #   python -m app.scraper.mass_scraper                  # all chains
+    #   python -m app.scraper.mass_scraper local            # skip the Israel-only chains
     #   python -m app.scraper.mass_scraper SHUFERSAL        # one chain
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
     if arg == "local":
         results = run_mass_scraper(skip_blocked=True)
-    elif arg == "full":
-        results = run_mass_scraper(force_full=True)
     elif arg and arg.upper() in installed_scrapers():
         results = run_mass_scraper(chains=[arg.upper()])
     else:

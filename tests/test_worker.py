@@ -69,7 +69,7 @@ async def test_one_failing_chain_does_not_stop_the_others(dumps, monkeypatch, se
 async def test_failed_scrape_still_parses_what_is_on_disk(dumps, monkeypatch):
     write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
 
-    async def dead(chain, force_full):
+    async def dead(chain):
         return False, "ftp down"
 
     monkeypatch.setattr(worker, "scrape_in_subprocess", dead)
@@ -82,9 +82,9 @@ async def test_failed_scrape_still_parses_what_is_on_disk(dumps, monkeypatch):
 async def test_hung_scraper_is_killed_after_timeout(monkeypatch):
     monkeypatch.setattr(settings, "SCRAPE_TIMEOUT_SECONDS", 1)
     monkeypatch.setattr(settings, "SCRAPE_ATTEMPTS", 1)
-    monkeypatch.setattr(worker, "_scrape_command", lambda chain, full: ["sleep", "30"])
+    monkeypatch.setattr(worker, "_scrape_command", lambda chain: ["sleep", "30"])
     started = time.time()
-    ok, error = await worker.scrape_in_subprocess("SHUFERSAL", False)
+    ok, error = await worker.scrape_in_subprocess("SHUFERSAL")
     assert not ok and "timed out" in error
     assert time.time() - started < 10
 
@@ -92,10 +92,10 @@ async def test_hung_scraper_is_killed_after_timeout(monkeypatch):
 async def test_failing_scraper_is_retried(monkeypatch):
     monkeypatch.setattr(settings, "SCRAPE_ATTEMPTS", 2)
     calls = []
-    monkeypatch.setattr(worker, "_scrape_command", lambda chain, full: calls.append(1) or ["false"])
+    monkeypatch.setattr(worker, "_scrape_command", lambda chain: calls.append(1) or ["false"])
     real_sleep = asyncio.sleep
     monkeypatch.setattr(worker.asyncio, "sleep", lambda s: real_sleep(0))
-    ok, error = await worker.scrape_in_subprocess("SHUFERSAL", False)
+    ok, error = await worker.scrape_in_subprocess("SHUFERSAL")
     assert not ok and len(calls) == 2 and "exit 1" in error
 
 
@@ -124,11 +124,74 @@ async def test_abandoned_runs_are_closed_on_next_cycle(dumps, session):
     assert statuses[0] == "failed"
 
 
-def test_next_slot_lands_on_the_next_boundary(monkeypatch):
-    monkeypatch.setattr(settings, "DELTA_EVERY_HOURS", 3)
-    assert worker.next_slot(datetime(2026, 5, 12, 10, 20)) == datetime(2026, 5, 12, 12, 0)
-    assert worker.next_slot(datetime(2026, 5, 12, 12, 0)) == datetime(2026, 5, 12, 15, 0)
-    assert worker.next_slot(datetime(2026, 5, 12, 23, 59)) == datetime(2026, 5, 13, 0, 0)
+def test_next_slot_is_the_next_daily_run_time(monkeypatch):
+    monkeypatch.setattr(settings, "RUN_AT", "06:00")
+    assert worker.next_slot(datetime(2026, 5, 12, 5, 59)) == datetime(2026, 5, 12, 6, 0)    # later today
+    assert worker.next_slot(datetime(2026, 5, 12, 6, 0)) == datetime(2026, 5, 13, 6, 0)     # exactly now: tomorrow
+    assert worker.next_slot(datetime(2026, 5, 12, 23, 59)) == datetime(2026, 5, 13, 6, 0)
+    monkeypatch.setattr(settings, "RUN_AT", "18:30")
+    assert worker.next_slot(datetime(2026, 5, 12, 10, 0)) == datetime(2026, 5, 12, 18, 30)
+
+
+async def test_failed_cycle_is_retried_a_limited_number_of_times(monkeypatch):
+    from app.pipeline.shutdown import STOP
+
+    monkeypatch.setattr(settings, "RETRY_AFTER_HOURS", 0)
+    monkeypatch.setattr(settings, "RETRY_MAX", 2)
+    calls = []
+
+    async def failing_cycle(*a, **k):
+        calls.append(1)
+        if len(calls) == 3:
+            STOP.set()               # end the loop once the retries are used up
+        return worker.CycleSummary(status="partial")
+
+    monkeypatch.setattr(worker, "run_cycle", failing_cycle)
+    try:
+        await asyncio.wait_for(worker.serve(), timeout=10)
+    finally:
+        STOP.clear()
+    assert len(calls) == 3           # the scheduled run plus two retries, then it waits for tomorrow
+
+
+async def test_successful_cycle_is_not_retried(monkeypatch):
+    from app.pipeline.shutdown import STOP
+
+    calls = []
+
+    async def ok_cycle(*a, **k):
+        calls.append(1)
+        STOP.set()
+        return worker.CycleSummary(status="ok")
+
+    monkeypatch.setattr(worker, "run_cycle", ok_cycle)
+    try:
+        await asyncio.wait_for(worker.serve(), timeout=10)
+    finally:
+        STOP.clear()
+    assert len(calls) == 1
+
+
+def test_scraper_asks_for_store_and_full_price_files_only(monkeypatch):
+    from app.scraper import mass_scraper
+
+    monkeypatch.setattr(settings, "SCRAPE_PROMOS", False)
+    assert mass_scraper._file_types() == ["STORE_FILE", "PRICE_FULL_FILE"]
+    monkeypatch.setattr(settings, "SCRAPE_PROMOS", True)
+    assert mass_scraper._file_types() == ["STORE_FILE", "PRICE_FULL_FILE", "PROMO_FULL_FILE"]
+
+
+async def test_old_ledger_rows_are_purged(session):
+    from sqlalchemy import text
+
+    from app.db.models import IngestedFile
+
+    session.add_all([IngestedFile(source_folder="X", file_name="old", file_type="price_full", status="done"),
+                     IngestedFile(source_folder="X", file_name="new", file_type="price_full", status="done")])
+    await session.commit()
+    await session.execute(text("UPDATE ingested_files SET updated_at = now() - interval '200 days' WHERE file_name='old'"))
+    await session.commit()
+    assert await runs.purge_old_ledger(120) == 1
 
 
 def test_unknown_chain_names_are_dropped_with_a_note():
