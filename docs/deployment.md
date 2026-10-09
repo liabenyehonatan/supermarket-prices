@@ -32,6 +32,16 @@ Outbound FTP (port 21) must be open; some hosts block it.
 
 ## 2. First start
 
+On a fresh Debian/Ubuntu server, one script does steps 1 and 2 (installs Docker, creates `.env`
+with random passwords, builds, runs the preflight and **stops if a chain is unreachable**, then
+starts everything):
+
+```bash
+bash deploy/setup-server.sh
+```
+
+By hand:
+
 ```bash
 cp .env.example .env
 # set POSTGRES_PASSWORD and API_DB_PASSWORD to two different long random values
@@ -40,9 +50,12 @@ docker compose ps          # migrate exits 0; the rest are running/healthy
 docker compose logs -f worker
 ```
 
-The worker runs a cycle immediately (the database starts empty) and then every
-`DELTA_EVERY_HOURS`. The first cycle downloads the full files of every chain, which
-takes hours; later cycles are small. Watch progress with:
+The worker runs a cycle immediately (the database starts empty) and then twice a day at
+`RUN_AT` (06:00 and 18:00 Israel time). Each cycle downloads only the *full* price files published
+since the previous one (delta files are not used) and loads only the newest one per store; a failed or partial cycle is retried
+up to twice, two hours apart. The first cycle downloads everything the portals still list
+(some list over a month of full files per store) and takes hours; later cycles are far smaller.
+Chains that publish in the afternoon (e.g. Rami Levy around 12:15) are picked up by the 18:00 cycle. Watch progress with:
 
 ```bash
 docker compose exec db psql -U supermarket supermarket_prices -c \
@@ -53,17 +66,35 @@ docker compose exec db psql -U supermarket supermarket_prices -c \
 Run a single chain by hand (stops being necessary once the schedule is running):
 
 ```bash
-docker compose exec worker python -m app.worker --once --chains RAMI_LEVY --full
+docker compose exec worker python -m app.worker --once --chains RAMI_LEVY
 ```
 
 If another cycle holds the lock, this exits with code 2 instead of overlapping.
+
+### Oracle Cloud Always Free (what we plan to use)
+
+Create the instance as **Ampere A1, 2 OCPU, 6 GB RAM, 100 GB boot volume** in `il-jerusalem-1`.
+Why these numbers:
+- The free allowance is 2 OCPU, 12 GB RAM and 200 GB of block storage in total (Oracle's
+  [Always Free page](https://docs.oracle.com/en-us/iaas/Content/FreeTier/resourceref.htm)).
+  The stack peaks around 35 GB of disk during the first load, so 100 GB is ample.
+- Oracle may **reclaim "idle" instances**: CPU (95th percentile), network *and* (A1 only) memory
+  all below 20% for 7 days. Our worker runs about an hour a day in total, so CPU and network will be
+  low. With 6 GB allocated, the stack's roughly 2-3 GB keeps memory above 20%, so the instance
+  should not count as idle. How Oracle measures memory is not documented; watch it (below).
+- Oracle's page does not say what a reclaimed instance becomes, or whether upgrading to Pay As You
+  Go exempts it. So: **copy backups off the server from day one** (`deploy/offsite-backup.sh`).
+- The home region is fixed at sign-up; choose Jerusalem then. Do not *stop* the instance (restart
+  is fine): a stopped A1 may not find capacity to start again.
+- If "Out of host capacity" appears while creating, that is a temporary shortage at creation time;
+  retry later or try another availability domain.
 
 ## 3. What to monitor
 
 | Signal | How |
 |---|---|
 | API alive and DB reachable | `GET /health` (200/503) |
-| Data is fresh | `GET /health/data` is 503 once the last good cycle is older than `MAX_DATA_AGE_HOURS` (default 12). Point an uptime monitor (UptimeRobot, Better Stack) at it. |
+| Data is fresh | `GET /health/data` is 503 once the last good cycle is older than `MAX_DATA_AGE_HOURS` (default 36: one run a day plus the retry window). Point an uptime monitor (UptimeRobot, Better Stack) at it. |
 | Worker ran | set `HEALTHCHECK_URL` to a healthchecks.io check: the worker pings `/start`, success, `/fail`. A missed ping alerts you if the worker itself dies. |
 | Backups ran | set `HEALTHCHECK_BACKUP_URL` the same way |
 | Per-chain problems | `ingest_runs` (above) and `ingested_files where status <> 'done'` |

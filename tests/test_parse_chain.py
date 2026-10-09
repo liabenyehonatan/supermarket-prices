@@ -97,8 +97,10 @@ async def test_leftover_file_from_a_crash_is_cleaned_without_reparsing(dumps, se
 
 
 async def test_files_are_applied_oldest_first_even_if_disk_order_differs(dumps, session, monkeypatch):
-    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "9.00", "2026-05-12 03:00")]))
-    write(dumps, price_name("777", "20260511-030442"), price_xml("777", [("111", "5.00", "2026-05-11 03:00")]))
+    # Delta files all load, so their order matters (two full files for one store would
+    # load only the newest; see test_only_the_newest_full_file_per_store_is_loaded).
+    write(dumps, price_name("777", "20260512-030442", full=False), price_xml("777", [("111", "9.00", "2026-05-12 03:00")]))
+    write(dumps, price_name("777", "20260511-030442", full=False), price_xml("777", [("111", "5.00", "2026-05-11 03:00")]))
     real = mass_parser._dump_files_in
     monkeypatch.setattr(mass_parser, "_dump_files_in", lambda folder: list(reversed(real(folder))))
     await parse_chain("SHUFERSAL")
@@ -171,3 +173,64 @@ def test_file_timestamp_formats():
     assert file_timestamp("PriceFull7290027600007-001-001-20260512-030442.xml") == datetime(2026, 5, 12, 3, 4, 42)
     assert file_timestamp("Stores7290027600007-000-202605120201.xml") == datetime(2026, 5, 12, 2, 1, 0)
     assert file_timestamp("garbage.xml") is None
+
+
+# ── newest full file per store ────────────────────────────────────────────────
+
+async def test_only_the_newest_full_file_per_store_is_loaded(dumps, session, monkeypatch):
+    monkeypatch.setattr(settings, "DELETE_AFTER_INGEST", True)
+    old = write(dumps, price_name("777", "20260510-030442"), price_xml("777", [("111", "4.00", "2026-05-10 01:00")]))
+    mid = write(dumps, price_name("777", "20260511-030442"), price_xml("777", [("111", "5.00", "2026-05-11 01:00")]))
+    new = write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "6.00", "2026-05-12 01:00")]))
+    other = write(dumps, price_name("778", "20260512-030442"), price_xml("778", [("111", "7.00", "2026-05-12 01:00")]))
+
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.files_ok == 2 and result.files_skipped == 2           # one load per store
+    rows = (await session.execute(select(Price.price, Price.is_current).order_by(Price.price))).all()
+    assert rows == [(Decimal("6.00"), True), (Decimal("7.00"), True)]  # the older prices never existed
+    states = await ledger(session)
+    assert states[price_name("777", "20260510-030442")][0] == "superseded"
+    assert states[price_name("777", "20260512-030442")][0] == "done"
+    assert not any(p.exists() for p in (old, mid, new, other))         # all handled files are gone
+
+
+async def test_an_older_full_file_arriving_later_never_rolls_a_store_back(dumps, session):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "6.00", "2026-05-12 01:00")]))
+    await parse_chain("SHUFERSAL")
+
+    # next day the portal still lists an older snapshot that we had not fetched before
+    write(dumps, price_name("777", "20260510-030442"), price_xml("777", [("111", "4.00", "2026-05-10 01:00"), ("222", "1.00", "2026-05-10 01:00")]))
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.files_ok == 0 and result.files_skipped >= 1
+    assert await current_prices(session) == {"111": Decimal("6.00")}   # untouched, nothing from the old file
+
+
+async def test_a_newer_full_file_still_replaces_what_is_stored(dumps, session):
+    write(dumps, price_name("777", "20260511-030442"), price_xml("777", [("111", "5.00", "2026-05-11 01:00"), ("222", "1.00", "2026-05-11 01:00")]))
+    await parse_chain("SHUFERSAL")
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "6.00", "2026-05-12 01:00"), ("222", "1.00", "2026-05-11 01:00")]))
+    result = await parse_chain("SHUFERSAL")
+    assert result.files_ok == 1
+    assert await current_prices(session) == {"111": Decimal("6.00"), "222": Decimal("1.00")}
+
+
+def test_split_superseded_leaves_store_and_delta_files_alone():
+    from datetime import datetime
+
+    from il_supermarket_parsers.utils.loading_utils import file_name_to_components
+
+    from app.parser.mass_parser import split_superseded
+
+    def f(name):
+        return file_name_to_components("/x", name)
+
+    full_old, full_new = f(price_name("1", "20260510-030000")), f(price_name("1", "20260512-030000"))
+    delta, stores = f(price_name("1", "20260512-040000", full=False)), f(STORES_NAME)
+    keep, skipped = split_superseded([full_old, full_new, delta, stores], {})
+    assert {k.file_name for k in keep} == {full_new.file_name, delta.file_name, stores.file_name}
+    assert [s.file_name for s in skipped] == [full_old.file_name]
+
+    keep, skipped = split_superseded([full_new], {"1": datetime(2026, 5, 13)})   # something newer already loaded
+    assert keep == [] and len(skipped) == 1

@@ -4,7 +4,7 @@
 #
 #   python -m app.worker                     # run forever on the schedule
 #   python -m app.worker --once              # one cycle, then exit
-#   python -m app.worker --once --chains SHUFERSAL RAMI_LEVY --full
+#   python -m app.worker --once --chains SHUFERSAL RAMI_LEVY
 #   python -m app.worker --once --no-scrape  # only load what is already in dumps/
 #
 # Design
@@ -86,21 +86,18 @@ async def _kill_group(proc: asyncio.subprocess.Process) -> None:
     await proc.wait()
 
 
-def _scrape_command(chain: str, force_full: bool) -> list[str]:
-    cmd = [sys.executable, "-m", "app.scraper.run_chain", chain]
-    if force_full:
-        cmd.append("--full")
-    return cmd
+def _scrape_command(chain: str) -> list[str]:
+    return [sys.executable, "-m", "app.scraper.run_chain", chain]
 
 
-async def scrape_in_subprocess(chain: str, force_full: bool) -> tuple[bool, Optional[str]]:
+async def scrape_in_subprocess(chain: str) -> tuple[bool, Optional[str]]:
     """Run app.scraper.run_chain with a timeout and retries. Returns (ok, error)."""
     last_error = "unknown"
     for attempt in range(1, settings.SCRAPE_ATTEMPTS + 1):
         if STOP.is_set():
             return False, "stopped"
         proc = await asyncio.create_subprocess_exec(
-            *_scrape_command(chain, force_full),
+            *_scrape_command(chain),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(settings.PROJECT_ROOT),
@@ -136,7 +133,6 @@ async def process_chain(
     *,
     scrape: bool,
     parse: bool,
-    force_full: bool,
     scrape_allowed: bool,
 ) -> ChainOutcome:
     outcome = ChainOutcome(chain=chain)
@@ -147,7 +143,7 @@ async def process_chain(
         else:
             async with scrape_sem:
                 run_id = await runs.start_run("scrape", chain, cycle_id)
-                ok, error = await scrape_in_subprocess(chain, force_full)
+                ok, error = await scrape_in_subprocess(chain)
                 outcome.scrape_ok, outcome.scrape_error = ok, error
                 await runs.finish_run(run_id, "ok" if ok else "failed", error=error)
 
@@ -221,7 +217,6 @@ async def run_cycle(
     *,
     scrape: bool = True,
     parse: bool = True,
-    force_full: bool = False,
 ) -> CycleSummary:
     """One scrape+parse pass. Raises AlreadyRunning if another run holds the lock."""
     summary = CycleSummary()
@@ -234,7 +229,7 @@ async def run_cycle(
         summary.notes += notes
         cycle_id = await runs.start_run("cycle")
         await ping("/start")
-        logger.info("Cycle start: %d chains (scrape=%s parse=%s full=%s)", len(todo), scrape, parse, force_full)
+        logger.info("Cycle start: %d chains (scrape=%s parse=%s)", len(todo), scrape, parse)
 
         scrape_allowed = _disk_ok() if scrape else True
         if scrape and not scrape_allowed:
@@ -245,7 +240,7 @@ async def run_cycle(
         tasks = [
             asyncio.create_task(process_chain(
                 c, cycle_id, scrape_sem, parse_sem,
-                scrape=scrape, parse=parse, force_full=force_full, scrape_allowed=scrape_allowed,
+                scrape=scrape, parse=parse, scrape_allowed=scrape_allowed,
             ))
             for c in todo
         ]
@@ -273,6 +268,7 @@ async def run_cycle(
             if settings.HISTORY_RETENTION_DAYS:
                 await maintenance.prune_history(settings.HISTORY_RETENTION_DAYS)
             await runs.purge_old_runs()
+            await runs.purge_old_ledger()
         except Exception as exc:
             logger.warning("housekeeping failed: %s", exc)
 
@@ -295,30 +291,59 @@ async def run_cycle(
 
 # ── Schedule ──────────────────────────────────────────────────────────────────
 
+def _run_times() -> list[tuple[int, int]]:
+    """RUN_AT ("06:00,18:00") as sorted (hour, minute) pairs."""
+    times = sorted({tuple(int(p) for p in part.strip().split(":")) for part in settings.RUN_AT.split(",") if part.strip()})
+    if not times:
+        raise ValueError("RUN_AT must hold at least one HH:MM time")
+    return times
+
+
 def next_slot(now: datetime) -> datetime:
-    """Next wall-clock boundary: every DELTA_EVERY_HOURS hours on the hour."""
-    step = max(1, settings.DELTA_EVERY_HOURS)
-    base = now.replace(minute=0, second=0, microsecond=0)
-    hours_ahead = step - (base.hour % step)
-    return base + timedelta(hours=hours_ahead)
+    """The next RUN_AT time after `now`, in now's timezone."""
+    candidates = []
+    for day in (0, 1):
+        for hour, minute in _run_times():
+            slot = (now + timedelta(days=day)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if slot > now:
+                candidates.append(slot)
+    return min(candidates)
+
+
+def longest_gap_hours() -> float:
+    """Longest wait between two consecutive runs; older data than this means a run was missed."""
+    minutes = [h * 60 + m for h, m in _run_times()]
+    gaps = [b - a for a, b in zip(minutes, minutes[1:])] + [minutes[0] + 24 * 60 - minutes[-1]]
+    return max(gaps) / 60
 
 
 async def serve() -> None:
     tz = ZoneInfo(settings.SCHEDULE_TIMEZONE)
-    logger.info("Worker started: every %dh (%s)", settings.DELTA_EVERY_HOURS, settings.SCHEDULE_TIMEZONE)
+    logger.info("Worker started: cycles daily at %s (%s)", settings.RUN_AT, settings.SCHEDULE_TIMEZONE)
 
-    # Run at startup if the data is stale, otherwise wait for the next slot.
+    # Run at startup if a scheduled run was missed (data older than the longest gap), otherwise wait.
     try:
         age = await runs.data_age_hours()
     except Exception as exc:
         logger.warning("could not read data age (%s); running now", exc)
         age = None
-    run_now = age is None or age >= settings.DELTA_EVERY_HOURS
+    run_now = age is None or age > longest_gap_hours() + 1
+    retries = 0
 
     while not STOP.is_set():
+        wake = None
         if run_now:
             try:
-                await run_cycle()
+                summary = await run_cycle()
+                if summary.status == "ok":
+                    retries = 0
+                elif retries < settings.RETRY_MAX:
+                    retries += 1
+                    wake = datetime.now(tz) + timedelta(hours=settings.RETRY_AFTER_HOURS)
+                    logger.warning("Cycle %s; retry %d/%d at %s", summary.status, retries,
+                                   settings.RETRY_MAX, wake.isoformat(timespec="minutes"))
+                else:
+                    retries = 0
             except AlreadyRunning:
                 logger.warning("Another run holds the lock; skipping this slot")
             except Exception:
@@ -326,7 +351,7 @@ async def serve() -> None:
                 await ping("/fail")
         run_now = True
 
-        wake = next_slot(datetime.now(tz))
+        wake = wake or next_slot(datetime.now(tz))
         logger.info("Next cycle at %s", wake.isoformat(timespec="minutes"))
         while not STOP.is_set() and datetime.now(tz) < wake:
             await asyncio.sleep(min(30, max(1, (wake - datetime.now(tz)).total_seconds())))
@@ -351,7 +376,6 @@ async def _amain(args) -> int:
             [c.upper() for c in args.chains] if args.chains else None,
             scrape=not args.no_scrape,
             parse=not args.no_parse,
-            force_full=args.full,
         )
     except AlreadyRunning:
         logger.error("Another ingest run holds the lock; not starting.")
@@ -369,7 +393,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Supermarket price ingestion worker")
     parser.add_argument("--once", action="store_true", help="run one cycle and exit")
     parser.add_argument("--chains", nargs="*", help="limit to these scraper names (e.g. SHUFERSAL)")
-    parser.add_argument("--full", action="store_true", help="force a full sync")
     parser.add_argument("--no-scrape", action="store_true", help="only parse what is already in dumps/")
     parser.add_argument("--no-parse", action="store_true", help="only download")
     args = parser.parse_args()

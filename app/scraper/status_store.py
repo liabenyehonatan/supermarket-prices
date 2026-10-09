@@ -52,11 +52,13 @@ def _older_than(entry: dict, cutoff: datetime) -> bool:
     return stamp < cutoff
 
 
-def prune(folder_name: str, event_days: int = 3, download_days: int = 14) -> tuple[int, int]:
+def prune(folder_name: str, event_days: int = 3, download_days: int = 60) -> tuple[int, int]:
     """
     Drop events older than `event_days` and verified downloads older than
-    `download_days`. A file forgotten that late and still listed by its portal
-    is simply fetched again; the ingest ledger stops it being loaded twice.
+    `download_days`. Some portals list over a month of full files per store, so
+    this must stay longer than that, or the same old files are fetched again and
+    again. A file forgotten and fetched anyway is never loaded twice: the ingest
+    ledger and the newest-full-per-store rule both skip it.
     Returns (events_removed, downloads_removed).
     """
     path = status_path(folder_name)

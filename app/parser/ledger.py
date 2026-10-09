@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 DONE = "done"
 FAILED = "failed"
 QUARANTINED = "quarantined"
+SUPERSEDED = "superseded"   # a newer full file for the same store exists; never loaded
 
 # ...-20260512-030442.xml  or  ...-202605120201.xml
 _TS_RE = re.compile(r"(\d{8})-?(\d{4,6})(?=\.\w+$)")
@@ -50,14 +51,15 @@ def file_timestamp(file_name: str) -> Optional[datetime]:
 class LedgerEntry:
     status: str
     attempts: int
+    file_type: str = ""
 
 
 async def load_ledger(session: AsyncSession, source_folder: str) -> dict[str, LedgerEntry]:
     result = await session.execute(
-        select(IngestedFile.file_name, IngestedFile.status, IngestedFile.attempts)
+        select(IngestedFile.file_name, IngestedFile.status, IngestedFile.attempts, IngestedFile.file_type)
         .where(IngestedFile.source_folder == source_folder)
     )
-    return {name: LedgerEntry(status, attempts) for name, status, attempts in result.all()}
+    return {name: LedgerEntry(status, attempts, ftype) for name, status, attempts, ftype in result.all()}
 
 
 async def record_done(
@@ -131,6 +133,19 @@ async def record_failure(
         await mark_quarantined(session, source_folder, file_name)
         return QUARANTINED
     return FAILED
+
+
+async def record_superseded(
+    session: AsyncSession, source_folder: str, file_names: list[str]
+) -> None:
+    """Mark full files as skipped because a newer one for their store is (or was) loaded."""
+    for start in range(0, len(file_names), 500):
+        stmt = pg_insert(IngestedFile).values([
+            {"source_folder": source_folder, "file_name": name, "file_type": "price_full",
+             "status": SUPERSEDED, "attempts": 0}
+            for name in file_names[start:start + 500]
+        ])
+        await session.execute(stmt.on_conflict_do_nothing(constraint="uq_ingested_files_source_name"))
 
 
 async def mark_quarantined(session: AsyncSession, source_folder: str, file_name: str) -> None:

@@ -53,8 +53,9 @@ DEV_CORS_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
-# /health/data answers 503 when the last successful ingest is older than this.
-MAX_DATA_AGE_HOURS = _float("MAX_DATA_AGE_HOURS", 12)
+# /health/data answers 503 when the last successful ingest is older than this
+# (one daily run, so a day plus a retry window).
+MAX_DATA_AGE_HOURS = _float("MAX_DATA_AGE_HOURS", 36)
 
 # ── Files ─────────────────────────────────────────────────────────────────────
 DUMPS_DIR = Path(os.getenv("DUMPS_DIR") or PROJECT_ROOT / "dumps").resolve()
@@ -72,9 +73,14 @@ SCRAPE_CONCURRENCY = _int("SCRAPE_CONCURRENCY", 3)
 PARSE_CONCURRENCY = _int("PARSE_CONCURRENCY", 2)
 SCRAPE_TIMEOUT_SECONDS = _int("SCRAPE_TIMEOUT_SECONDS", 3 * 3600)
 SCRAPE_ATTEMPTS = _int("SCRAPE_ATTEMPTS", 2)
-FULL_SYNC_INTERVAL_DAYS = _int("FULL_SYNC_INTERVAL_DAYS", 7)
-DELTA_EVERY_HOURS = _int("DELTA_EVERY_HOURS", 3)
-FULL_SYNC_HOUR = _int("FULL_SYNC_HOUR", 2)
+# Daily cycle times, local time (SCHEDULE_TIMEZONE), comma separated. Every cycle
+# downloads only the full price files published since the previous one; delta
+# files are not used. Chains that publish in the afternoon are picked up by the
+# evening cycle.
+RUN_AT = os.getenv("RUN_AT", "06:00,18:00")
+# A cycle that ended failed/partial is retried this many hours later, up to RETRY_MAX times.
+RETRY_AFTER_HOURS = _float("RETRY_AFTER_HOURS", 2)
+RETRY_MAX = _int("RETRY_MAX", 2)
 SCHEDULE_TIMEZONE = os.getenv("SCHEDULE_TIMEZONE", "Asia/Jerusalem")
 # A file that fails to parse this many times is moved to dumps/_quarantine/.
 PARSE_MAX_ATTEMPTS = _int("PARSE_MAX_ATTEMPTS", 3)
