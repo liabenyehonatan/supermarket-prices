@@ -101,3 +101,17 @@ async def purge_old_runs(keep_days: int = 90) -> None:
                     IngestRun.parent_id.is_(None),
                 )
             )
+
+
+async def purge_old_ledger(keep_days: int = 120) -> int:
+    """Forget ledger rows older than the portals could still list the file."""
+    from app.db.models import IngestedFile
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            result = await session.execute(
+                IngestedFile.__table__.delete().where(
+                    IngestedFile.updated_at < func.now() - timedelta(days=keep_days)
+                )
+            )
+            return result.rowcount or 0

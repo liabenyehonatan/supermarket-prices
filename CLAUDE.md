@@ -13,7 +13,7 @@ alembic upgrade head
 alembic revision --autogenerate -m "description"
 
 # Ingestion worker (scrape -> parse -> delete), the production entry point
-python -m app.worker                           # run forever, every DELTA_EVERY_HOURS
+python -m app.worker                           # run forever, cycles at RUN_AT (06:00 and 18:00)
 python -m app.worker --once                    # one cycle, then exit
 python -m app.worker --once --chains SHUFERSAL --no-scrape   # only load what is in dumps/
 
@@ -37,14 +37,14 @@ Environment: requires a `.env` file with `DATABASE_URL` (async PostgreSQL URL, e
 **Data pipeline:** Scraper → `dumps/<Chain>/*.xml` → Parser → PostgreSQL → FastAPI (the XML is deleted after it is committed in production)
 
 ### Scraper layer (`app/scraper/`)
-- `mass_scraper.py`: `scrape_chain()` downloads one chain via `il-supermarket-scraper` (full files if the last full sync is older than 7 days, otherwise deltas); `run_mass_scraper()` loops chains and keeps going when one fails. The full-sync tracker is updated per chain, only after that chain succeeded.
+- `mass_scraper.py`: `scrape_chain()` downloads one chain's store and FULL price files via `il-supermarket-scraper` (delta files are not used: a daily full file is self-correcting); `run_mass_scraper()` loops chains and keeps going when one fails. 
 - `run_chain.py`: one chain in its own process. The worker launches it per chain so a hang can be killed on a timeout.
 - `preflight.py`: downloads one small file per chain to verify a machine can reach them (use it on every new server).
 - **Download dedup is the library's own status database** (`dumps/status/<chain>.json`, by file name), *not* "file exists on disk". That is what makes deleting loaded files safe. Keep `dumps/status` on persistent storage.
 - 12 chains (`BLOCKED_FROM_ABROAD`) only answer Israeli IPs.
 
 ### Parser layer (`app/parser/`)
-- `mass_parser.py`: `parse_chain(name)` loads one chain's files. Per file: check the XML is well-formed (the chain parsers silently "repair" truncated files in place), load in one transaction together with its `ingested_files` ledger row, delete the file after commit. Files are applied oldest first, stores before prices. A file that fails 3 times is moved to `dumps/_quarantine/`.
+- `mass_parser.py`: `parse_chain(name)` loads one chain's files. Per file: check the XML is well-formed (the chain parsers silently "repair" truncated files in place), load in one transaction together with its `ingested_files` ledger row, delete the file after commit. Of the full price files only the newest per store is loaded; older ones are recorded as `superseded` and skipped. Files are applied oldest first, stores before prices. A file that fails 3 times is moved to `dumps/_quarantine/`.
 - `price_loader.py`: set-based product/price load in chunks of 500 (a few queries per chunk, not per row).
 - `ledger.py`: the `ingested_files` ledger and file housekeeping. A file is loaded when its ledger row says `done`, never because of what is on disk.
 - `universal_parser.py`: field-name helpers, chain and store upserts.
@@ -71,7 +71,7 @@ Three endpoints under `/api/v1`:
 All DB access is async (`AsyncSession` via `asyncpg`). FastAPI dependency `get_db` provides a session per request.
 
 ### Ingestion worker (`app/worker.py`, `app/pipeline/`)
-One cycle = for every chain: scrape (subprocess, timeout, retries) then parse. Chains are isolated: a failure is recorded in `ingest_runs` and never stops the others. A Postgres advisory lock allows one cycle at a time across processes and hosts. `GET /health/data` is 503 when the last successful cycle is older than `MAX_DATA_AGE_HOURS`. Celery/Redis are no longer used; there are no `/tasks` API endpoints.
+Two cycles a day (`RUN_AT`, default 06:00 and 18:00 Israel time; a failed or partial cycle is retried up to twice, 2 hours apart). The evening cycle downloads only files published since the morning one. One cycle = for every chain: scrape (subprocess, timeout, retries) then parse. Chains are isolated: a failure is recorded in `ingest_runs` and never stops the others. A Postgres advisory lock allows one cycle at a time across processes and hosts. `GET /health/data` is 503 when the last successful cycle is older than `MAX_DATA_AGE_HOURS`. Celery/Redis are no longer used; there are no `/tasks` API endpoints.
 
 ## Rules
 
