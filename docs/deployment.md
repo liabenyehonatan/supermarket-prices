@@ -66,7 +66,7 @@ docker compose exec db psql -U supermarket supermarket_prices -c \
 Run a single chain by hand (stops being necessary once the schedule is running):
 
 ```bash
-docker compose exec worker python -m app.worker --once --chains RAMI_LEVY --full
+docker compose exec worker python -m app.worker --once --chains RAMI_LEVY
 ```
 
 If another cycle holds the lock, this exits with code 2 instead of overlapping.
