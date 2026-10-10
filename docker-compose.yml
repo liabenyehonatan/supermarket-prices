@@ -151,7 +151,9 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
+      # Plain HTTP on the public port by default. With HTTPS on (see below) set
+      # NGINX_BIND=127.0.0.1:8080 so only Caddy faces the internet.
+      - "${NGINX_BIND:-0.0.0.0:80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - nginx_cache:/var/cache/nginx/api
@@ -159,8 +161,28 @@ services:
       - api
       - frontend
 
+  # Optional HTTPS: enable with COMPOSE_PROFILES=https, DOMAIN=your.domain and
+  # NGINX_BIND=127.0.0.1:8080 in .env. Caddy then serves 80/443 and proxies to nginx.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}      # set a real domain in .env; localhost only gets a self-signed certificate
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # certificates: keep, or Let's Encrypt rate limits bite
+      - caddy_config:/config
+    depends_on:
+      - nginx
+
 volumes:
   pgdata:
   dumps:
   backups:
   nginx_cache:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,7 @@
+# HTTPS front door. Caddy gets and renews a free certificate for $DOMAIN by itself
+# (Let's Encrypt) and hands plain requests to the nginx container.
+# Needs: DNS for $DOMAIN pointing at this server, and ports 80 and 443 open to the internet.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy nginx:80
+}
