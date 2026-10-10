@@ -2467,8 +2467,8 @@ img { max-width: 100%; display: block; }
   box-shadow: 0 8px 20px rgba(30, 60, 40, 0.16);
 }
 .basket-card.is-active .basket-card-name { color: var(--ink-900); }
-.basket-card-cta { margin-top: auto; padding-top: 4px; font-size: var(--fs-13); font-weight: var(--fw-semibold); color: var(--green-700); }
-.basket-card-cta::after { content: " ‹"; }
+.basket-card-cta { margin-top: auto; padding: 4px 0 0; border: none; background: none; font-family: var(--font-sans); cursor: pointer; text-align: start; font-size: var(--fs-13); font-weight: var(--fw-semibold); color: var(--green-700); }
+.basket-card-cta { display: inline-flex; align-items: center; gap: 2px; }
 /* Home basket card: wrapper holds the card (navigates) and a small delete button (removes, with undo) */
 .basket-card-wrap { position: relative; flex: 0 0 132px; display: flex; }
 .basket-card-wrap .basket-card { flex: 1 1 auto; min-width: 0; }

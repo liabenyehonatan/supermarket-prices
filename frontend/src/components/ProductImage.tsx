@@ -19,7 +19,7 @@ export function ProductImage({
   };
 
   return (
-    <div style={{ ...sharedStyle, position: 'relative', background: '#DDEBD6', overflow: 'hidden' }}>
+    <div style={{ ...sharedStyle, position: 'relative', background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px var(--line)', overflow: 'hidden' }}>
       {!failed && (
         <img
           src={`/api/v1/products/${barcode}/image`}
@@ -43,7 +43,7 @@ export function ProductImage({
             src="/icons/no-image.webp"
             alt=""
             aria-hidden
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: 'brightness(1.18) contrast(1.4)' }}
           />
         </div>
       )}
