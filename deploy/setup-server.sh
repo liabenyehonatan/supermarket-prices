@@ -95,7 +95,7 @@ fi
 say "Starting the stack"
 # nginx depends on api and frontend, which depend on migrate and db: starting it starts them all.
 $DOCKER compose up -d --build --wait nginx
-$DOCKER compose up -d worker backup
+$DOCKER compose up -d      # worker, backup and (if COMPOSE_PROFILES=https) caddy
 sleep 5
 $DOCKER compose ps
 code=$(curl -s -o /dev/null -w '%{http_code}' -m 8 http://localhost/health || true)

@@ -159,11 +159,35 @@ and is reversible (`python -m alembic downgrade -1`). It briefly locks writes to
 `prices` while the indexes build (seconds per million rows); run it when the
 worker is idle (`docker compose stop worker` first).
 
-## 7. TLS
+## 7. HTTPS
 
-nginx here speaks plain HTTP on port 80. Put Cloudflare in front (free, also gives
-CDN caching and DDoS protection) or terminate TLS with Caddy/certbot. The cache
-and rate limits are at the nginx layer and work either way.
+By default nginx serves plain HTTP on port 80. For HTTPS, the compose file has an optional Caddy service that gets
+and renews a free Let's Encrypt certificate by itself. You need a domain whose DNS record (A) points at the server's
+public IP (a registered domain, or a free subdomain such as DuckDNS), and ports 80 and 443 open to the internet. In `.env`:
+
+```bash
+COMPOSE_PROFILES=https
+DOMAIN=sali.example.com
+NGINX_BIND=127.0.0.1:8080      # nginx stops listening publicly; only Caddy does
+```
+
+then `docker compose up -d`. Keep the `caddy_data` volume: it holds the certificates, and Let's Encrypt limits how
+often a new one can be issued. Alternatively put Cloudflare in front (free, also CDN and DDoS protection).
+
+### Oracle: ports 80 and 443 reachable but nothing answers
+
+Opening a port in the cloud console's security list is half of it. If `curl http://<public-ip>/health` from another
+machine times out although the stack is healthy on the server, the instance's own firewall may be blocking it
+(Ubuntu images on Oracle ship with restrictive iptables rules). Check, and open the ports:
+
+```bash
+sudo iptables -L INPUT -n --line-numbers          # look for a REJECT rule before your ACCEPTs
+sudo iptables -I INPUT 5 -p tcp --dport 80  -j ACCEPT
+sudo iptables -I INPUT 5 -p tcp --dport 443 -j ACCEPT
+sudo apt-get install -y iptables-persistent && sudo netfilter-persistent save    # survive a reboot
+```
+
+Do not touch the rule for port 22 (SSH), or you lock yourself out.
 
 ## Settings reference
 
