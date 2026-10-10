@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, ChevronLeft, Barcode,
-  Plus, Check, Trash2,
+  Plus, Check, Trash2, CircleHelp,
 } from 'lucide-react';
 
 function SearchProductIcon() {
@@ -447,7 +447,10 @@ export function SearchPage() {
               </div>
             )}
             {!hasQuery && !showHow && (
-              <button className="how-link" onClick={() => setShowHow(true)}>איך זה עובד?</button>
+              <button className="how-link" onClick={() => setShowHow(true)}>
+                <CircleHelp size={15} strokeWidth={1.8} />
+                איך זה עובד?
+              </button>
             )}
           </div>
 
@@ -549,11 +552,11 @@ export function SearchPage() {
           <>
             {shownBaskets.length > 0 && (
               <>
-                <div className="section-header" style={{ marginBottom: 12 }}>
+                <div className="section-header home-section-head">
                   <div className="section-title">הסלים שלי</div>
                 </div>
                 <div className="card-row" ref={basketRowRef}>
-                  <button className="basket-card basket-card-new" onClick={openCreate}>
+                  <button className={`basket-card basket-card-new`} onClick={openCreate} aria-label="סל חדש">
                     <Plus size={22} strokeWidth={2} />
                     <span>סל חדש</span>
                   </button>
@@ -588,7 +591,7 @@ export function SearchPage() {
 
             <ExampleComparisons />
 
-            <div className="section-header" style={{ marginBottom: 12 }}>
+            <div className="section-header home-section-head">
               <div>
                 <div className="section-title">מחירים לפי רשת</div>
                 <div className="section-subtitle">

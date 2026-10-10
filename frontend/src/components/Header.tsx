@@ -21,7 +21,7 @@ export function Header() {
           style={{ background: 'none', border: 'none', padding: 0 }}
           aria-label="סלי — דף הבית"
         >
-          <SaliLogo size={30} />
+          <SaliLogo size={34} />
           <span className="header-logo-text">
             סלי<span>.</span>
           </span>
