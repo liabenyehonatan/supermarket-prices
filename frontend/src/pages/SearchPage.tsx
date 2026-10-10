@@ -565,10 +565,13 @@ export function SearchPage() {
                     const isActive = b.id === activeId;
                     return (
                       <div key={b.id} className="basket-card-wrap">
-                      <button
+                      <div
+                        role="button"
+                        tabIndex={0}
                         className={`basket-card${isActive ? ' is-active' : ''}`}
-                        onClick={() => { setActive(b.id); navigate('/basket'); }}
-                        aria-current={isActive ? 'true' : undefined}
+                        onClick={() => setActive(b.id)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActive(b.id); } }}
+                        aria-pressed={isActive}
                       >
                         <span className="basket-card-name">{b.name}</span>
                         <span className="basket-card-meta">{count === 0 ? 'ריק' : count === 1 ? 'פריט אחד' : `${count} פריטים`}</span>
@@ -577,8 +580,16 @@ export function SearchPage() {
                             {watch[b.id].diff < 0 ? 'ירד' : 'עלה'} <bdi dir="ltr">₪{Math.abs(watch[b.id].diff).toFixed(2)}</bdi>
                           </span>
                         )}
-                        {isActive && <span className="basket-card-cta">{count === 0 ? 'להוספה' : 'להשוואה'}</span>}
-                      </button>
+                        {isActive && (
+                          <button
+                            className="basket-card-cta"
+                            onClick={e => { e.stopPropagation(); navigate('/basket'); }}
+                          >
+                            {count === 0 ? 'להוספה' : 'להשוואה'}
+                            <ChevronLeft size={14} strokeWidth={2.5} aria-hidden />
+                          </button>
+                        )}
+                      </div>
                       <button className="basket-card-remove" aria-label={`מחיקת ${b.name}`} onClick={() => deleteBasket(b.id)}>
                         <Trash2 size={14} strokeWidth={1.8} />
                       </button>
