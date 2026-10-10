@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check, Pencil, Trash2, Plus, X } from 'lucide-react';
+import { ChevronDown, ShoppingBasket, Check, Pencil, Trash2, Plus, X } from 'lucide-react';
 import { useBasket } from '../context/BasketContext';
 import { timeAgo } from '../lib/basketCompare';
 
@@ -36,6 +36,7 @@ export function BasketSwitcher({ variant = 'title' }: { variant?: 'title' | 'pil
   return (
     <>
       <button className={variant === 'pill' ? 'basket-pill' : 'basket-switcher'} onClick={() => setOpen(true)} aria-label={`סל פעיל: ${active.name}. החלפה`}>
+        {variant === 'pill' && <ShoppingBasket size={14} strokeWidth={1.9} aria-hidden />}
         <span className={variant === 'pill' ? 'basket-pill-name' : 'basket-switcher-name'}>{active.name}</span>
         <ChevronDown size={variant === 'pill' ? 13 : 16} strokeWidth={2} />
       </button>
