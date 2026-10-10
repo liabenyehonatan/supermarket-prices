@@ -102,6 +102,18 @@ Why these numbers:
 A file that fails three times lands in `dumps/_quarantine/<Chain>/` inside the
 worker's volume and is never retried; look at its `last_error` in `ingested_files`.
 
+Put the monitoring URLs in `.env` without editing it by hand (safe to re-run):
+
+```bash
+bash deploy/set-env.sh HEALTHCHECK_URL=https://hc-ping.com/<worker-id> \
+                       HEALTHCHECK_BACKUP_URL=https://hc-ping.com/<backup-id> \
+                       HEALTHCHECK_OFFSITE_URL=https://hc-ping.com/<offsite-id>
+docker compose up -d        # picks up the new values
+```
+
+In healthchecks.io give the `worker` check a grace time of several hours: the very first cycle downloads
+everything and takes hours, and a check that sees `/start` but no success within its grace time reports "down".
+
 ## 4. Backups and restore
 
 `backup` writes `/backups/supermarket_prices-<stamp>.dump` daily (UTC hour

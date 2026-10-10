@@ -12,10 +12,15 @@
 # Set HEALTHCHECK_OFFSITE_URL (a healthchecks.io check) to get an alert if this stops running.
 
 set -euo pipefail
-: "${RCLONE_REMOTE:?set RCLONE_REMOTE, e.g. myremote:supermarket-backups}"
-KEEP_REMOTE_DAYS="${KEEP_REMOTE_DAYS:-30}"
 
 cd "$(cd "$(dirname "$0")/.." && pwd)"
+
+# Under cron the shell has no .env; read just the keys this script needs.
+env_value() { [ -f .env ] && grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true; }
+RCLONE_REMOTE="${RCLONE_REMOTE:-$(env_value RCLONE_REMOTE)}"
+HEALTHCHECK_OFFSITE_URL="${HEALTHCHECK_OFFSITE_URL:-$(env_value HEALTHCHECK_OFFSITE_URL)}"
+KEEP_REMOTE_DAYS="${KEEP_REMOTE_DAYS:-$(env_value KEEP_REMOTE_DAYS)}"; KEEP_REMOTE_DAYS="${KEEP_REMOTE_DAYS:-7}"
+: "${RCLONE_REMOTE:?set RCLONE_REMOTE in .env (e.g. gdrive:supermarket-backups)}"
 command -v rclone >/dev/null || { echo "rclone is not installed" >&2; exit 1; }
 SUDO=""; docker info >/dev/null 2>&1 || SUDO="sudo"
 
