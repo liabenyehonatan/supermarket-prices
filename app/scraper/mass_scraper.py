@@ -49,7 +49,7 @@ def installed_scrapers() -> list[str]:
 
 
 def get_enabled_scrapers(skip_blocked: bool = False) -> list[str]:
-    result = [n for n in installed_scrapers() if n not in SUPERSEDED]
+    result = [n for n in installed_scrapers() if n not in SUPERSEDED and n not in settings.SKIP_CHAINS]
     if skip_blocked:
         result = [n for n in result if n not in BLOCKED_FROM_ABROAD]
     return result

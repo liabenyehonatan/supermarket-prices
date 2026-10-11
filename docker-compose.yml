@@ -102,6 +102,7 @@ services:
       <<: *owner-db
       DELETE_AFTER_INGEST: "true"          # the ledger, not the disk, remembers what is loaded
       SKIP_BLOCKED_CHAINS: ${SKIP_BLOCKED_CHAINS:-false}
+      SKIP_CHAINS: ${SKIP_CHAINS:-}
       HEALTHCHECK_URL: ${HEALTHCHECK_URL:-}
       HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-}
       SCRAPE_CONCURRENCY: ${SCRAPE_CONCURRENCY:-3}

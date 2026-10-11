@@ -218,3 +218,15 @@ async def test_old_ledger_rows_are_purged(session):
 def test_unknown_chain_names_are_dropped_with_a_note():
     chains, notes = worker.resolve_chains(["SHUFERSAL", "NOT_A_CHAIN"], scrape=True)
     assert chains == ["SHUFERSAL"] and any("NOT_A_CHAIN" in n for n in notes)
+
+
+def test_skipped_chains_are_left_out_of_the_schedule(monkeypatch):
+    from app.scraper import mass_scraper
+
+    assert "WOLT" in mass_scraper.get_enabled_scrapers()
+    monkeypatch.setattr(settings, "SKIP_CHAINS", {"WOLT"})
+    assert "WOLT" not in mass_scraper.get_enabled_scrapers()
+    chains, _ = worker.resolve_chains(["WOLT"], scrape=True)       # naming it explicitly still works
+    assert chains == ["WOLT"]
+    default, _ = worker.resolve_chains(None, scrape=True)
+    assert "WOLT" not in default
