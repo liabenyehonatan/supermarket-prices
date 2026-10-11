@@ -37,5 +37,23 @@ async def test_duplicate_current_rows_are_repaired_on_upgrade(_database):
 async def test_downgrade_then_upgrade_roundtrip(_database):
     import asyncio
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, command.downgrade, _database, "-1")
+    await loop.run_in_executor(None, command.downgrade, _database, "5532a7085020")
     await loop.run_in_executor(None, command.upgrade, _database, "head")
+
+
+async def test_city_codes_are_resolved_by_migration(_database):
+    import asyncio
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, command.downgrade, _database, "b7d41c9e5a20")
+    conn = await asyncpg.connect(_dsn())
+    try:
+        await conn.execute("TRUNCATE chains RESTART IDENTITY CASCADE")
+        await conn.execute("INSERT INTO chains (chain_id, name) VALUES ('1', 'MahsaniAShukNewSource')")
+        for sid, city in [("a", "2600"), ("b", "0"), ("c", "unknown"), ("d", "חיפה"), ("e", "99999"), ("f", None)]:
+            await conn.execute("INSERT INTO stores (chain_id, store_id, city) VALUES (1, $1, $2)", sid, city)
+        await loop.run_in_executor(None, command.upgrade, _database, "head")
+        cities = {r["store_id"]: r["city"] for r in await conn.fetch("SELECT store_id, city FROM stores")}
+        assert cities == {"a": "אילת", "b": None, "c": None, "d": "חיפה", "e": None, "f": None}
+        assert await conn.fetchval("SELECT name FROM chains") == "מחסני השוק"
+    finally:
+        await conn.close()
