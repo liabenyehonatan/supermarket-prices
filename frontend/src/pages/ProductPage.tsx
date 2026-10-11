@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
+import { cityName, navQuery, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
@@ -30,10 +31,9 @@ function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): num
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Waze and Google Maps both accept a free-text destination — no store coordinates
-// needed, so this works today even though store geocoding hasn't run yet.
+// Waze and Google Maps both accept a free-text destination — no store coordinates needed.
 function storeNavQuery(row: PriceAtStore): string {
-  return [row.store_name, row.store_address, row.store_city].filter(Boolean).join(', ') || row.chain_name;
+  return navQuery({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city }) || row.chain_name;
 }
 function wazeUrl(row: PriceAtStore): string {
   return `https://waze.com/ul?q=${encodeURIComponent(storeNavQuery(row))}&navigate=yes`;
@@ -131,7 +131,7 @@ export function ProductPage() {
 
   const namedPrices = data ? data.prices.filter(row => row.store_name) : [];
   const matchingPrices = namedPrices
-    .filter(row => !cityFilter || row.store_city?.includes(cityFilter))
+    .filter(row => !cityFilter || cityName(row.store_city).includes(cityFilter))
     .filter(row => !chainFilter || row.chain_name === chainFilter);
   // Nearby mode: stores within NEARBY_KM of the user. Only geocoded stores have
   // coordinates, so "all stores" stays one tap away.
@@ -322,8 +322,8 @@ export function ProductPage() {
                   <StoreRow
                     key={key}
                     chain={row.chain_name}
-                    name={name}
-                    city={row.store_city}
+                    name={row.chain_name}
+                    city={storeSubtitle({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city })}
                     warning={isStale(row.price_updated_at) ? `מחיר ישן · עודכן לפני ${timeAgo(row.price_updated_at)}` : undefined}
                     price={row.price}
                     isCheapest={isCheapest}
@@ -333,7 +333,7 @@ export function ProductPage() {
                     onToggle={() => setExpandedRow(expandedRow === key ? null : key)}
                   >
                     {km != null && <div className="store-row-sub">{km.toFixed(1)} ק״מ ממך</div>}
-                    {row.store_address && <div className="store-row-sub">{row.store_address}</div>}
+                    {row.store_name && row.store_name !== row.chain_name && <div className="store-row-sub">{row.store_name}</div>}
                     <div className="store-row-actions">
                       <a href={wazeUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
                         <Navigation size={12} strokeWidth={2} />

@@ -15,6 +15,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+import { cityName } from '../lib/store';
 export function searchProducts(q: string, limit = 20, offset = 0): Promise<Product[]> {
   return request<Product[]>(
     `/api/v1/products/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`
@@ -78,7 +79,9 @@ let citiesRequest: Promise<string[]> | null = null;
 
 export function fetchCities(): Promise<string[]> {
   if (!citiesRequest) {
-    citiesRequest = request<string[]>('/api/v1/stores/cities').catch(err => {
+    citiesRequest = request<string[]>('/api/v1/stores/cities')
+      .then(list => list.filter(c => cityName(c)))   // chains publish numeric city codes too
+      .catch(err => {
       citiesRequest = null; // allow a retry after a failure
       throw err;
     });
