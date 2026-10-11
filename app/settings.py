@@ -81,6 +81,10 @@ MIN_FREE_DISK_GB = _float("MIN_FREE_DISK_GB", 5)
 # not fetched (they would only pile up on disk). Turn on together with a promo loader.
 SCRAPE_PROMOS = _bool("SCRAPE_PROMOS", False)
 SKIP_BLOCKED_CHAINS = _bool("SKIP_BLOCKED_CHAINS", False)
+# Scraper names never run by the schedule (comma separated, e.g. SUPER_PHARM). For a
+# chain that fails every time on this server, so it does not mark every cycle "partial".
+# Naming a chain explicitly (--chains, preflight arguments) still works.
+SKIP_CHAINS = {c.upper() for c in _list("SKIP_CHAINS")}
 SCRAPE_CONCURRENCY = _int("SCRAPE_CONCURRENCY", 3)
 PARSE_CONCURRENCY = _int("PARSE_CONCURRENCY", 2)
 SCRAPE_TIMEOUT_SECONDS = _int("SCRAPE_TIMEOUT_SECONDS", 3 * 3600)
