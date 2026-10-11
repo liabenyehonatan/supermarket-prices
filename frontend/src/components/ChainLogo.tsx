@@ -37,7 +37,7 @@ const LOGO_MAP: Record<string, string> = {
 };
 
 /* Logos that have their own solid background — fill edge-to-edge, no padding */
-const LOGO_FILLS_CONTAINER = new Set(['טיב טעם', 'וולט', 'גוד פארם', 'סיטי מרקט']);
+const LOGO_FILLS_CONTAINER = new Set(['טיב טעם', 'וולט', 'גוד פארם', 'סיטי מרקט', 'יילו']);
 
 /* Fallback colored initials for chains without images */
 const FALLBACK_COLORS: Record<string, { bg: string; fg: string; abbr: string }> = {
@@ -98,7 +98,7 @@ export function ChainLogo({ name, size = 44, showLabel = false }: ChainLogoProps
         ...containerStyle,
         background: fillsContainer ? 'transparent' : '#fff',
         border: fillsContainer ? 'none' : '1px solid rgba(0,0,0,0.07)',
-        padding: fillsContainer ? 0 : Math.round(size * 0.1),
+        padding: fillsContainer ? 0 : Math.round(size * 0.05),
         boxSizing: 'border-box',
         overflow: 'hidden',
       }}>
