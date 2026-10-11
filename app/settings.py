@@ -5,6 +5,7 @@
 # `uvicorn main:app` still works with only DATABASE_URL set.
 
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -14,29 +15,40 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _int(name: str, default: int) -> int:
+def _env(name: str, default: str = "") -> str:
+    """
+    The variable's value without an inline "  # comment". docker compose hands the
+    raw text after "=" to the container, so `KEY=2   # note` arrives as "2   # note".
+    """
     raw = os.getenv(name)
-    return int(raw) if raw not in (None, "") else default
+    if raw is None:
+        return default
+    return re.split(r"\s+#", raw, maxsplit=1)[0].strip()
+
+
+def _int(name: str, default: int) -> int:
+    raw = _env(name)
+    return int(raw) if raw else default
 
 
 def _float(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    return float(raw) if raw not in (None, "") else default
+    raw = _env(name)
+    return float(raw) if raw else default
 
 
 def _bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw in (None, ""):
+    raw = _env(name)
+    if not raw:
         return default
-    return raw.strip().lower() in ("1", "true", "yes", "on")
+    return raw.lower() in ("1", "true", "yes", "on")
 
 
 def _list(name: str) -> list[str]:
-    return [p.strip() for p in os.getenv(name, "").split(",") if p.strip()]
+    return [p.strip() for p in _env(name).split(",") if p.strip()]
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = _env("DATABASE_URL") or None
 DB_POOL_SIZE = _int("DB_POOL_SIZE", 5)
 DB_MAX_OVERFLOW = _int("DB_MAX_OVERFLOW", 5)
 # Set when connecting through pgbouncer in transaction mode (e.g. Supabase
@@ -58,7 +70,7 @@ DEV_CORS_ORIGINS = [
 MAX_DATA_AGE_HOURS = _float("MAX_DATA_AGE_HOURS", 36)
 
 # ── Files ─────────────────────────────────────────────────────────────────────
-DUMPS_DIR = Path(os.getenv("DUMPS_DIR") or PROJECT_ROOT / "dumps").resolve()
+DUMPS_DIR = Path(_env("DUMPS_DIR") or PROJECT_ROOT / "dumps").resolve()
 # Remove an XML file once it is committed to the database. Off by default so a
 # local checkout never loses its raw files; the production compose turns it on.
 DELETE_AFTER_INGEST = _bool("DELETE_AFTER_INGEST", False)
@@ -77,11 +89,11 @@ SCRAPE_ATTEMPTS = _int("SCRAPE_ATTEMPTS", 2)
 # downloads only the full price files published since the previous one; delta
 # files are not used. Chains that publish in the afternoon are picked up by the
 # evening cycle.
-RUN_AT = os.getenv("RUN_AT", "06:00,18:00")
+RUN_AT = _env("RUN_AT", "06:00,18:00") or "06:00,18:00"
 # A cycle that ended failed/partial is retried this many hours later, up to RETRY_MAX times.
 RETRY_AFTER_HOURS = _float("RETRY_AFTER_HOURS", 2)
 RETRY_MAX = _int("RETRY_MAX", 2)
-SCHEDULE_TIMEZONE = os.getenv("SCHEDULE_TIMEZONE", "Asia/Jerusalem")
+SCHEDULE_TIMEZONE = _env("SCHEDULE_TIMEZONE", "Asia/Jerusalem") or "Asia/Jerusalem"
 # A file that fails to parse this many times is moved to dumps/_quarantine/.
 PARSE_MAX_ATTEMPTS = _int("PARSE_MAX_ATTEMPTS", 3)
 
@@ -99,4 +111,4 @@ HISTORY_RETENTION_DAYS = _int("HISTORY_RETENTION_DAYS", 0) or None
 
 # ── Monitoring ────────────────────────────────────────────────────────────────
 # Healthchecks.io-style URL: GET <url>/start, <url>, <url>/fail.
-HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "").strip() or None
+HEALTHCHECK_URL = _env("HEALTHCHECK_URL") or None
