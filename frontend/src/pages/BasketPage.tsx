@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
+import { navQuery, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { LocationPrompt } from '../components/LocationPrompt';
@@ -44,7 +45,7 @@ function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
 // Same navigation links as the product page's store rows — Waze and Google Maps
 // both accept a free-text destination, so no store coordinates are needed.
 function storeNavQuery(store: { name: string; address?: string; city?: string; chain: { name: string } }): string {
-  return [store.name, store.address, store.city].filter(Boolean).join(', ') || store.chain.name;
+  return navQuery({ chain: store.chain.name, name: store.name, address: store.address, city: store.city }) || store.chain.name;
 }
 function wazeUrl(store: Parameters<typeof storeNavQuery>[0]): string {
   return `https://waze.com/ul?q=${encodeURIComponent(storeNavQuery(store))}&navigate=yes`;
@@ -65,8 +66,8 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
   return (
     <StoreRow
       chain={store.store.chain.name}
-      name={store.store.name || store.store.chain.name}
-      city={store.store.city}
+      name={store.store.chain.name}
+      city={storeSubtitle({ chain: store.store.chain.name, name: store.store.name, address: store.store.address, city: store.store.city })}
       warning={store.items_missing > 0 ? `חסרים ${store.items_missing} מוצרים` : undefined}
       price={store.total_price}
       isCheapest={isWinner}
