@@ -30,7 +30,7 @@ const LOGO_MAP: Record<string, string> = {
   'שוק העיר':            '/logos/shuk-ahir.png',
   'סטופ מרקט':           '/logos/stop-market.png',
   'סופר ספיר':           '/logos/super-sapir.png',
-  'פרשמרקט / סופרדוש':   '/logos/fresh-market.png',
+  'פרשמרקט / סופרדוש':   '/logos/super-dosh.png',
   'יילו':                '/logos/yellow.png',
   'זול ובגדול':          '/logos/zol-vebegadol.png',
   'וולט':                '/logos/wolt.png',
