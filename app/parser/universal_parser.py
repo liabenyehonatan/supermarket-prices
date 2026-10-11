@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chain, Store
+from app.parser.city_codes import resolve_city
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +194,7 @@ async def upsert_store_from_row(
     store = result.scalar_one_or_none()
 
     name = _get(row, "StoreName", "storename", "STORENAME")
-    city = _get(row, "City", "city", "CITY")
+    city = resolve_city(_get(row, "City", "city", "CITY"))
     address = _get(row, "Address", "address", "ADDRESS")
     lat = _safe_float(_get(row, "Latitude", "latitude"))
     lon = _safe_float(_get(row, "Longitude", "longitude"))
