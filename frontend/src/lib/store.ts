@@ -1,0 +1,33 @@
+// How a store is described in the UI. Chains publish messy store data: the
+// "city" is often a numeric CBS code ("2600"), "0" or "unknown", and the store
+// name is frequently just the branch or town. Show the chain first, the address
+// under it, and never show a city that is not a name.
+
+/** The city if it is a real name, otherwise ''. */
+export function cityName(city?: string | null): string {
+  const c = (city ?? '').trim();
+  if (!c || /^\d+$/.test(c) || c.toLowerCase() === 'unknown') return '';
+  return c;
+}
+
+interface StoreText { chain: string; name?: string | null; address?: string | null; city?: string | null }
+
+function unique(parts: (string | null | undefined)[]): string[] {
+  const out: string[] = [];
+  for (const p of parts) {
+    const t = (p ?? '').trim();
+    if (t && t.toLowerCase() !== 'unknown' &&!out.some(o => o.includes(t) || t.includes(o))) out.push(t);
+  }
+  return out;
+}
+
+/** Line under the chain name: "address, city", or the store name when there is no address. */
+export function storeSubtitle(s: StoreText): string {
+  const addr = unique([s.address, cityName(s.city)]).join(', ');
+  return addr || (s.name && s.name !== s.chain ? s.name : '');
+}
+
+/** Free-text destination for Waze / Google Maps. */
+export function navQuery(s: StoreText): string {
+  return unique([s.chain, s.name, s.address, cityName(s.city)]).join(', ');
+}

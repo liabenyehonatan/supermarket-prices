@@ -12,11 +12,32 @@ const LOGO_MAP: Record<string, string> = {
   'אושר עד':  '/logos/osher-ad.png',
   'חצי חינם': '/logos/hatzi-hinam.png',
   'סופריודה': '/logos/super-yuda.png',
+  'סופר יודה': '/logos/super-yuda.png',
   'יוניברס':  '/logos/universe.png',
+  // chain names exactly as the parser stores them (CHAIN_DISPLAY_NAMES)
+  'יינות ביתן / קרפור':  '/logos/yayno-bitan.png',
+  'דור אלון':            '/logos/dor-alon.png',
+  'גוד פארם':            '/logos/good-pharm.png',
+  'עוף והודו ברקת':      '/logos/bareket.png',
+  'סיטי מרקט':           '/logos/city-market.png',
+  'קשת טעמים':           '/logos/keshet.png',
+  'קינג סטור':           '/logos/king-store.png',
+  'מעיין 2000':          '/logos/maayan-2000.png',
+  'מחסני השוק':          '/logos/mahsani-hashuk.png',
+  'משנת יוסף':           '/logos/meshnat-yosef.png',
+  'פוליצר':              '/logos/polizer.png',
+  'סאלח דבאח':           '/logos/salach-dabach.png',
+  'שוק העיר':            '/logos/shuk-ahir.png',
+  'סטופ מרקט':           '/logos/stop-market.png',
+  'סופר ספיר':           '/logos/super-sapir.png',
+  'פרשמרקט / סופרדוש':   '/logos/super-dosh.png',
+  'יילו':                '/logos/yellow.png',
+  'זול ובגדול':          '/logos/zol-vebegadol.png',
+  'וולט':                '/logos/wolt.png',
 };
 
 /* Logos that have their own solid background — fill edge-to-edge, no padding */
-const LOGO_FILLS_CONTAINER = new Set(['טיב טעם']);
+const LOGO_FILLS_CONTAINER = new Set(['טיב טעם', 'וולט', 'גוד פארם', 'סיטי מרקט', 'יילו']);
 
 /* Fallback colored initials for chains without images */
 const FALLBACK_COLORS: Record<string, { bg: string; fg: string; abbr: string }> = {
@@ -24,7 +45,6 @@ const FALLBACK_COLORS: Record<string, { bg: string; fg: string; abbr: string }> 
   'AM:PM':    { bg: '#2C2C2C', fg: '#fff', abbr: 'AM' },
   'כוחנית':   { bg: '#0057A8', fg: '#fff', abbr: 'K' },
   'ברנע':     { bg: '#E8510C', fg: '#fff', abbr: 'B' },
-  'שוק העיר': { bg: '#4A4A4A', fg: '#fff', abbr: 'SH' },
 };
 
 function resolveLogoPath(name: string): string | null {
@@ -78,7 +98,7 @@ export function ChainLogo({ name, size = 44, showLabel = false }: ChainLogoProps
         ...containerStyle,
         background: fillsContainer ? 'transparent' : '#fff',
         border: fillsContainer ? 'none' : '1px solid rgba(0,0,0,0.07)',
-        padding: fillsContainer ? 0 : Math.round(size * 0.1),
+        padding: fillsContainer ? 0 : Math.round(size * 0.05),
         boxSizing: 'border-box',
         overflow: 'hidden',
       }}>
