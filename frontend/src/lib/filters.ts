@@ -1,9 +1,14 @@
 // Store filters (city + chain) shared by the home, product and basket pages.
 // Kept in sessionStorage so a choice made on one page applies on the others.
 
+// Chain names exactly as the parser stores them (CHAIN_DISPLAY_NAMES in
+// app/parser/universal_parser.py): the API filters on an exact name match.
 export const FEATURED_CHAINS = [
-  'שופרסל', 'רמי לוי', 'ויקטורי', 'מגה',
-  'יוחננוף', 'טיב טעם', 'אושר עד', 'קרפור', 'חצי חינם',
+  'שופרסל', 'רמי לוי', 'ויקטורי', 'יוחננוף', 'טיב טעם', 'אושר עד', 'חצי חינם',
+  'יינות ביתן / קרפור', 'דור אלון', 'פרשמרקט / סופרדוש', 'סיטי מרקט', 'סופר יודה',
+  'סופר ספיר', 'סטופ מרקט', 'סאלח דבאח', 'זול ובגדול', 'מחסני השוק', 'מעיין 2000',
+  'קינג סטור', 'קשת טעמים', 'שוק העיר', 'פוליצר', 'משנת יוסף', 'משנת יוסף 2',
+  'עוף והודו ברקת', 'גוד פארם', 'ח. כהן', 'שפע ברכת השם', 'יילו', 'וולט',
 ];
 
 const CITY_KEY = 'cityFilter';
