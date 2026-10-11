@@ -234,3 +234,13 @@ def test_split_superseded_leaves_store_and_delta_files_alone():
 
     keep, skipped = split_superseded([full_new], {"1": datetime(2026, 5, 13)})   # something newer already loaded
     assert keep == [] and len(skipped) == 1
+
+
+def test_resolve_city_turns_codes_into_names_and_drops_junk():
+    from app.parser.city_codes import resolve_city
+
+    assert resolve_city("2600") == "אילת"
+    assert resolve_city("02600") == "אילת"
+    assert resolve_city("  חיפה ") == "חיפה"
+    for junk in ("0", "unknown", "Unknown", "", None, "99999"):
+        assert resolve_city(junk) is None
