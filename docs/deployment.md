@@ -23,7 +23,7 @@ python3 -m venv venv && venv/bin/pip install -r requirements.txt
 venv/bin/python -m app.scraper.preflight
 ```
 
-Every line must say `OK`. A datacenter address is not the same as a home
+Every line should say `OK`. On the Oracle Jerusalem server all 12 Israel-only chains passed; `SUPER_PHARM` (a pharmacy chain) answered HTTP 492, a block of datacenter addresses, although it works from a home connection. A chain that cannot be reached is left out with `SKIP_CHAINS=SUPER_PHARM` in `.env`. A datacenter address is not the same as a home
 connection: a chain can accept one and refuse the other, so do not skip this.
 (`SKIP`/`not in installed library` for a name is harmless; it means the pinned
 library version does not know that chain.)

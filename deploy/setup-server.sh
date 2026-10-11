@@ -84,8 +84,10 @@ if [ "$SKIP_PREFLIGHT" -eq 0 ]; then
   set -e
   if [ "$status" -ne 0 ]; then
     echo
-    echo "Preflight reported problems (above). A chain that fails here will fail in production too."
-    echo "Most likely this provider's IP range is refused. Consider another provider (and ask for a refund)."
+    echo "Preflight reported problems (above). Read the output first:"
+    echo "  - a Python traceback means a configuration or code problem, not a blocked IP"
+    echo "  - FAIL / EMPTY lines for several chains mean this provider's IP range is refused;"
+    echo "    a chain that fails here will fail in production too, so consider another provider"
     if [ "$FORCE" -eq 0 ]; then echo "Stopping. Re-run with --force to continue anyway."; exit 3; fi
     echo "--force given: continuing."
   fi
