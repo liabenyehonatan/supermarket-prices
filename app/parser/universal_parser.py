@@ -126,6 +126,16 @@ async def get_or_create_chain(
     )
     chain = result.scalar_one_or_none()
 
+    if chain is None and not chain_id.strip("0"):
+        # Some files carry ChainId 0000000000000 (a placeholder). Use the chain this folder
+        # already belongs to instead of creating a second, empty-named duplicate.
+        chain = (await session.execute(
+            select(Chain)
+            .where(Chain.name == CHAIN_DISPLAY_NAMES.get(folder_name, folder_name), Chain.chain_id != chain_id)
+            .order_by(Chain.id)
+            .limit(1)
+        )).scalar_one_or_none()
+
     if chain is None:
         display_name = CHAIN_DISPLAY_NAMES.get(folder_name, folder_name)
         chain = Chain(
