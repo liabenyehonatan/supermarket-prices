@@ -69,6 +69,10 @@ export interface ExampleComparison {
   priciest_price: number | string; priciest_chain: string; stores_count: number;
 }
 
+export function fetchChains(): Promise<{ name: string; stores: number }[]> {
+  return request<{ name: string; stores: number }[]>('/api/v1/chains');
+}
+
 export function fetchExamples(limit = 3): Promise<ExampleComparison[]> {
   return request<ExampleComparison[]>(`/api/v1/products/examples?limit=${limit}`);
 }

@@ -51,6 +51,8 @@ function timeAgo(iso?: string): string {
 }
 
 
+const STORES_PAGE = 40;
+
 // Prices older than a week get flagged; fresh ones need no label. A chain's full file lists every
 // item, and an item's own price_updated_at only moves when its price changes, so it can be years old
 // for a price confirmed today. Judge freshness by when we last saw the price in a file (scraped_at).
@@ -90,6 +92,8 @@ export function ProductPage() {
   const [chainFilter, setChainFilter] = useState(readChainFilter);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // Popular products are sold in ~1,500 stores; drawing them all at once is slow on a phone.
+  const [visibleCount, setVisibleCount] = useState(STORES_PAGE);
   // Nearby mode is an explicit opt-in per visit — a position left over from an earlier
   // session must never make the page claim these stores are "near you".
   const [nearbyActive, setNearbyActive] = useState(false);
@@ -145,6 +149,9 @@ export function ProductPage() {
     : [];
   const nearbyMode = nearbyPrices.length > 0 && !showAll;
   const filteredPrices = nearbyMode ? nearbyPrices : matchingPrices;
+  const shownPrices = filteredPrices.slice(0, visibleCount);
+  // A new product or filter starts again from the first page.
+  useEffect(() => { setVisibleCount(STORES_PAGE); }, [barcode, cityFilter, chainFilter, showAll, nearbyActive]);
 
   function setNearby(on: boolean) {
     nearbyRef.current = on;
@@ -312,7 +319,7 @@ export function ProductPage() {
             )}
 
             <div className="compare-table" style={{ marginBottom: 20 }}>
-              {filteredPrices.map((row, idx) => {
+              {shownPrices.map((row, idx) => {
                 const isCheapest = idx === 0;
                 const diff = Number(row.price) - Number(filteredPrices[0]?.price ?? row.price);
                 const key = `${row.store_id}-${idx}`;
@@ -363,6 +370,12 @@ export function ProductPage() {
                 );
               })}
             </div>
+
+            {filteredPrices.length > visibleCount && (
+              <button className="btn btn-secondary btn-full" style={{ marginBottom: 20 }} onClick={() => setVisibleCount(c => c + STORES_PAGE)}>
+                הצג עוד {Math.min(STORES_PAGE, filteredPrices.length - visibleCount)} חנויות · נותרו {filteredPrices.length - visibleCount}
+              </button>
+            )}
 
             {nearbyMode && (
               <button className="btn btn-secondary btn-full" style={{ marginBottom: 20 }} onClick={() => setShowAll(true)}>

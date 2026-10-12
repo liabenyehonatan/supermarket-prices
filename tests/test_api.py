@@ -116,3 +116,51 @@ async def test_bitan_and_carrefour_are_told_apart_by_store_name(client, session)
 
     r = await client.post("/api/v1/basket/compare", params={"chain": "קרפור"}, json=[{"barcode": "9", "quantity": 1}])
     assert [s["store"]["chain"]["name"] for s in r.json()["stores"]] == ["קרפור"]
+
+
+async def test_chains_endpoint_lists_brands_biggest_first(client, session):
+    from app.chains import MIXED_CHAIN
+    from app.db.models import Chain, Store
+
+    big = Chain(chain_id="1", name="גדולה")
+    mixed = Chain(chain_id="2", name=MIXED_CHAIN)
+    session.add_all([big, mixed])
+    await session.flush()
+    session.add_all([
+        Store(chain_id=big.id, store_id=str(i), name=f"s{i}") for i in range(3)
+    ] + [
+        Store(chain_id=mixed.id, store_id="a", name="יינות ביתן טבעון"),
+        Store(chain_id=mixed.id, store_id="b", name="קרפור אילת"),
+        Store(chain_id=mixed.id, store_id="c", name="היפר עפולה"),
+    ])
+    await session.commit()
+
+    r = await client.get("/api/v1/chains")
+    assert r.json() == [{"name": "גדולה", "stores": 3}, {"name": "קרפור", "stores": 2}, {"name": "יינות ביתן", "stores": 1}]
+
+
+async def test_zero_prices_are_never_served_or_loaded(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+    from app.parser.price_loader import normalize_row
+
+    assert normalize_row({"ItemCode": "1", "ItemName": "x", "ItemPrice": "0.00"}, None) is None
+    assert normalize_row({"ItemCode": "1", "ItemName": "x", "ItemPrice": "-3"}, None) is None
+    assert normalize_row({"ItemCode": "1", "ItemName": "x", "ItemPrice": "2.5"}, None) is not None
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    stores = [Store(chain_id=chain.id, store_id=str(i), name=f"s{i}") for i in range(2)]
+    product = Product(barcode="5", name="מוצר")
+    session.add_all(stores + [product])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    session.add_all([
+        Price(product_id=product.id, store_id=stores[0].id, price=0, price_updated_at=now, is_current=True),
+        Price(product_id=product.id, store_id=stores[1].id, price=4, price_updated_at=now, is_current=True),
+    ])
+    await session.commit()
+
+    r = await client.get("/api/v1/products/5/compare")
+    assert [p["price"] for p in r.json()["prices"]] == ["4.00"]
