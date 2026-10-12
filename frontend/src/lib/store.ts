@@ -21,15 +21,37 @@ function unique(parts: (string | null | undefined)[]): string[] {
   return out;
 }
 
-/** The branch name when it says more than the chain name, otherwise ''. */
+const URLISH = /(https?:\/\/|www\.|\.(co\.il|org\.il|com|org|net)\b)/i;
+const ONLINE_WORD = /(online|אונליין)/i;
+const ONLINE_NAME = /(online|אונליין|אינטרנט)/i;
+
+/** An address with a web link stuck on the end ("דרך הדרום http:// 1") loses the link. */
+function cleanAddress(raw?: string | null): string {
+  const a = (raw ?? '').trim();
+  if (!a) return '';
+  const cut = a.replace(/\s*(https?:\/\/\S*|www\.\S*|\S+\.(co\.il|org\.il|com|org|net)\S*)[\s\d|/]*$/i, '').replace(/[\s|]+$/, '').trim();
+  return cut.length > 1 ? cut : '';
+}
+
+/** Chains list their web shop as a "store": its name says online/internet, or its "address" is just a web link. */
+export function isOnlineStore(s: StoreText): boolean {
+  if (ONLINE_NAME.test(s.name ?? '')) return true;
+  const raw = (s.address ?? '').trim();
+  return !!raw && URLISH.test(raw) && cleanAddress(raw) === '';
+}
+
+/** The branch name when it says more than the chain name, otherwise ''.
+ *  A web shop is always named "<chain> אונליין" (unless its own name already says so). */
 export function storeBranch(s: StoreText): string {
   const n = (s.name ?? '').trim();
+  if (isOnlineStore(s)) return ONLINE_WORD.test(n) ? n : `${s.chain} אונליין`;
   return n && n !== s.chain ? n : '';
 }
 
-/** "address, city" with junk values dropped, or ''. */
+/** "address, city" with junk values dropped; a web shop's address is simply "אינטרנט". */
 export function storeAddress(s: StoreText): string {
-  return unique([s.address, cityName(s.city)]).join(', ');
+  if (isOnlineStore(s)) return 'אינטרנט';
+  return unique([cleanAddress(s.address), cityName(s.city)]).join(', ');
 }
 
 /** Line under the chain name: "סניף: <name>" (the address is shown when the row is opened);
