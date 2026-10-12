@@ -57,3 +57,35 @@ async def test_city_codes_are_resolved_by_migration(_database):
         assert await conn.fetchval("SELECT name FROM chains") == "מחסני השוק"
     finally:
         await conn.close()
+
+
+async def test_zero_id_chain_is_merged_into_the_real_chain(_database):
+    import asyncio
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, command.downgrade, _database, "f2c8d6e14b71")
+    conn = await asyncpg.connect(_dsn())
+    try:
+        await conn.execute("TRUNCATE chains RESTART IDENTITY CASCADE")
+        await conn.execute("INSERT INTO chains (chain_id, name) VALUES ('7290000000003', 'סיטי מרקט'), ('0000000000000', 'סיטי מרקט')")
+        await conn.execute("INSERT INTO stores (chain_id, store_id) VALUES (1, '003'), (2, '003'), (2, '999')")
+        await conn.execute("INSERT INTO products (barcode, name) VALUES ('b1', 'n1'), ('b2', 'n2')")
+        await conn.execute(
+            "INSERT INTO prices (product_id, store_id, price, price_updated_at, scraped_at, is_current) VALUES "
+            "(1, 1, 5, '2026-10-01', '2026-10-01', true),"     # real chain, older
+            "(1, 2, 6, '2026-10-01', '2026-10-10', true),"     # zero-id chain, newer scrape: wins
+            "(2, 2, 7, '2026-10-01', '2026-10-10', true),"     # only under the zero-id chain: moves over
+            "(1, 3, 8, '2026-10-01', '2026-10-10', true)"      # store that exists only under the zero-id chain
+        )
+        await loop.run_in_executor(None, command.upgrade, _database, "head")
+
+        assert await conn.fetchval("SELECT count(*) FROM chains") == 1
+        stores = await conn.fetch("SELECT id, chain_id, store_id FROM stores ORDER BY store_id")
+        assert [(s["chain_id"], s["store_id"]) for s in stores] == [(1, "003"), (1, "999")]
+        main003 = stores[0]["id"]
+        current = await conn.fetch(
+            "SELECT product_id, store_id, price FROM prices WHERE is_current ORDER BY product_id, store_id")
+        assert [(r["product_id"], int(r["price"])) for r in current if r["store_id"] == main003] == [(1, 6), (2, 7)]
+        assert await conn.fetchval("SELECT count(*) FROM prices") == 4      # nothing deleted
+        assert await conn.fetchval("SELECT count(*) FROM prices WHERE is_current") == 3
+    finally:
+        await conn.close()
