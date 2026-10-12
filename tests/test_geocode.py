@@ -92,3 +92,23 @@ async def test_job_does_not_record_failures_and_gives_up(session, monkeypatch):
     for s in stores:
         await session.refresh(s)
     assert all(s.geocoded_at is None for s in stores)
+
+
+async def test_a_poison_address_is_marked_not_found_and_does_not_block_the_rest(session, monkeypatch):
+    await _stores(session)
+    monkeypatch.setattr(job, "PAUSE", 0)
+    monkeypatch.setattr(job, "MAX_CONSECUTIVE_ERRORS", 1)
+
+    async def fake(client, address, city, sleep):
+        if address == "לא ידוע":
+            raise geo.GeocodeError("400 for this address", retryable=False)
+        return (32.08, 34.78, "address")
+
+    monkeypatch.setattr(job, "geocode", fake)
+
+    found, missed = await job.fill_geocodes(minutes=1)
+    stores = {s.store_id: s for s in (await session.execute(select(Store))).scalars()}
+    for s in stores.values():
+        await session.refresh(s)
+    assert stores["a"].latitude == 32.08            # the store after the poison one was still located
+    assert stores["b"].geo_precision == "none" and stores["b"].geocoded_at is not None

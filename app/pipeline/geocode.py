@@ -6,6 +6,7 @@
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime
 
@@ -37,11 +38,10 @@ _NEXT = text(
 
 async def fill_geocodes(minutes: float, batch: int = 50) -> tuple[int, int]:
     """Locate stores for up to `minutes`; returns (found, not_found)."""
-    import re
-
     online = re.compile(_ONLINE, re.I)
     deadline = time.monotonic() + minutes * 60
     found = missed = errors = 0
+    stop = False
     city_cache: dict[str, tuple | None] = {}
 
     async def pause():
@@ -51,7 +51,7 @@ async def fill_geocodes(minutes: float, batch: int = 50) -> tuple[int, int]:
         while time.monotonic() < deadline and not STOP.is_set():
             async with AsyncSessionLocal() as session:
                 rows = (await session.execute(_NEXT, {"days": RECHECK_DAYS, "batch": batch})).all()
-            if not rows:
+            if not rows or stop:
                 break
             for row in rows:
                 if time.monotonic() >= deadline or STOP.is_set():
@@ -63,14 +63,19 @@ async def fill_geocodes(minutes: float, batch: int = 50) -> tuple[int, int]:
                     try:
                         hit = await geocode(client, row.address, row.city, pause)
                     except GeocodeError as exc:
-                        errors += 1
                         logger.warning("geocode failed for store %s: %s", row.id, exc)
-                        if errors >= MAX_CONSECUTIVE_ERRORS:
-                            logger.warning("Geocoding keeps failing; stopping for now")
-                            return found, missed
-                        await pause()
-                        continue
-                    errors = 0
+                        if exc.retryable:
+                            errors += 1
+                            if errors >= MAX_CONSECUTIVE_ERRORS:
+                                logger.warning("Geocoding keeps failing; stopping for now")
+                                stop = True
+                                break
+                            await pause()
+                            continue
+                        # This address itself makes the service fail: treat it as not found, not a poison row.
+                        hit = None
+                    else:
+                        errors = 0
                     result, precision = (hit[:2], hit[2]) if hit else (None, "none")
                 async with AsyncSessionLocal() as session:
                     async with session.begin():
@@ -82,6 +87,8 @@ async def fill_geocodes(minutes: float, batch: int = 50) -> tuple[int, int]:
                     found += 1
                 else:
                     missed += 1
+            if stop:
+                break
     if found or missed:
         logger.info("Store positions: %d found, %d not found", found, missed)
     return found, missed

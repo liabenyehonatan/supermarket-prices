@@ -18,7 +18,14 @@ JUNK_ADDRESS = re.compile(r"^(unknown|\d+|-+)$", re.I)
 
 
 class GeocodeError(Exception):
-    """The service could not be asked (outage, block, rate limit); says nothing about the address."""
+    """The service could not be asked; says nothing about the address.
+
+    `retryable` is True for outages, timeouts, 429 and 5xx (try again later, and stop if it keeps
+    happening); False when this particular address makes the service answer with an error."""
+
+    def __init__(self, message: str, retryable: bool = True):
+        super().__init__(message)
+        self.retryable = retryable
 
 
 def _inside_israel(lat: float, lng: float) -> bool:
@@ -31,8 +38,13 @@ async def _search(client: httpx.AsyncClient, **params) -> Optional[tuple[float, 
                                                    "accept-language": "he", **params}, headers=HEADERS)
         resp.raise_for_status()
         results = resp.json()
-    except (httpx.HTTPError, ValueError) as exc:
+    except httpx.HTTPStatusError as exc:
+        code = exc.response.status_code
+        raise GeocodeError(str(exc), retryable=code == 429 or code >= 500) from exc
+    except httpx.HTTPError as exc:
         raise GeocodeError(str(exc)) from exc
+    except ValueError as exc:                    # an answer that is not JSON
+        raise GeocodeError(str(exc), retryable=False) from exc
     if not results:
         return None
     lat, lng = float(results[0]["lat"]), float(results[0]["lon"])
