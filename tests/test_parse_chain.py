@@ -261,3 +261,15 @@ def test_resolve_city_turns_codes_into_names_and_drops_junk():
     assert resolve_city("  חיפה ") == "חיפה"
     for junk in ("0", "unknown", "Unknown", "", None, "99999"):
         assert resolve_city(junk) is None
+
+
+async def test_zero_chain_id_in_a_file_name_reuses_the_folders_chain(session):
+    from app.db.models import Chain
+    from app.parser.universal_parser import get_or_create_chain
+
+    session.add(Chain(chain_id="7290000000003", name="סיטי מרקט"))
+    await session.commit()
+
+    chain = await get_or_create_chain(session, chain_id="0000000000000", folder_name="CityMarketShops")
+    assert chain.chain_id == "7290000000003"
+    assert (await session.execute(select(Chain))).scalars().all().__len__() == 1
