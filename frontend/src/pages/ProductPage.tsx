@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
-import { cityName, navQuery, storeAddress, storeSubtitle } from '../lib/store';
+import { cityName, isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
@@ -336,10 +336,12 @@ export function ProductPage() {
                   >
                     {km != null && <div className="store-row-sub">{km.toFixed(1)} ק״מ ממך</div>}
                     {(() => {
-                      const addr = storeAddress({ chain: row.chain_name, address: row.store_address, city: row.store_city });
+                      const addr = storeAddress({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city });
                       return addr ? <div className="store-row-sub">כתובת: {addr}</div> : null;
                     })()}
                     <div className="store-row-actions">
+                      {!isOnlineStore({ chain: row.chain_name, name: row.store_name, address: row.store_address }) && (<>
+
                       <a href={wazeUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
                         <Navigation size={12} strokeWidth={2} />
                         Waze
@@ -348,6 +350,7 @@ export function ProductPage() {
                         <MapPin size={12} strokeWidth={2} />
                         Maps
                       </a>
+                      </>)}
                       {row.delivery_url && (
                         <a href={row.delivery_url} target="_blank" rel="noopener noreferrer" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
                           <Truck size={12} strokeWidth={2} />

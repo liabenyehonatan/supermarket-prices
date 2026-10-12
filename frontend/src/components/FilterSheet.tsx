@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Navigation, X, Check } from 'lucide-react';
+import { Navigation, X, Check, Search } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 import { CityPicker } from './CityPicker';
 import { FEATURED_CHAINS } from '../lib/filters';
@@ -16,6 +16,9 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
   onLocate: () => void;
   onClose: () => void;
 }) {
+  const [chainQuery, setChainQuery] = useState('');
+  const visibleChains = FEATURED_CHAINS.filter(name => name.includes(chainQuery.trim()));
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -41,8 +44,19 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
         </div>
 
         <div className="filter-sheet-label">רשת</div>
+        <label className="chain-search">
+          <Search size={15} strokeWidth={2} aria-hidden />
+          <input
+            type="search"
+            value={chainQuery}
+            onChange={e => setChainQuery(e.target.value)}
+            placeholder="חפשי רשת..."
+            aria-label="חיפוש רשת"
+          />
+        </label>
         <div className="filter-sheet-chains">
-          {FEATURED_CHAINS.map(name => (
+          {visibleChains.length === 0 && <div className="chain-search-empty">לא נמצאה רשת בשם הזה</div>}
+          {visibleChains.map(name => (
             <button
               key={name}
               className={`filter-chain${chain === name ? ' selected' : ''}`}
