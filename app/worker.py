@@ -265,6 +265,10 @@ async def run_cycle(
 
         # Housekeeping never decides the cycle result.
         try:
+            await maintenance.refresh_popularity()
+        except Exception as exc:
+            logger.warning("popularity refresh failed: %s", exc)
+        try:
             if settings.HISTORY_RETENTION_DAYS:
                 await maintenance.prune_history(settings.HISTORY_RETENTION_DAYS)
             await runs.purge_old_runs()
