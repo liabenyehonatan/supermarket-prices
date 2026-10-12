@@ -61,7 +61,7 @@ async def fill_geocodes(minutes: float, batch: int = 50) -> tuple[int, int]:
                     result, precision = None, "none"        # a web shop: nowhere to navigate to
                 else:
                     try:
-                        hit = await geocode(client, row.address, row.city, pause)
+                        hit = await geocode(client, row.address, row.city, pause, name=row.name)
                     except GeocodeError as exc:
                         logger.warning("geocode failed for store %s: %s", row.id, exc)
                         if exc.retryable:
