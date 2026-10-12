@@ -84,6 +84,7 @@ class PriceAtStore(BaseModel):
     price: Decimal
     unit_price: Optional[Decimal]
     price_updated_at: datetime
+    scraped_at: Optional[datetime] = None  # last time a chain file confirmed this price
     latitude: Optional[float]
     longitude: Optional[float]
     delivery_url: Optional[str]

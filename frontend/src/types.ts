@@ -18,6 +18,7 @@ export interface PriceAtStore {
   price: number;
   unit_price?: number;
   price_updated_at?: string;
+  scraped_at?: string;
   latitude?: number;
   longitude?: number;
   delivery_url?: string;

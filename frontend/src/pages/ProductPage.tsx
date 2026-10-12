@@ -51,7 +51,9 @@ function timeAgo(iso?: string): string {
 }
 
 
-// Prices older than a week get flagged; fresh ones need no label.
+// Prices older than a week get flagged; fresh ones need no label. A chain's full file lists every
+// item, and an item's own price_updated_at only moves when its price changes, so it can be years old
+// for a price confirmed today. Judge freshness by when we last saw the price in a file (scraped_at).
 function isStale(iso?: string): boolean {
   return !!iso && Date.now() - new Date(iso).getTime() > 7 * 24 * 3_600_000;
 }
@@ -324,7 +326,7 @@ export function ProductPage() {
                     chain={row.chain_name}
                     name={row.chain_name}
                     city={storeSubtitle({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city })}
-                    warning={isStale(row.price_updated_at) ? `מחיר ישן · עודכן לפני ${timeAgo(row.price_updated_at)}` : undefined}
+                    warning={isStale(row.scraped_at ?? row.price_updated_at) ? `מחיר ישן · עודכן לפני ${timeAgo(row.scraped_at ?? row.price_updated_at)}` : undefined}
                     price={row.price}
                     isCheapest={isCheapest}
                     cheapestLabel={nearbyMode ? 'הכי זול לידך' : 'הכי זול'}
