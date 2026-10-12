@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
-import { cityName, navQuery, storeSubtitle } from '../lib/store';
+import { cityName, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
@@ -335,7 +335,10 @@ export function ProductPage() {
                     onToggle={() => setExpandedRow(expandedRow === key ? null : key)}
                   >
                     {km != null && <div className="store-row-sub">{km.toFixed(1)} ק״מ ממך</div>}
-                    {row.store_name && row.store_name !== row.chain_name && <div className="store-row-sub">{row.store_name}</div>}
+                    {(() => {
+                      const addr = storeAddress({ chain: row.chain_name, address: row.store_address, city: row.store_city });
+                      return addr ? <div className="store-row-sub">כתובת: {addr}</div> : null;
+                    })()}
                     <div className="store-row-actions">
                       <a href={wazeUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
                         <Navigation size={12} strokeWidth={2} />
