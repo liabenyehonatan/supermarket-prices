@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 
 /**
  * Horizontal chain picker shown as a 3D carousel: items tilt and shrink as they
  * move away from the center, with arrows that appear while there is more to see.
  */
-export function ChainCarousel({ chains, selected, onSelect, style }: {
+export function ChainCarousel({ chains: allChains, selected, onSelect, style }: {
   chains: string[];
   selected: string;
   onSelect: (name: string) => void;
   style?: CSSProperties;
 }) {
+  const [query, setQuery] = useState('');
+  const chains = query.trim() ? allChains.filter(name => name.includes(query.trim())) : allChains;
   const trackRef = useRef<HTMLDivElement>(null);
   const [canBack, setCanBack] = useState(false);   // toward the start (right in RTL)
   const [canFwd, setCanFwd]   = useState(false);   // toward the end (left in RTL)
@@ -57,7 +59,7 @@ export function ChainCarousel({ chains, selected, onSelect, style }: {
       track.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [update]);
+  }, [update, query]);
 
   // dir 1 = forward (toward the end of the list)
   function step(dir: 1 | -1) {
@@ -69,6 +71,19 @@ export function ChainCarousel({ chains, selected, onSelect, style }: {
   }
 
   return (
+    <>
+    {allChains.length > 8 && (
+      <label className="chain-search" style={style}>
+        <Search size={15} strokeWidth={2} aria-hidden />
+        <input
+          type="search"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="חפשי רשת..."
+          aria-label="חיפוש רשת"
+        />
+      </label>
+    )}
     <div className="chain-carousel" style={style}>
       {canBack && (
         <button className="chain-carousel-arrow start" onClick={() => step(-1)} aria-label="רשתות קודמות">
@@ -93,6 +108,8 @@ export function ChainCarousel({ chains, selected, onSelect, style }: {
           <ChevronLeft size={18} strokeWidth={2.5} />
         </button>
       )}
+      {chains.length === 0 && <div className="chain-search-empty">לא נמצאה רשת בשם הזה</div>}
     </div>
+    </>
   );
 }
