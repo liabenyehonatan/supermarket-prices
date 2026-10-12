@@ -194,6 +194,7 @@ async def compare_product_prices(
             price=price.price,
             unit_price=price.unit_price,
             price_updated_at=price.price_updated_at,
+            scraped_at=price.scraped_at,
             latitude=store.latitude,
             longitude=store.longitude,
             delivery_url=store.delivery_url,
