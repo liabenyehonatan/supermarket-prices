@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
-import { navQuery, storeSubtitle } from '../lib/store';
+import { navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { LocationPrompt } from '../components/LocationPrompt';
@@ -86,6 +86,10 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
         </div>
       ) : undefined}
     >
+      {(() => {
+        const addr = storeAddress({ chain: store.store.chain.name, address: store.store.address, city: store.store.city });
+        return addr ? <div className="store-row-sub">כתובת: {addr}</div> : null;
+      })()}
       <div className="store-row-actions">
         <a href={wazeUrl(store.store)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${store.store.name}`}>
           <Navigation size={12} strokeWidth={2} />
