@@ -9,6 +9,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select, func, and_, or_, text
+from sqlalchemy import column as sa_column, table as sa_table
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -65,11 +66,10 @@ async def search_products(
     is_barcode = q.strip().isdigit()
 
     # Subquery: count current prices per product (proxy for popularity)
+    # Precomputed by the worker after each cycle (a live GROUP BY over every current price
+    # took ~9 s per search once all chains were loaded).
     store_count_sq = (
-        select(Price.product_id, func.count(Price.id).label("store_count"))
-        .where(Price.is_current == True)
-        .group_by(Price.product_id)
-        .subquery()
+        sa_table("product_store_counts", sa_column("product_id"), sa_column("store_count")).alias("store_count_sq")
     )
 
     if is_barcode:
