@@ -107,6 +107,9 @@ class Store(Base):
     # of rounding is perfectly fine. Float also uses less storage than Numeric.
     latitude: Mapped[Optional[float]] = mapped_column(Float)
     longitude: Mapped[Optional[float]] = mapped_column(Float)
+    # How the position was found ('address' | 'city' | 'none') and when we last tried; see app/pipeline/geocode.py.
+    geo_precision: Mapped[Optional[str]] = mapped_column(String(10))
+    geocoded_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     # For the "transfer basket" feature — the specific URL for THIS store's
     # online delivery page (if the chain supports per-store URLs).

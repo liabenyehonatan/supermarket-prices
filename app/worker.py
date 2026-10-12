@@ -33,7 +33,7 @@ import httpx
 
 from app import settings
 from app.parser.mass_parser import ChainParseResult, chains_on_disk, folder_for_chain, parse_chain
-from app.pipeline import images, maintenance, runs
+from app.pipeline import geocode as geocoding, images, maintenance, runs
 from app.pipeline.lock import AlreadyRunning, ingest_lock
 from app.pipeline.shutdown import STOP
 from app.scraper.mass_scraper import get_enabled_scrapers, installed_scrapers
@@ -355,6 +355,12 @@ async def serve() -> None:
                         await images.fill_images(settings.IMAGE_FILL_MINUTES)
                     except Exception as exc:
                         logger.warning("picture lookup failed: %s", exc)
+                # New stores get a position (a few minutes: only stores not yet located are asked about).
+                if settings.GEOCODE_MINUTES > 0 and not STOP.is_set():
+                    try:
+                        await geocoding.fill_geocodes(settings.GEOCODE_MINUTES)
+                    except Exception as exc:
+                        logger.warning("store geocoding failed: %s", exc)
             except AlreadyRunning:
                 logger.warning("Another run holds the lock; skipping this slot")
             except Exception:
