@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
+from app.images import ImageLookupError
 from app.images import lookup_image_url as _lookup_image_url
 from app.db.models import Product, Price, Store, Chain
 from app.api.schemas import (
@@ -411,7 +412,10 @@ async def example_comparisons(
             if lookups_left <= 0:
                 continue
             lookups_left -= 1
-            found = await _lookup_image_url(product.barcode, product.name)
+            try:
+                found = await _lookup_image_url(product.barcode, product.name)
+            except ImageLookupError:
+                found = None
             if not found:
                 continue
             product.image_url = found
@@ -440,9 +444,10 @@ async def example_comparisons(
 
 # Pictures are looked up in app.images (also used in bulk by the worker).
 
-# The browser may keep these for a day (a redirect is stable; a miss is re-checked only every
-# IMAGE_RECHECK_DAYS anyway).
-_IMAGE_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
+# A redirect is stable; a miss is re-checked only every IMAGE_RECHECK_DAYS, but the worker may find
+# the picture sooner, so a 404 is kept for a shorter time.
+_IMAGE_HIT_HEADERS = {"Cache-Control": "public, max-age=86400"}
+_IMAGE_MISS_HEADERS = {"Cache-Control": "public, max-age=3600"}
 IMAGE_RECHECK_DAYS = 14
 
 
@@ -452,7 +457,7 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
     product = result.scalar_one_or_none()
 
     if product and product.image_url:
-        return RedirectResponse(product.image_url, status_code=302, headers=_IMAGE_CACHE_HEADERS)
+        return RedirectResponse(product.image_url, status_code=302, headers=_IMAGE_HIT_HEADERS)
 
     # A recent miss is not looked up again on every view.
     recently_missed = bool(
@@ -460,7 +465,11 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
         and product.image_checked_at > datetime.utcnow() - timedelta(days=IMAGE_RECHECK_DAYS)
     )
     if not recently_missed:
-        image_url = await _lookup_image_url(barcode, product.name if product else None)
+        try:
+            image_url = await _lookup_image_url(barcode, product.name if product else None)
+        except ImageLookupError:
+            # Shufersal could not be asked: say nothing about the picture and do not cache it.
+            raise HTTPException(status_code=404, detail="No image found", headers={"Cache-Control": "no-store"})
         if product:
             if image_url:
                 product.image_url = image_url
@@ -468,9 +477,9 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
                 product.image_checked_at = datetime.utcnow()
             await db.commit()
         if image_url:
-            return RedirectResponse(image_url, status_code=302, headers=_IMAGE_CACHE_HEADERS)
+            return RedirectResponse(image_url, status_code=302, headers=_IMAGE_HIT_HEADERS)
 
-    raise HTTPException(status_code=404, detail="No image found", headers=_IMAGE_CACHE_HEADERS)
+    raise HTTPException(status_code=404, detail="No image found", headers=_IMAGE_MISS_HEADERS)
 
 
 # ─── Endpoint 3: Basket Comparison ───────────────────────────────────────────

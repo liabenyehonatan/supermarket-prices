@@ -18,26 +18,24 @@ def _names_similar(our_name: str, their_name: str) -> bool:
     return len(our_words & their_words) / len(our_words) >= 0.6
 
 
+class ImageLookupError(Exception):
+    """Shufersal could not be asked (outage, block page, rate limit): says nothing about the picture."""
+
+
 async def lookup_image_url(barcode: str, name: Optional[str]) -> Optional[str]:
-    """Ask Shufersal's catalogue for a product picture (by barcode, then by similar name)."""
+    """Shufersal's picture URL, or None when it has none (found by barcode, then by a similar name).
+    Raises ImageLookupError when the lookup itself failed, so callers never record a failure as 'no picture'."""
     try:
         async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(
-                SHUFERSAL_SEARCH,
-                params={"q": barcode, "format": "json"},
-                headers=SHUFERSAL_HEADERS,
-            )
-            results = resp.json().get("results", [])
+            async def search(q: str) -> list[dict]:
+                resp = await client.get(
+                    SHUFERSAL_SEARCH, params={"q": q, "format": "json"}, headers=SHUFERSAL_HEADERS)
+                resp.raise_for_status()
+                return resp.json().get("results", [])
 
+            results = await search(barcode)
             if not results and name:
-                resp2 = await client.get(
-                    SHUFERSAL_SEARCH,
-                    params={"q": name, "format": "json"},
-                    headers=SHUFERSAL_HEADERS,
-                )
-                name_results = resp2.json().get("results", [])
-                results = [r for r in name_results if _names_similar(name, r.get("name", ""))]
-
+                results = [r for r in await search(name) if _names_similar(name, r.get("name", ""))]
         return results[0].get("baseProductImageMedium") if results else None
-    except Exception:
-        return None
+    except (httpx.HTTPError, ValueError, AttributeError) as exc:
+        raise ImageLookupError(str(exc)) from exc
