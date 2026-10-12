@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Navigation, X, Check, Search } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 import { CityPicker } from './CityPicker';
-import { FEATURED_CHAINS } from '../lib/filters';
+import { useChainNames } from '../lib/filters';
 
 /** Bottom sheet for the product page: city, chain and "use my location" in one place. */
 export function FilterSheet({ city, cities, chain, locating, onCity, onChain, onLocate, onClose }: {
@@ -17,7 +17,8 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
   onClose: () => void;
 }) {
   const [chainQuery, setChainQuery] = useState('');
-  const visibleChains = FEATURED_CHAINS.filter(name => name.includes(chainQuery.trim()));
+  const chainNames = useChainNames();
+  const visibleChains = chainNames.filter(name => name.includes(chainQuery.trim()));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

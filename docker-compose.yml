@@ -12,11 +12,19 @@ x-backend: &backend
   restart: unless-stopped
   init: true            # reap the scraper libraries' child processes
 
+# Docker keeps container logs forever by default; cap them so the disk cannot fill up.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-owner-db: &owner-db
   DATABASE_URL: postgresql+asyncpg://supermarket:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/supermarket_prices
 
 services:
   db:
+    logging: *logging
     image: postgres:16-alpine
     restart: unless-stopped
     shm_size: 256mb
@@ -57,6 +65,7 @@ services:
 
   # One-shot: applies migrations as the owner role, then exits.
   migrate:
+    logging: *logging
     <<: *backend
     restart: "no"
     command: python -m alembic upgrade head
@@ -67,6 +76,7 @@ services:
         condition: service_healthy
 
   api:
+    logging: *logging
     <<: *backend
     command: >
       uvicorn main:app --host 0.0.0.0 --port 8000
@@ -94,6 +104,7 @@ services:
       - no-new-privileges:true
 
   worker:
+    logging: *logging
     <<: *backend
     command: python -m app.worker
     stop_grace_period: 3m        # lets the current file finish loading on `docker stop`
@@ -123,6 +134,7 @@ services:
       - no-new-privileges:true
 
   backup:
+    logging: *logging
     image: postgres:16-alpine
     restart: unless-stopped
     entrypoint: ["sh", "/backup.sh"]
@@ -142,6 +154,7 @@ services:
         condition: service_healthy
 
   frontend:
+    logging: *logging
     build:
       context: ./frontend
       args:
@@ -149,6 +162,7 @@ services:
     restart: unless-stopped
 
   nginx:
+    logging: *logging
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
@@ -165,6 +179,7 @@ services:
   # Optional HTTPS: enable with COMPOSE_PROFILES=https, DOMAIN=your.domain and
   # NGINX_BIND=127.0.0.1:8080 in .env. Caddy then serves 80/443 and proxies to nginx.
   caddy:
+    logging: *logging
     image: caddy:2-alpine
     profiles: ["https"]
     restart: unless-stopped

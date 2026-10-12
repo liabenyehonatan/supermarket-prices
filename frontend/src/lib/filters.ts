@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react';
+import { fetchChains } from '../api/client';
+
 // Store filters (city + chain) shared by the home, product and basket pages.
 // Kept in sessionStorage so a choice made on one page applies on the others.
 
-// Chain names exactly as the parser stores them (CHAIN_DISPLAY_NAMES in
+// Fallback list, used until (or if) the API's /chains answers. Chain names exactly as the parser stores them (CHAIN_DISPLAY_NAMES in
 // app/parser/universal_parser.py): the API filters on an exact name match.
 export const FEATURED_CHAINS = [
   'שופרסל', 'רמי לוי', 'ויקטורי', 'יוחננוף', 'טיב טעם', 'אושר עד', 'חצי חינם',
@@ -10,6 +13,19 @@ export const FEATURED_CHAINS = [
   'קינג סטור', 'קשת טעמים', 'שוק העיר', 'פוליצר', 'משנת יוסף',
   'עוף והודו ברקת', 'גוד פארם', 'ח. כהן', 'שפע ברכת השם', 'יילו', 'וולט',
 ];
+
+/** The chains the app knows, biggest first, straight from the API (so it never drifts from the data). */
+export function useChainNames(): string[] {
+  const [names, setNames] = useState<string[]>(FEATURED_CHAINS);
+  useEffect(() => {
+    let live = true;
+    fetchChains()
+      .then(list => { if (live && list.length) setNames(list.map(c => c.name)); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+  return names;
+}
 
 const CITY_KEY = 'cityFilter';
 const CHAIN_KEY = 'chainFilter';
