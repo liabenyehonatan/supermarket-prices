@@ -61,7 +61,7 @@ async def test_job_locates_marks_misses_and_skips_web_shops(session, monkeypatch
     await _stores(session)
     monkeypatch.setattr(job, "PAUSE", 0)
 
-    async def fake(client, address, city, sleep):
+    async def fake(client, address, city, sleep, name=None):
         return (32.08, 34.78, "address") if address == "הרצל 1" else None
 
     monkeypatch.setattr(job, "geocode", fake)
@@ -82,7 +82,7 @@ async def test_job_does_not_record_failures_and_gives_up(session, monkeypatch):
     monkeypatch.setattr(job, "PAUSE", 0)
     monkeypatch.setattr(job, "MAX_CONSECUTIVE_ERRORS", 2)
 
-    async def down(client, address, city, sleep):
+    async def down(client, address, city, sleep, name=None):
         raise geo.GeocodeError("429")
 
     monkeypatch.setattr(job, "geocode", down)
@@ -99,7 +99,7 @@ async def test_a_poison_address_is_marked_not_found_and_does_not_block_the_rest(
     monkeypatch.setattr(job, "PAUSE", 0)
     monkeypatch.setattr(job, "MAX_CONSECUTIVE_ERRORS", 1)
 
-    async def fake(client, address, city, sleep):
+    async def fake(client, address, city, sleep, name=None):
         if address == "לא ידוע":
             raise geo.GeocodeError("400 for this address", retryable=False)
         return (32.08, 34.78, "address")
@@ -112,3 +112,21 @@ async def test_a_poison_address_is_marked_not_found_and_does_not_block_the_rest(
         await session.refresh(s)
     assert stores["a"].latitude == 32.08            # the store after the poison one was still located
     assert stores["b"].geo_precision == "none" and stores["b"].geocoded_at is not None
+
+
+async def test_address_is_read_from_the_name_when_the_chain_publishes_none():
+    assert geo.address_in_name("סיטי מרקט הרצוג גבעתיים, הרצוג 23 גבעתיים") == "הרצוג 23 גבעתיים"
+    assert geo.address_in_name("סיטי מרקט כרמי גת, שד' לכיש 181 ק.גת") == "שד' לכיש 181 קרית גת"
+    assert geo.address_in_name('מתוק שוק, הרצל 70 ראשל"צ') == "הרצל 70 ראשון לציון"
+    assert geo.address_in_name("שופרסל דיל אילת") == ""
+    assert geo.address_in_name("סניף, בלי מספר") == ""
+
+    queries = []
+
+    def handler(request):
+        queries.append(dict(request.url.params))
+        return httpx.Response(200, json=[{"lat": "32.07", "lon": "34.81"}])
+
+    async with _client(handler) as c:
+        got = await geo.geocode(c, "unknown", None, _no_sleep, name="סיטי מרקט, הרצוג 23 גבעתיים")
+    assert got == (32.07, 34.81, "address") and queries[0]["q"] == "הרצוג 23 גבעתיים"

@@ -51,11 +51,37 @@ async def _search(client: httpx.AsyncClient, **params) -> Optional[tuple[float, 
     return (lat, lng) if _inside_israel(lat, lng) else None
 
 
+# Abbreviations chains use for cities, which the search does not know.
+_ABBREVIATIONS = {'ראשל"צ': "ראשון לציון", 'ת"א': "תל אביב", 'פ"ת': "פתח תקווה", 'ב"ש': "באר שבע",
+                  "ק.גת": "קרית גת", "ק.אונו": "קרית אונו", 'ר"ג': "רמת גן", 'נס"צ': "נס ציונה", 'ק"ש': "קרית שמונה"}
+
+
+def expand_abbreviations(text: str) -> str:
+    for short, full in _ABBREVIATIONS.items():
+        text = text.replace(short, full)
+    return text
+
+
+def address_in_name(name: Optional[str]) -> str:
+    """Some chains (City Market) publish no address, but the name ends with it:
+    'סיטי מרקט הרצוג גבעתיים, הרצוג 23 גבעתיים' -> 'הרצוג 23 גבעתיים'."""
+    parts = (name or "").rsplit(",", 1)
+    tail = parts[-1].strip() if len(parts) == 2 else ""
+    return expand_abbreviations(tail) if re.search(r"\d", tail) else ""
+
+
 async def geocode(client: httpx.AsyncClient, address: Optional[str], city: Optional[str],
-                  sleep) -> Optional[tuple[float, float, str]]:
+                  sleep, name: Optional[str] = None) -> Optional[tuple[float, float, str]]:
     """(lat, lng, 'address'|'city') or None. `sleep` is awaited between requests (rate limit)."""
     address = (address or "").strip()
     city = (city or "").strip()
+    if (not address or JUNK_ADDRESS.match(address)) and not city:
+        tail = address_in_name(name)
+        if tail:
+            hit = await _search(client, q=tail)
+            await sleep()
+            if hit:
+                return hit[0], hit[1], "address"
     if address and not JUNK_ADDRESS.match(address) and city:
         hit = await _search(client, street=address, city=city)
         await sleep()
