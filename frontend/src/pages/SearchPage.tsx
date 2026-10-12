@@ -26,7 +26,7 @@ function BuildBasketIcon() {
   return <img src="/icons/basket-plant.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
 }
 
-import { searchProducts, cheapestPricesBatch, fetchUnitPrices, type UnitPriceInfo } from '../api/client';
+import { searchProducts, cheapestPricesBatch } from '../api/client';
 import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
 import { TrustLine } from '../components/TrustLine';
@@ -296,36 +296,12 @@ export function SearchPage() {
 
   const hasQuery = query.trim().length > 0;
 
-  // Ordering of the full results list. "unit" needs one extra request, made only when it is chosen.
-  const [sortMode, setSortMode] = useState<'relevance' | 'price' | 'unit'>('relevance');
-  const [unitPrices, setUnitPrices] = useState<Record<string, UnitPriceInfo>>({});
-  const unitAsked = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (sortMode !== 'unit') return;
-    const missing = results.map(r => r.barcode).filter(b => !unitAsked.current.has(b));
-    if (!missing.length) return;
-    missing.forEach(b => unitAsked.current.add(b));
-    fetchUnitPrices(missing).then(map => setUnitPrices(prev => ({ ...prev, ...map }))).catch(() => {});
-  }, [sortMode, results]);
+  // Ordering of the full results list.
+  const [sortMode, setSortMode] = useState<'relevance' | 'price'>('relevance');
 
   const orderedResults = (() => {
     if (sortMode === 'price') {
       return [...results].sort((a, b) => (cheapest[a.barcode] ?? Infinity) - (cheapest[b.barcode] ?? Infinity));
-    }
-    if (sortMode === 'unit') {
-      // A price per 100 g and a price per litre can't be ranked against each other, so group by unit
-      // (largest group first) and order each group by what one unit costs.
-      const unitOf = (b: string) => unitPrices[b]?.unit ?? '';
-      const groupSize: Record<string, number> = {};
-      results.forEach(r => { if (unitPrices[r.barcode]) groupSize[unitOf(r.barcode)] = (groupSize[unitOf(r.barcode)] ?? 0) + 1; });
-      return [...results].sort((a, b) => {
-        const ua = unitPrices[a.barcode]; const ub = unitPrices[b.barcode];
-        if (!ua || !ub) return ua ? -1 : ub ? 1 : 0;
-        const ga = groupSize[unitOf(a.barcode)]; const gb = groupSize[unitOf(b.barcode)];
-        if (ga !== gb) return gb - ga;
-        if (unitOf(a.barcode) !== unitOf(b.barcode)) return unitOf(a.barcode).localeCompare(unitOf(b.barcode), 'he');
-        return Number(ua.unit_price) - Number(ub.unit_price);
-      });
     }
     return results;
   })();
@@ -668,7 +644,7 @@ export function SearchPage() {
 
                 {results.length > 1 && (
                   <div className="sort-row" role="group" aria-label="מיון תוצאות">
-                    {([['relevance', 'רלוונטיות'], ['price', 'הכי זול'], ['unit', 'מחיר ליחידה']] as const).map(([id, label]) => (
+                    {([['relevance', 'רלוונטיות'], ['price', 'הכי זול']] as const).map(([id, label]) => (
                       <button key={id} className={`sort-pill${sortMode === id ? ' on' : ''}`} aria-pressed={sortMode === id} onClick={() => setSortMode(id)}>
                         {label}
                       </button>
@@ -679,7 +655,6 @@ export function SearchPage() {
                 <div className="results-list" style={{ paddingBottom: 80 }}>
                   {orderedResults.map(product => {
                     const price = cheapest[product.barcode];
-                    const unit = sortMode === 'unit' ? unitPrices[product.barcode] : undefined;
                     return (
                       <div
                         key={product.barcode}
@@ -717,8 +692,7 @@ export function SearchPage() {
                                 {fmt(price)}
                               </div>
                               <div className="product-card-price-label">
-                                {unit ? <bdi dir="ltr">{`₪${Number(unit.unit_price).toFixed(2)}`}</bdi> : 'הכי זול'}
-                                {unit ? ` ל-${(unit.unit ?? 'יחידה').replace(/^1 /, '')}` : ''}
+                                הכי זול
                               </div>
                             </>
                           ) : (

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
-import { navQuery, storeAddress, storeSubtitle } from '../lib/store';
+import { isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { LocationPrompt } from '../components/LocationPrompt';
@@ -87,10 +87,11 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
       ) : undefined}
     >
       {(() => {
-        const addr = storeAddress({ chain: store.store.chain.name, address: store.store.address, city: store.store.city });
+        const addr = storeAddress({ chain: store.store.chain.name, name: store.store.name, address: store.store.address, city: store.store.city });
         return addr ? <div className="store-row-sub">כתובת: {addr}</div> : null;
       })()}
       <div className="store-row-actions">
+        {!isOnlineStore({ chain: store.store.chain.name, name: store.store.name, address: store.store.address }) && (<>
         <a href={wazeUrl(store.store)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${store.store.name}`}>
           <Navigation size={12} strokeWidth={2} />
           Waze
@@ -99,6 +100,7 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
           <MapPin size={12} strokeWidth={2} />
           Maps
         </a>
+        </>)}
         {store.store.delivery_url && (
           <a href={store.store.delivery_url} target="_blank" rel="noopener noreferrer">
             <Truck size={12} strokeWidth={2} />

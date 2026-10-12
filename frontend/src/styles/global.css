@@ -2678,3 +2678,18 @@ img { max-width: 100%; display: block; }
 .basket-pill { background: var(--green-50); border-color: var(--green-200); color: var(--green-700); }
 .basket-pill:hover { border-color: var(--green-700); }
 .basket-pill svg { flex-shrink: 0; }
+
+
+/* Chain name search (home carousel and the product-page filter sheet) */
+.chain-search {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 10px; padding: 0 12px; height: 40px;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink-3, #6b7a72);
+}
+.chain-search:focus-within { border-color: var(--green-600); }
+.chain-search input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  font: inherit; font-size: 14px; color: var(--ink, #1b2a22);
+}
+.chain-search-empty { padding: 14px 4px; font-size: 13px; color: var(--ink-3, #6b7a72); }
