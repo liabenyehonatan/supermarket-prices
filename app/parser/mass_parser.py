@@ -15,7 +15,9 @@
 #  - The XML is deleted (when DELETE_AFTER_INGEST is on) only after commit.
 
 import asyncio
+import gzip
 import logging
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -108,7 +110,31 @@ def _chain_name_for_folder(folder_name: str) -> Optional[str]:
     return {v.value: v.name for v in DumpFolderNames}.get(folder_name)
 
 
+def _unpack_gzip_downloads(folder: Path) -> None:
+    """Some portals' files are saved as gzip data without a .xml (or .gz) name and are never
+    unpacked by the scraper, so the glob below would silently see nothing for that chain.
+    Unpack them next to the original as <name>.xml and drop the compressed copy."""
+    for path in sorted(folder.iterdir()):
+        if not path.is_file() or path.suffix:
+            continue
+        try:
+            with path.open("rb") as fh:
+                if fh.read(2) != b"\x1f\x8b":
+                    continue
+            target = path.with_name(path.name + ".xml")
+            tmp = path.with_name(path.name + ".unpack")
+            if not target.exists():
+                with gzip.open(path, "rb") as src, tmp.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                tmp.rename(target)
+            path.unlink()
+        except Exception as exc:
+            logger.warning("Could not unpack %s: %s", path.name, exc)
+            path.with_name(path.name + ".unpack").unlink(missing_ok=True)
+
+
 def _dump_files_in(folder: Path) -> list[DumpFile]:
+    _unpack_gzip_downloads(folder)
     result = []
     for xml_file in sorted(folder.glob("*.xml")):
         try:

@@ -67,6 +67,23 @@ async def test_loads_stores_and_prices_and_records_ledger(dumps, session):
     assert set((await ledger(session)).values()) == {("done", 1)}
 
 
+async def test_gzip_files_without_an_extension_are_unpacked_and_loaded(dumps, session):
+    import gzip
+
+    def write_gz(name, xml):
+        dumps.mkdir(parents=True, exist_ok=True)
+        (dumps / name.removesuffix(".xml")).write_bytes(gzip.compress(xml.encode("utf-8")))
+
+    write_gz(STORES_NAME, stores_xml([("777", "סניף בדיקה", "חיפה")]))
+    write_gz(price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.status == "ok" and result.files_ok == 2
+    assert await current_prices(session) == {"111": Decimal("5.50")}
+    assert not [f for f in dumps.iterdir() if not f.suffix]  # compressed originals are gone
+
+
 async def test_second_run_does_not_reload_files(dumps, session):
     write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
     await parse_chain("SHUFERSAL")
