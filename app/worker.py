@@ -267,6 +267,7 @@ async def run_cycle(
         try:
             if settings.HISTORY_RETENTION_DAYS:
                 await maintenance.prune_history(settings.HISTORY_RETENTION_DAYS)
+            await maintenance.refresh_popularity()
             await runs.purge_old_runs()
             await runs.purge_old_ledger()
         except Exception as exc:

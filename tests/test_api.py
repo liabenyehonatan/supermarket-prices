@@ -58,3 +58,29 @@ async def test_cors_is_not_wide_open(client):
 async def test_read_endpoints_work_on_an_empty_database(client):
     assert (await client.get("/api/v1/stats")).status_code == 200
     assert (await client.get("/api/v1/products/search", params={"q": "חלב"})).status_code == 200
+
+
+async def test_search_ranks_by_store_count_from_the_refreshed_view(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+    from app.pipeline import maintenance
+
+    chain = Chain(chain_id="123", name="רשת")
+    session.add(chain)
+    await session.flush()
+    stores = [Store(chain_id=chain.id, store_id=str(i), name=f"s{i}") for i in range(2)]
+    rare, common = Product(barcode="1", name="חלב נדיר"), Product(barcode="2", name="חלב נפוץ")
+    session.add_all(stores + [rare, common])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    session.add_all([
+        Price(product_id=rare.id, store_id=stores[0].id, price=5, price_updated_at=now, is_current=True),
+        Price(product_id=common.id, store_id=stores[0].id, price=5, price_updated_at=now, is_current=True),
+        Price(product_id=common.id, store_id=stores[1].id, price=6, price_updated_at=now, is_current=True),
+    ])
+    await session.commit()
+
+    await maintenance.refresh_popularity()
+
+    r = await client.get("/api/v1/products/search", params={"q": "חלב"})
+    assert [p["barcode"] for p in r.json()] == ["2", "1"]
