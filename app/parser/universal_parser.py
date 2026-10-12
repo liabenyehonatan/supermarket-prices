@@ -43,7 +43,9 @@ CHAIN_DISPLAY_NAMES: dict[str, str] = {
     "Mega":                     "מגה",
     "NetivHased":               "נתיב החסד",
     "MeshnatYosef1":            "משנת יוסף",
-    "MeshnatYosef2":            "משנת יוסף 2",
+    # The same company publishes two feeds (the web shop, and the Kitty Market branches): one name.
+    # They stay two chain rows because their store numbers overlap ('001' is a different store in each).
+    "MeshnatYosef2":            "משנת יוסף",
     "Osherad":                  "אושר עד",
     "Polizer":                  "פוליצר",
     "RamiLevy":                 "רמי לוי",
