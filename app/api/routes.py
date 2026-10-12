@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
+from app.chains import display_chain_name, display_chain_name_sql
 from app.images import ImageLookupError
 from app.images import lookup_image_url as _lookup_image_url
 from app.db.models import Product, Price, Store, Chain
@@ -193,7 +194,7 @@ async def compare_product_prices(
             store_name=store.name,
             store_city=store.city,
             store_address=store.address,
-            chain_name=chain.name,
+            chain_name=display_chain_name(chain.name, store.name),
             price=price.price,
             unit_price=price.unit_price,
             price_updated_at=price.price_updated_at,
@@ -385,7 +386,7 @@ async def example_comparisons(
     async def extreme(product_id: int, ascending: bool):
         order = Price.price.asc() if ascending else Price.price.desc()
         row = (await db.execute(
-            select(Price.price, Chain.name)
+            select(Price.price, display_chain_name_sql())
             .join(Store, Store.id == Price.store_id)
             .join(Chain, Chain.id == Store.chain_id)
             .where(Price.product_id == product_id, Price.is_current.is_(True))
@@ -541,7 +542,7 @@ async def compare_basket(
         # Same "contains" match the product page uses
         prices_query = prices_query.where(Store.city.icontains(city.strip(), autoescape=True))
     if chain and chain.strip():
-        prices_query = prices_query.where(Chain.name == chain.strip())
+        prices_query = prices_query.where(display_chain_name_sql() == chain.strip())
 
     prices_result = await db.execute(prices_query)
     all_price_rows = prices_result.all()
@@ -593,7 +594,7 @@ async def compare_basket(
                 longitude=store.longitude,
                 chain=ChainResponse(
                     id=chain.id,
-                    name=chain.name,
+                    name=display_chain_name(chain.name, store.name),
                     chain_id=chain.chain_id,
                 ),
             ),

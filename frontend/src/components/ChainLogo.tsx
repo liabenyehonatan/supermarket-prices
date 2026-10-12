@@ -15,6 +15,7 @@ const LOGO_MAP: Record<string, string> = {
   'סופר יודה': '/logos/super-yuda.png',
   'יוניברס':  '/logos/universe.png',
   // chain names exactly as the parser stores them (CHAIN_DISPLAY_NAMES)
+  'יינות ביתן':          '/logos/yayno-bitan.png',
   'יינות ביתן / קרפור':  '/logos/yayno-bitan.png',
   'דור אלון':            '/logos/dor-alon.png',
   'גוד פארם':            '/logos/good-pharm.png',
