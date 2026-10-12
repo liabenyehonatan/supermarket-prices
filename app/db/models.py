@@ -163,6 +163,8 @@ class Product(Base):
     # WHY Text and not String(500)?
     # URLs can be very long especially with CDN parameters. Text has no limit.
     image_url: Mapped[Optional[str]] = mapped_column(Text)
+    # When we last looked for a picture and found none; stops the lookup being repeated on every view.
+    image_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     # The manufacturer's name (often same as brand but sometimes different).
     manufacturer: Mapped[Optional[str]] = mapped_column(String(200))

@@ -33,7 +33,7 @@ import httpx
 
 from app import settings
 from app.parser.mass_parser import ChainParseResult, chains_on_disk, folder_for_chain, parse_chain
-from app.pipeline import maintenance, runs
+from app.pipeline import images, maintenance, runs
 from app.pipeline.lock import AlreadyRunning, ingest_lock
 from app.pipeline.shutdown import STOP
 from app.scraper.mass_scraper import get_enabled_scrapers, installed_scrapers
@@ -290,6 +290,12 @@ async def run_cycle(
             summary.status, ok_count, len(summary.outcomes), files_ok, rows,
             f"; problems: {summary.failed_chains}" if summary.failed_chains else "",
         )
+        # After the result is reported: this is a nicety, it never decides or delays the cycle outcome.
+        if settings.IMAGE_FILL_MINUTES > 0 and not STOP.is_set():
+            try:
+                await images.fill_images(settings.IMAGE_FILL_MINUTES)
+            except Exception as exc:
+                logger.warning("picture lookup failed: %s", exc)
     return summary
 
 
