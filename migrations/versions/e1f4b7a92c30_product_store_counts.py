@@ -30,6 +30,17 @@ def upgrade() -> None:
     )
     # Required for REFRESH ... CONCURRENTLY (readers are not blocked while it refreshes).
     op.execute("CREATE UNIQUE INDEX ix_product_store_counts_product ON product_store_counts (product_id)")
+    # Don't rely on default privileges: the read-only API role must be able to read the view.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'api_ro') THEN
+            GRANT SELECT ON product_store_counts TO api_ro;
+          END IF;
+        END $$
+        """
+    )
 
 
 def downgrade() -> None:
