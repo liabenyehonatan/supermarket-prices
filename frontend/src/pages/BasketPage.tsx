@@ -164,8 +164,8 @@ function CompareDelta({ prev, now }: { prev: BasketSnapshot | null; now: BasketS
 }
 
 /** Drag a row sideways far enough and it is removed (an undo notice follows). */
-function SwipeRow({ onRemove, disabled, className, children }: {
-  onRemove: () => void; disabled?: boolean; className: string; children: React.ReactNode;
+function SwipeRow({ onRemove, onClick, disabled, className, children }: {
+  onRemove: () => void; onClick?: () => void; disabled?: boolean; className: string; children: React.ReactNode;
 }) {
   const [dx, setDx] = useState(0);
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
@@ -206,6 +206,7 @@ function SwipeRow({ onRemove, disabled, className, children }: {
         className={className}
         style={{ transform: `translateX(${dx}px)`, transition: dx === 0 ? 'transform 0.2s' : 'none', touchAction: 'pan-y' }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+        onClick={onClick}
       >
         {children}
       </div>
@@ -385,8 +386,9 @@ export function BasketPage() {
                 className={`basket-item${editing ? ' editing' : ''}${selected.has(item.barcode) ? ' selected' : ''}`}
                 disabled={editing}
                 onRemove={() => { setResults(null); removeItem(item.barcode); }}
+                onClick={editing ? () => toggleSelected(item.barcode) : undefined}
               >
-                <div style={{ display: 'contents' }} onClick={editing ? () => toggleSelected(item.barcode) : undefined}>
+                <div style={{ display: 'contents' }}>
                 {editing && (
                   <input
                     type="checkbox"
@@ -401,10 +403,12 @@ export function BasketPage() {
                 <div
                   className="basket-item-body"
                   style={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/product/${item.barcode}`)}
+                  // While editing, a tap anywhere on the row selects it (the row handles that);
+                  // outside editing it opens the product.
+                  onClick={editing ? undefined : () => navigate(`/product/${item.barcode}`)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && navigate(`/product/${item.barcode}`)}
+                  onKeyDown={e => { if (e.key === 'Enter') { if (editing) toggleSelected(item.barcode); else navigate(`/product/${item.barcode}`); } }}
                 >
                   <div className="basket-item-name">{item.name}</div>
 
