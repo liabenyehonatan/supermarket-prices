@@ -504,7 +504,7 @@ export function SearchPage() {
                       textAlign: 'start', fontFamily: 'var(--font-sans)',
                     }}
                   >
-                    <ProductImage barcode={product.barcode} name={product.name} size={44} />
+                    <ProductImage barcode={product.barcode} name={product.name} imageUrl={product.image_url} size={44} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {(() => {
                         const { displayName, size, tailBrand } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
@@ -691,7 +691,7 @@ export function SearchPage() {
                         style={{ width: '100%', textAlign: 'start', border: '1px solid var(--line)', cursor: 'pointer' }}
                         aria-label={`${product.name}${price ? ` — הכי זול ${fmt(price)}` : ''}`}
                       >
-                        <ProductImage barcode={product.barcode} name={product.name} size={56} />
+                        <ProductImage barcode={product.barcode} name={product.name} imageUrl={product.image_url} size={56} />
 
                         <div className="product-card-body">
                           {(() => {

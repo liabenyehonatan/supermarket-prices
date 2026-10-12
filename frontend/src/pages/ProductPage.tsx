@@ -203,7 +203,7 @@ export function ProductPage() {
             {/* Product card */}
             <div className="product-hero">
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <ProductImage barcode={data.product.barcode} name={data.product.name} size={112} borderRadius={16} />
+                <ProductImage barcode={data.product.barcode} name={data.product.name} imageUrl={data.product.image_url} size={112} borderRadius={16} />
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {(() => {
