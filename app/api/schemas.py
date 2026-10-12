@@ -141,3 +141,8 @@ class BasketCompareResponse(BaseModel):
     total_items_requested: int
     cheapest_store: Optional[str]
     max_savings: Decimal  # Difference between cheapest and most expensive
+
+class ChainListItem(BaseModel):
+    """A chain as users know it (brands told apart), with how many stores we hold for it."""
+    name: str
+    stores: int

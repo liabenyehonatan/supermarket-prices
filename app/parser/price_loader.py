@@ -80,7 +80,7 @@ def normalize_row(row: dict, fallback_ts: Optional[datetime]) -> Optional[PriceR
         return None
 
     price = _money(_get(row, "ItemPrice", "itemprice", "ITEMPRICE"))
-    if price is None:
+    if price is None or price <= 0:   # 0 means "no price" (generic items, unavailable): never a bargain
         return None
 
     unit_price = _money(
