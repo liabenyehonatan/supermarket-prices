@@ -113,6 +113,10 @@ STALE_CLOSE_MIN_RATIO = _float("STALE_CLOSE_MIN_RATIO", 0.5)
 # history (the project default).
 HISTORY_RETENTION_DAYS = _int("HISTORY_RETENTION_DAYS", 0) or None
 
+# After each cycle the worker looks up pictures for the most-searched products that have none yet,
+# for up to this many minutes (0 turns it off). Lookups go to Shufersal's site, a few at a time.
+IMAGE_FILL_MINUTES = _float("IMAGE_FILL_MINUTES", 30)
+
 # ── Monitoring ────────────────────────────────────────────────────────────────
 # Healthchecks.io-style URL: GET <url>/start, <url>, <url>/fail.
 HEALTHCHECK_URL = _env("HEALTHCHECK_URL") or None

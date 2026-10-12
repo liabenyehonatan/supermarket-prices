@@ -3,11 +3,14 @@ import { useState } from 'react';
 export function ProductImage({
   barcode,
   name,
+  imageUrl,
   size = 56,
   borderRadius = 12, // --r-md: the same tile radius everywhere
 }: {
   barcode: string;
   name: string;
+  /** When the API already knows the picture, load it directly: no extra round trip through our server. */
+  imageUrl?: string | null;
   size?: number;
   borderRadius?: number;
 }) {
@@ -22,14 +25,17 @@ export function ProductImage({
     <div style={{ ...sharedStyle, position: 'relative', background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px var(--line)', overflow: 'hidden' }}>
       {!failed && (
         <img
-          src={`/api/v1/products/${barcode}/image`}
+          src={imageUrl || `/api/v1/products/${barcode}/image`}
           alt={name}
+          loading="lazy"
+          decoding="async"
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
           style={{
             ...sharedStyle,
             objectFit: 'contain',
-            display: loaded ? 'block' : 'none',
+            display: 'block',
+            opacity: loaded ? 1 : 0, // not display:none: a lazy image that is not displayed is never fetched
             position: 'absolute', top: 0, left: 0,
           }}
         />

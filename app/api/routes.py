@@ -2,6 +2,7 @@
 
 import logging
 import time
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
+from app.images import lookup_image_url as _lookup_image_url
 from app.db.models import Product, Price, Store, Chain
 from app.api.schemas import (
     ProductSearchResult,
@@ -436,40 +438,12 @@ async def example_comparisons(
 
 # ─── Endpoint: Product image (via Shufersal CDN) ─────────────────────────────
 
-SHUFERSAL_SEARCH = "https://www.shufersal.co.il/online/he/search/results"
-SHUFERSAL_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+# Pictures are looked up in app.images (also used in bulk by the worker).
 
-def _names_similar(our_name: str, their_name: str) -> bool:
-    our_words = set(our_name.split())
-    their_words = set(their_name.split())
-    if not our_words:
-        return False
-    return len(our_words & their_words) / len(our_words) >= 0.6
-
-
-async def _lookup_image_url(barcode: str, name: Optional[str]) -> Optional[str]:
-    """Ask Shufersal's catalogue for a product picture (by barcode, then by similar name)."""
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(
-                SHUFERSAL_SEARCH,
-                params={"q": barcode, "format": "json"},
-                headers=SHUFERSAL_HEADERS,
-            )
-            results = resp.json().get("results", [])
-
-            if not results and name:
-                resp2 = await client.get(
-                    SHUFERSAL_SEARCH,
-                    params={"q": name, "format": "json"},
-                    headers=SHUFERSAL_HEADERS,
-                )
-                name_results = resp2.json().get("results", [])
-                results = [r for r in name_results if _names_similar(name, r.get("name", ""))]
-
-        return results[0].get("baseProductImageMedium") if results else None
-    except Exception:
-        return None
+# The browser may keep these for a day (a redirect is stable; a miss is re-checked only every
+# IMAGE_RECHECK_DAYS anyway).
+_IMAGE_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
+IMAGE_RECHECK_DAYS = 14
 
 
 @router.get("/products/{barcode}/image", summary="Redirect to product image")
@@ -478,16 +452,25 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
     product = result.scalar_one_or_none()
 
     if product and product.image_url:
-        return RedirectResponse(product.image_url, status_code=302)
+        return RedirectResponse(product.image_url, status_code=302, headers=_IMAGE_CACHE_HEADERS)
 
-    image_url = await _lookup_image_url(barcode, product.name if product else None)
+    # A recent miss is not looked up again on every view.
+    recently_missed = bool(
+        product and product.image_checked_at
+        and product.image_checked_at > datetime.utcnow() - timedelta(days=IMAGE_RECHECK_DAYS)
+    )
+    if not recently_missed:
+        image_url = await _lookup_image_url(barcode, product.name if product else None)
+        if product:
+            if image_url:
+                product.image_url = image_url
+            else:
+                product.image_checked_at = datetime.utcnow()
+            await db.commit()
+        if image_url:
+            return RedirectResponse(image_url, status_code=302, headers=_IMAGE_CACHE_HEADERS)
 
-    if image_url and product:
-        product.image_url = image_url
-        await db.commit()
-        return RedirectResponse(image_url, status_code=302)
-
-    raise HTTPException(status_code=404, detail="No image found")
+    raise HTTPException(status_code=404, detail="No image found", headers=_IMAGE_CACHE_HEADERS)
 
 
 # ─── Endpoint 3: Basket Comparison ───────────────────────────────────────────
