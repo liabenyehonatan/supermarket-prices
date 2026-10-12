@@ -20,6 +20,7 @@ from app.images import ImageLookupError
 from app.images import lookup_image_url as _lookup_image_url
 from app.db.models import Product, Price, Store, Chain
 from app.api.schemas import (
+    ChainListItem,
     ProductSearchResult,
     ProductCompareResponse,
     PriceAtStore,
@@ -172,6 +173,7 @@ async def compare_product_prices(
         .where(
             Price.product_id == product.id,
             Price.is_current == True,
+            Price.price > 0,  # a 0 price means "none", never the cheapest
             ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores
         )
         .order_by(Price.price.asc())  # Cheapest first
@@ -248,6 +250,7 @@ async def cheapest_prices_batch(
         .where(
             Product.barcode.in_(barcodes),
             Price.is_current == True,
+            Price.price > 0,  # a 0 price means "none", never the cheapest
             ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores, same as /compare
         )
         .group_by(Product.barcode)
@@ -282,6 +285,7 @@ async def unit_prices_batch(
         .where(
             Product.barcode.in_(barcodes),
             Price.is_current == True,
+            Price.price > 0,  # a 0 price means "none", never the cheapest
             Price.unit_price.isnot(None),
             Price.unit_price > 0,
             ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores, same as /compare
@@ -315,6 +319,23 @@ async def list_cities(db: AsyncSession = Depends(get_db)):
 
 _STATS_TTL_SECONDS = 600
 _stats_cache: tuple[float, StatsResponse] | None = None
+
+
+@router.get(
+    "/chains",
+    response_model=List[ChainListItem],
+    summary="Chains we hold prices for (the list the app filters by), biggest first",
+)
+async def list_chains(db: AsyncSession = Depends(get_db)):
+    name = display_chain_name_sql()
+    rows = await db.execute(
+        select(name.label("name"), func.count(Store.id).label("stores"))
+        .select_from(Store)
+        .join(Chain, Chain.id == Store.chain_id)
+        .group_by(name)
+        .order_by(func.count(Store.id).desc(), name)
+    )
+    return [ChainListItem(name=r.name, stores=r.stores) for r in rows.all()]
 
 
 @router.get(
@@ -371,7 +392,7 @@ async def example_comparisons(
             func.min(Price.price).label("lo"),
             func.max(Price.price).label("hi"),
         )
-        .where(Price.is_current.is_(True))
+        .where(Price.is_current.is_(True), Price.price > 0)
         .group_by(Price.product_id)
         .having(func.count() >= 20)
         .order_by(func.count().desc())
@@ -389,7 +410,7 @@ async def example_comparisons(
             select(Price.price, display_chain_name_sql())
             .join(Store, Store.id == Price.store_id)
             .join(Chain, Chain.id == Store.chain_id)
-            .where(Price.product_id == product_id, Price.is_current.is_(True))
+            .where(Price.product_id == product_id, Price.is_current.is_(True), Price.price > 0)
             .order_by(order)
             .limit(1)
         )).first()
@@ -535,6 +556,7 @@ async def compare_basket(
         .where(
             Product.barcode.in_(barcodes),
             Price.is_current == True,
+            Price.price > 0,  # a 0 price means "none", never the cheapest
             ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores
         )
     )
