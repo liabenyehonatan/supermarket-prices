@@ -84,3 +84,35 @@ async def test_search_ranks_by_store_count_from_the_refreshed_view(client, sessi
 
     r = await client.get("/api/v1/products/search", params={"q": "חלב"})
     assert [p["barcode"] for p in r.json()] == ["2", "1"]
+
+
+async def test_bitan_and_carrefour_are_told_apart_by_store_name(client, session):
+    from datetime import datetime
+    from app.chains import MIXED_CHAIN, display_chain_name
+    from app.db.models import Chain, Price, Product, Store
+
+    assert display_chain_name(MIXED_CHAIN, "יינות ביתן טבעון") == "יינות ביתן"
+    assert display_chain_name(MIXED_CHAIN, "קרפור מרקט אילת") == "קרפור"
+    assert display_chain_name(MIXED_CHAIN, "היפר עפולה") == "קרפור"
+    assert display_chain_name("שופרסל", "יינות ביתן") == "שופרסל"
+
+    chain = Chain(chain_id="7290055700007", name=MIXED_CHAIN)
+    session.add(chain)
+    await session.flush()
+    bitan = Store(chain_id=chain.id, store_id="1", name="יינות ביתן טבעון")
+    carrefour = Store(chain_id=chain.id, store_id="2", name="קרפור מרקט אילת")
+    product = Product(barcode="9", name="מוצר")
+    session.add_all([bitan, carrefour, product])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    session.add_all([
+        Price(product_id=product.id, store_id=bitan.id, price=5, price_updated_at=now, is_current=True),
+        Price(product_id=product.id, store_id=carrefour.id, price=6, price_updated_at=now, is_current=True),
+    ])
+    await session.commit()
+
+    r = await client.get("/api/v1/products/9/compare")
+    assert [p["chain_name"] for p in r.json()["prices"]] == ["יינות ביתן", "קרפור"]
+
+    r = await client.post("/api/v1/basket/compare", params={"chain": "קרפור"}, json=[{"barcode": "9", "quantity": 1}])
+    assert [s["store"]["chain"]["name"] for s in r.json()["stores"]] == ["קרפור"]
