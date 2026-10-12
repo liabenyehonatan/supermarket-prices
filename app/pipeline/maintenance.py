@@ -4,9 +4,17 @@ import logging
 
 from sqlalchemy import text
 
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, engine
 
 logger = logging.getLogger(__name__)
+
+
+async def refresh_popularity() -> None:
+    """Rebuild product_store_counts (search ranking). CONCURRENTLY keeps the API readable meanwhile;
+    it cannot run inside a transaction, hence AUTOCOMMIT."""
+    async with engine.connect() as conn:
+        conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY product_store_counts"))
 
 
 async def prune_history(days: int, batch: int = 20000) -> int:
