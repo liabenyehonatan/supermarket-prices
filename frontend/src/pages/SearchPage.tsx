@@ -36,7 +36,7 @@ import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { FEATURED_CHAINS, readChainFilter, saveChainFilter } from '../lib/filters';
+import { useChainNames, readChainFilter, saveChainFilter } from '../lib/filters';
 
 /* ── constants ────────────────────────────────────────────── */
 const PAGE_SIZE = 20;
@@ -126,6 +126,7 @@ function QuickAddButton({ product, small }: { product: Product; small?: boolean 
 /* ── main component ───────────────────────────────────────── */
 export function SearchPage() {
   const navigate = useNavigate();
+  const chainNames = useChainNames();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSnap = useRef<SearchSnapshot | null>(readSnapshot(searchParams.get('q') ?? ''));
   // "How it works" shows once; afterwards it is only a small link away
@@ -587,7 +588,7 @@ export function SearchPage() {
               </div>
             </div>
             <ChainCarousel
-              chains={FEATURED_CHAINS}
+              chains={chainNames}
               selected={chainFilter}
               onSelect={selectChain}
               style={{ marginBottom: chainFilter ? 8 : 32 }}
