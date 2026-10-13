@@ -9,7 +9,7 @@ from typing import Annotated, List, Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select, func, and_, or_, text, literal, update
 from sqlalchemy import column as sa_column, table as sa_table
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -555,6 +555,7 @@ async def compare_basket(
     items: Annotated[List[BasketItem], Field(max_length=100)],     # a real basket is a few dozen at most
     city: Optional[str] = Query(None, max_length=60, description="Only stores whose city contains this text"),
     chain: Optional[str] = Query(None, max_length=60, description="Only stores of this chain (exact name)"),
+    limit: Optional[int] = Query(None, ge=1, le=500, description="Return only the best N stores (default: all)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -590,17 +591,21 @@ async def compare_basket(
     )
     products = {p.barcode: p for p in products_result.scalars().all()}
 
-    # Step 3: Get all current prices for all basket products
-    # This is ONE query that fetches everything we need
+    # Step 3: Get all current prices for all basket products, as plain columns (loading four full ORM
+    # entities per row for ~9,000 rows was most of the time).
+    by_id = {p.id: p for p in products.values()}
     prices_query = (
-        select(Price, Product, Store, Chain)
-        .join(Product, Price.product_id == Product.id)
+        select(
+            Price.price, Price.product_id,
+            Store.id.label("store_pk"), Store.store_id, Store.name.label("store_name"), Store.city,
+            Store.address, Store.latitude, Store.longitude,
+            Chain.id.label("chain_pk"), Chain.name.label("chain_name"), Chain.chain_id.label("chain_code"),
+        )
         .join(Store, Price.store_id == Store.id)
         .join(Chain, Store.chain_id == Chain.id)
         .where(
-            Product.barcode.in_(barcodes),
-            _real_barcode(),
-            Price.is_current == True,
+            Price.product_id.in_(list(by_id)),
+            Price.is_current,
             Price.price > 0,  # a 0 price means "none", never the cheapest
             _not_wholesale(),  # exclude wholesale stores
         )
@@ -611,84 +616,66 @@ async def compare_basket(
     if chain and chain.strip():
         prices_query = prices_query.where(display_chain_name_sql() == chain.strip())
 
-    prices_result = await db.execute(prices_query)
-    all_price_rows = prices_result.all()
+    all_price_rows = (await db.execute(prices_query)).all()
 
-    # Step 4: Group prices by store
-    # store_id → {barcode → price_info}
-    store_prices: dict = {}
-    store_objects: dict = {}
-    chain_objects: dict = {}
-
-    for price, product, store, chain in all_price_rows:
-        if store.id not in store_prices:
-            store_prices[store.id] = {}
-            store_objects[store.id] = store
-            chain_objects[store.id] = chain
-
-        store_prices[store.id][product.barcode] = {
+    # Step 4: Group prices by store: store_pk -> (row, {barcode -> item})
+    grouped: dict = {}
+    for r in all_price_rows:
+        product = by_id[r.product_id]
+        qty = quantity_map.get(product.barcode, 1)
+        entry = grouped.get(r.store_pk)
+        if entry is None:
+            entry = grouped[r.store_pk] = (r, {})
+        entry[1][product.barcode] = {
             "product_name": product.name,
             "barcode": product.barcode,
-            "unit_price": price.price,
-            "quantity": quantity_map.get(product.barcode, 1),
-            "line_total": price.price * quantity_map.get(product.barcode, 1),
+            "unit_price": r.price,
+            "quantity": qty,
+            "line_total": r.price * qty,
         }
 
-    # Step 5: Calculate total per store
-    store_totals = []
+    # Step 5: Total per store (of the items it has), then sort: complete baskets first, cheapest first
+    ranked = []
+    for r, items_by_barcode in grouped.values():
+        total = sum((info["line_total"] for info in items_by_barcode.values()), Decimal("0"))
+        ranked.append((len(barcodes) - len(items_by_barcode), total, r, items_by_barcode))
+    ranked.sort(key=lambda x: (x[0], x[1]))
 
-    for store_id, barcode_prices in store_prices.items():
-        store = store_objects[store_id]
-        chain = chain_objects[store_id]
+    complete_totals = [t for missing, t, _, _ in ranked if missing == 0]
+    if len(complete_totals) >= 2:
+        max_savings = complete_totals[-1] - complete_totals[0]
+        max_total = complete_totals[-1]
+    else:
+        max_savings = Decimal("0")
+        max_total = max((t for _, t, _, _ in ranked), default=Decimal("0"))
+    cheapest_store = ranked[0][2].store_name if ranked else None
 
-        # Calculate total for items this store HAS
-        total = sum(
-            info["line_total"]
-            for info in barcode_prices.values()
-        )
-
-        items_found = len(barcode_prices)
-        items_missing = len(barcodes) - items_found
-
-        store_totals.append(BasketStoreTotal(
-            store=StoreResponse(
-                id=store.id,
-                store_id=store.store_id,
-                name=store.name,
-                city=store.city,
-                address=store.address,
-                latitude=store.latitude,
-                longitude=store.longitude,
-                chain=ChainResponse(
-                    id=chain.id,
-                    name=display_chain_name(chain.name, store.name),
-                    chain_id=chain.chain_id,
+    # Step 6: Build the answer. The constructed models skip validation (the values come from the database)
+    # and the JSON is written straight from them: a basket answer is ~1.3 MB, so this mattered.
+    shown = ranked[:limit] if limit else ranked
+    store_totals = [
+        BasketStoreTotal.model_construct(
+            store=StoreResponse.model_construct(
+                id=r.store_pk, store_id=r.store_id, name=r.store_name, city=r.city, address=r.address,
+                latitude=r.latitude, longitude=r.longitude,
+                chain=ChainResponse.model_construct(
+                    id=r.chain_pk, name=display_chain_name(r.chain_name, r.store_name), chain_id=r.chain_code,
                 ),
             ),
             total_price=total,
-            items_found=items_found,
-            items_missing=items_missing,
-            item_prices=list(barcode_prices.values()),
-        ))
+            items_found=len(items_by_barcode),
+            items_missing=missing,
+            item_prices=list(items_by_barcode.values()),
+        )
+        for missing, total, r, items_by_barcode in shown
+    ]
 
-    # Step 6: Sort — complete baskets first, then by price ascending
-    store_totals.sort(key=lambda x: (x.items_missing, x.total_price))
-
-    # Calculate max savings among complete-basket stores only
-    complete = [s for s in store_totals if s.items_missing == 0]
-    if len(complete) >= 2:
-        max_savings = complete[-1].total_price - complete[0].total_price
-        cheapest_store = complete[0].store.name
-    elif store_totals:
-        max_savings = Decimal("0")
-        cheapest_store = store_totals[0].store.name
-    else:
-        max_savings = Decimal("0")
-        cheapest_store = None
-
-    return BasketCompareResponse(
+    response = BasketCompareResponse.model_construct(
         stores=store_totals,
         total_items_requested=len(barcodes),
         cheapest_store=cheapest_store,
         max_savings=max_savings,
+        total_stores=len(ranked),
+        max_total=max_total,
     )
+    return Response(content=response.model_dump_json(), media_type="application/json")
