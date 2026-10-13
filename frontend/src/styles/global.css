@@ -150,6 +150,7 @@ body {
   /* Pale sky-blue ombre fading to white, fixed to the viewport */
   background: linear-gradient(180deg, #EAF6FC 0%, #F4FAFD 45%, #FFFFFF 100%) fixed;
   min-height: 100vh;
+  min-height: 100dvh;   /* the visible height on phones whose address bar collapses */
   font-feature-settings: var(--tnum);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -337,6 +338,7 @@ img { max-width: 100%; display: block; }
   padding-block-start: calc(var(--header-h) + var(--sp-6));
   padding-block-end: calc(var(--bottom-nav-h) + var(--sp-6));
   min-height: 100vh;
+  min-height: 100dvh;   /* the visible height on phones whose address bar collapses */
 }
 @media (min-width: 768px) {
   .page-wrapper { padding-block-end: var(--sp-12); }
@@ -2693,3 +2695,25 @@ img { max-width: 100%; display: block; }
   font: inherit; font-size: 14px; color: var(--ink, #1b2a22);
 }
 .chain-search-empty { padding: 14px 4px; font-size: 13px; color: var(--ink-3, #6b7a72); }
+
+
+/* Bigger touch areas without changing the look: a 44px invisible hit zone around small controls */
+.qty-btn, .basket-card-remove { position: relative; }
+.qty-btn::after, .basket-card-remove::after { content: ''; position: absolute; inset: -6px; }
+.basket-card-remove::after { inset: -10px; }
+
+/* Page footer: disclaimer link, deliberately quiet */
+.site-footer {
+  text-align: center; padding: var(--sp-6, 24px) var(--sp-4, 16px);
+  padding-bottom: calc(var(--bottom-nav-h, 64px) + var(--sp-8, 32px));
+  font-size: 12px; color: var(--ink-400, #8a948e);
+}
+.site-footer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* About page */
+.about-page { max-width: 640px; line-height: 1.75; padding-bottom: 32px; }
+.about-page h1 { font-size: 24px; margin: 8px 0 12px; }
+.about-page h2 { font-size: 17px; margin: 24px 0 4px; color: var(--ink-900, #1b2a22); }
+.about-page p, .about-page li { font-size: 15px; color: var(--ink-700, #3d4a43); }
+.about-page ul { padding-inline-start: 20px; }
+.about-page a { color: var(--green-700, #126E45); text-decoration: underline; }

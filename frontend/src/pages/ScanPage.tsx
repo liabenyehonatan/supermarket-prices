@@ -6,7 +6,8 @@ import {
   CAMERA_MESSAGES, SCAN_CONSTRAINTS, cameraSupportProblem, classifyCameraError,
   createBarcodeReader, isTransientScanError,
 } from '../lib/scanner';
-import { compareProduct } from '../api/client';
+import { ApiError, compareProduct } from '../api/client';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 export function ScanPage() {
   const navigate = useNavigate();
@@ -14,6 +15,8 @@ export function ScanPage() {
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const started = useRef(false);
+  const alive = useRef(true);       // false once the page is left: a camera that opens late must be closed again
+  useDocumentTitle('סריקת ברקוד | סלי');
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
   const [manual, setManual] = useState('');
@@ -30,8 +33,9 @@ export function ScanPage() {
     try {
       await compareProduct(code);
       navigate(`/product/${code}`, { replace: true });
-    } catch {
-      setNotFound(code);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) setNotFound(code);
+      else setError('אין כרגע חיבור לשרת. נסי שוב בעוד רגע.');
     }
   }, [navigate, stop]);
 
@@ -43,7 +47,7 @@ export function ScanPage() {
     try {
       const reader = createBarcodeReader();
       readerRef.current = reader;
-      controlsRef.current = await reader.decodeFromConstraints(
+      const controls = await reader.decodeFromConstraints(
         SCAN_CONSTRAINTS,
         videoRef.current!,
         (result, err) => {
@@ -55,14 +59,17 @@ export function ScanPage() {
           }
         }
       );
+      if (!alive.current) { controls.stop(); return; }
+      controlsRef.current = controls;
     } catch (err) {
       setError(CAMERA_MESSAGES[classifyCameraError(err)]);
     }
   }, [handleCode, stop]);
 
   useEffect(() => {
+    alive.current = true;
     if (!started.current) { started.current = true; void start(); }
-    return stop;
+    return () => { alive.current = false; stop(); };
   }, [start, stop]);
 
   const submitManual = () => { if (manual) void handleCode(manual); };
