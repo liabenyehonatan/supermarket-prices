@@ -23,7 +23,8 @@ async def _chains(session):
     fresh = Chain(chain_id="1", name="חיה")
     dead = Chain(chain_id="2", name="מתה")
     never = Chain(chain_id="3", name="לא נטענה")
-    session.add_all([fresh, dead, never])
+    empty = Chain(chain_id="4", name="בלי חנויות")                 # e.g. a chain we skip on purpose: not an alarm
+    session.add_all([fresh, dead, never, empty])
     await session.flush()
     now = datetime.utcnow()
     session.add_all([
