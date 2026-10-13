@@ -1,9 +1,9 @@
 # app/api/schemas.py
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 from decimal import Decimal
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from zoneinfo import ZoneInfo
 
 _ISRAEL = ZoneInfo("Asia/Jerusalem")
@@ -140,13 +140,14 @@ class ProductCompareResponse(BaseModel):
 
 class CheapestPriceRequest(BaseModel):
     """A list of barcodes to look up the cheapest current price for, in one call."""
-    barcodes: List[str]
+    # At most 100 barcodes of at most 20 characters per call (a real page asks for ~20).
+    barcodes: Annotated[List[Annotated[str, StringConstraints(max_length=20)]], Field(max_length=100)]
 
 
 class BasketItem(BaseModel):
     """One item in a shopping basket comparison request."""
-    barcode: str
-    quantity: int = 1  # How many of this item
+    barcode: str = Field(min_length=1, max_length=20)
+    quantity: int = Field(1, ge=1, le=99)  # How many of this item (a negative total would rank first)
 
 
 class BasketStoreTotal(BaseModel):
