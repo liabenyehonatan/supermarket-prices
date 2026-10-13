@@ -4,13 +4,23 @@ import type {
   BasketCompareResponse,
 } from '../types';
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000';
+// Empty = same origin (the production default). The dev server proxies /api (see vite.config.ts).
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+
+/** A failed API call; `status` lets callers tell "not found" (404) from "server unreachable". */
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new ApiError(res.status, text || `HTTP ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -67,6 +77,13 @@ export interface ExampleComparison {
   barcode: string; name: string; brand?: string; unit_of_measure?: string;
   cheapest_price: number | string; cheapest_chain: string;
   priciest_price: number | string; priciest_chain: string; stores_count: number;
+}
+
+/** The city nearest to a position, answered by our own server from the stores we hold. The position is
+ *  rounded to ~1 km before it leaves the phone; nothing is sent to a third party. */
+export async function fetchNearestCity(lat: number, lng: number): Promise<string> {
+  const r = await request<{ city: string | null }>(`/api/v1/location/city?lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}`);
+  return r.city ?? '';
 }
 
 export function fetchChains(): Promise<{ name: string; stores: number }[]> {

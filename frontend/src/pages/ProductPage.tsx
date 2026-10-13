@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
+import { money, safeHttpUrl } from '../lib/safe';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { cityName, isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
@@ -18,7 +20,7 @@ import { LocationPrompt } from '../components/LocationPrompt';
 
 const NEARBY_KM = 15;
 
-function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
+function fmt(p: number | string) { return money(p); }
 
 // Great-circle distance between two lat/lng points, in km.
 function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -104,14 +106,25 @@ export function ProductPage() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [barcode]);
 
+  useDocumentTitle(data ? `${data.product.name} — השוואת מחירים | סלי` : null);
+
+  // Loads (or reloads) the product. `isCurrent` lets a slow answer for a product the user already left
+  // be dropped instead of overwriting the page.
+  const load = useCallback((code: string, isCurrent: () => boolean) => {
+    setLoading(true); setError(null);
+    compareProduct(code)
+      .then(result => { if (isCurrent()) setData(result); })
+      .catch(() => { if (isCurrent()) setError('לא הצלחנו לטעון את המוצר כרגע. נסי שוב בעוד רגע.'); })
+      .finally(() => { if (isCurrent()) setLoading(false); });
+  }, []);
+
   useEffect(() => {
     if (!barcode) return;
-    setLoading(true); setError(null);
-    compareProduct(barcode)
-      .then(setData)
-      .catch(() => setError('לא הצלחנו לטעון. תנסה שוב?'))
-      .finally(() => setLoading(false));
-  }, [barcode]);
+    let current = true;
+    setData(null); setQty(1); setExpandedRow(null);      // never show the previous product while this one loads
+    load(barcode, () => current);
+    return () => { current = false; };
+  }, [barcode, load]);
 
   useEffect(() => {
     const ex = items.find(i => i.barcode === barcode);
@@ -169,8 +182,12 @@ export function ProductPage() {
     if (!myCoords) handleGps();
   }
 
-  const savings     = data ? Number(data.most_expensive_price) - Number(data.cheapest_price) : 0;
-  const savingsPct  = data ? Math.round((savings / Number(data.most_expensive_price)) * 100) : 0;
+  // The headline numbers describe the stores listed below (rows without a store name are not listed).
+  const listedPrices = namedPrices.map(row => Number(row.price)).filter(Number.isFinite);
+  const headlineMin = listedPrices.length ? Math.min(...listedPrices) : Number(data?.cheapest_price ?? 0);
+  const headlineMax = listedPrices.length ? Math.max(...listedPrices) : Number(data?.most_expensive_price ?? 0);
+  const savings     = data ? headlineMax - headlineMin : 0;
+  const savingsPct  = data && headlineMax > 0 ? Math.round((savings / headlineMax) * 100) : 0;
 
   return (
     <div className="page-wrapper">
@@ -180,7 +197,7 @@ export function ProductPage() {
       <div className="container" style={{ paddingBottom: data ? 96 : 0 }}>
 
         {/* Back */}
-        <button className="page-back" onClick={() => navigate(-1)}>
+        <button className="page-back" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}>
           <ArrowRight size={18} strokeWidth={2} />
           חזרה לתוצאות
         </button>
@@ -203,7 +220,7 @@ export function ProductPage() {
           <div className="empty-state">
             <div className="empty-state-title">שגיאה בטעינה</div>
             <div className="empty-state-desc">{error}</div>
-            <button className="btn btn-secondary btn-sm" onClick={() => barcode && void compareProduct(barcode).then(setData)}>
+            <button className="btn btn-secondary btn-sm" onClick={() => barcode && load(barcode, () => true)}>
               נסה שוב
             </button>
           </div>
@@ -237,11 +254,11 @@ export function ProductPage() {
               {/* One headline price; the range and savings are supporting detail */}
               <div className="product-hero-price-row">
                 <span className="product-hero-price-from">מ־</span>
-                <span className="product-hero-price-min tabular">{fmt(data.cheapest_price)}</span>
+                <span className="product-hero-price-min tabular">{fmt(headlineMin)}</span>
               </div>
-              {data.price_difference > 0.01 && (
+              {savings > 0.01 && (
                 <div className="product-hero-range">
-                  טווח מחירים <bdi dir="ltr">{fmt(data.cheapest_price)} – {fmt(data.most_expensive_price)}</bdi> · {data.prices.length} חנויות
+                  טווח מחירים <bdi dir="ltr">{fmt(headlineMin)} – {fmt(headlineMax)}</bdi> · {namedPrices.length} חנויות
                 </div>
               )}
               {savings > 0.01 && (
@@ -362,8 +379,8 @@ export function ProductPage() {
                         Maps
                       </a>
                       </>)}
-                      {row.delivery_url && (
-                        <a href={row.delivery_url} target="_blank" rel="noopener noreferrer" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
+                      {safeHttpUrl(row.delivery_url) && (
+                        <a href={safeHttpUrl(row.delivery_url) as string} target="_blank" rel="noopener noreferrer" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
                           <Truck size={12} strokeWidth={2} />
                           משלוח
                           <ExternalLink size={10} strokeWidth={2} />
