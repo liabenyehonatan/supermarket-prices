@@ -4,12 +4,13 @@ import logging
 import time
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import Field
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, func, and_, or_, text
+from sqlalchemy import select, func, and_, or_, text, literal, update
 from sqlalchemy import column as sa_column, table as sa_table
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -43,6 +44,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1")
 
 
+# Barcodes shorter than this are a chain's own item numbers (the same number is a different product at
+# another chain), so they are never compared across chains.
+MIN_BARCODE_LEN = 7
+MAX_SEARCH_WORDS = 6
+
+
+def _real_barcode():
+    return func.length(Product.barcode) >= MIN_BARCODE_LEN
+
+
+def _not_wholesale():
+    """Wholesale stores are not for shoppers. A store without a name is kept (it is not wholesale)."""
+    return or_(Store.name.is_(None), ~Store.name.ilike("%סיטונ%"))
+
+
 # ─── Endpoint 1: Search Products ─────────────────────────────────────────────
 
 @router.get(
@@ -53,9 +69,9 @@ router = APIRouter(prefix="/api/v1")
 async def search_products(
     # Query parameters — these come from the URL like:
     # /products/search?q=טבסקו&limit=10
-    q: str = Query(..., min_length=1, description="Product name or barcode to search for"),
+    q: str = Query(..., min_length=1, max_length=100, description="Product name or barcode to search for"),
     limit: int = Query(20, ge=1, le=100, description="Max results to return"),
-    offset: int = Query(0, ge=0, description="Number of results to skip (for paging)"),
+    offset: int = Query(0, ge=0, le=10000, description="Number of results to skip (for paging)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -79,7 +95,7 @@ async def search_products(
 
     if is_barcode:
         result = await db.execute(
-            select(Product).where(Product.barcode == q.strip()).limit(limit)
+            select(Product).where(Product.barcode == q.strip(), _real_barcode()).limit(limit)
         )
         products = result.scalars().all()
     else:
@@ -87,7 +103,8 @@ async def search_products(
         # Any word may match (like Shufersal's own search), in any order.
         # Ranking: names that contain more of the query's words come first,
         # then names starting with the full query, then popularity.
-        words = q.split()
+        # A bounded number of meaningful words: thousands of one-letter terms would scan every product.
+        words = [w for w in q.split() if len(w) >= 2][:MAX_SEARCH_WORDS]
         if not words:
             return []
         word_hits = [
@@ -99,7 +116,7 @@ async def search_products(
         exact_q = (
             select(Product, func.coalesce(store_count_sq.c.store_count, 0).label("sc"))
             .outerjoin(store_count_sq, Product.id == store_count_sq.c.product_id)
-            .where(or_(*[Product.name.icontains(w, autoescape=True) for w in words]))
+            .where(or_(*[Product.name.icontains(w, autoescape=True) for w in words]), _real_barcode())
             .order_by(
                 words_matched.desc(),
                 prefix_bonus.desc(),
@@ -115,12 +132,15 @@ async def search_products(
 
         if not products and offset == 0:
             # Fuzzy fallback (first page only — later pages would just append noise) via pg_trgm — handles typos like "גבימה" → "גבינה"
+            # `<%` can use the trigram index (word_similarity(...) > x cannot and scanned every product);
+            # the threshold is set for this transaction only.
+            await db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
             fuzzy_q = (
                 select(Product, func.coalesce(store_count_sq.c.store_count, 0).label("sc"))
                 .outerjoin(store_count_sq, Product.id == store_count_sq.c.product_id)
-                .where(func.word_similarity(q, Product.name) > 0.2)
+                .where(literal(" ".join(words)).op("<%")(Product.name), _real_barcode())
                 .order_by(
-                    func.word_similarity(q, Product.name).desc(),
+                    func.word_similarity(" ".join(words), Product.name).desc(),
                     func.coalesce(store_count_sq.c.store_count, 0).desc(),
                     Product.id,
                 )
@@ -154,7 +174,7 @@ async def compare_product_prices(
 
     # Step 1: Find the product
     result = await db.execute(
-        select(Product).where(Product.barcode == barcode)
+        select(Product).where(Product.barcode == barcode, _real_barcode())
     )
     product = result.scalar_one_or_none()
 
@@ -174,7 +194,7 @@ async def compare_product_prices(
             Price.product_id == product.id,
             Price.is_current == True,
             Price.price > 0,  # a 0 price means "none", never the cheapest
-            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores
+            _not_wholesale(),  # exclude wholesale stores
         )
         .order_by(Price.price.asc())  # Cheapest first
     )
@@ -250,9 +270,10 @@ async def cheapest_prices_batch(
         .join(Store, Price.store_id == Store.id)
         .where(
             Product.barcode.in_(barcodes),
+            _real_barcode(),
             Price.is_current == True,
             Price.price > 0,  # a 0 price means "none", never the cheapest
-            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores, same as /compare
+            _not_wholesale(),  # exclude wholesale stores, same as /compare
         )
         .group_by(Product.barcode)
     )
@@ -285,11 +306,12 @@ async def unit_prices_batch(
         .join(Store, Price.store_id == Store.id)
         .where(
             Product.barcode.in_(barcodes),
+            _real_barcode(),
             Price.is_current == True,
             Price.price > 0,  # a 0 price means "none", never the cheapest
             Price.unit_price.isnot(None),
             Price.unit_price > 0,
-            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores, same as /compare
+            _not_wholesale(),  # exclude wholesale stores, same as /compare
         )
         .group_by(Product.barcode, Product.unit_of_measure)
     )
@@ -500,19 +522,21 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
 
     # A recent miss is not looked up again on every view.
     recently_missed = bool(
-        product and product.image_checked_at
+        product.image_checked_at
         and product.image_checked_at > datetime.utcnow() - timedelta(days=IMAGE_RECHECK_DAYS)
     )
     if not recently_missed:
+        product_id, product_name = product.id, product.name
+        # Give the connection back before the slow call to Shufersal (up to ~16 s): holding it here let a
+        # trickle of requests use up the whole pool.
+        await db.rollback()
         try:
-            image_url = await _lookup_image_url(barcode, product.name)
+            image_url = await _lookup_image_url(barcode, product_name)
         except ImageLookupError:
             # Shufersal could not be asked: say nothing about the picture and do not cache it.
             raise HTTPException(status_code=404, detail="No image found", headers={"Cache-Control": "no-store"})
-        if image_url:
-            product.image_url = image_url
-        else:
-            product.image_checked_at = datetime.utcnow()
+        values = {"image_url": image_url} if image_url else {"image_checked_at": datetime.utcnow()}
+        await db.execute(update(Product).where(Product.id == product_id).values(**values))
         await db.commit()
         if image_url:
             return RedirectResponse(image_url, status_code=302, headers=_IMAGE_HIT_HEADERS)
@@ -528,9 +552,9 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
     summary="Compare total basket price across all stores",
 )
 async def compare_basket(
-    items: List[BasketItem],
-    city: Optional[str] = Query(None, description="Only stores whose city contains this text"),
-    chain: Optional[str] = Query(None, description="Only stores of this chain (exact name)"),
+    items: Annotated[List[BasketItem], Field(max_length=100)],     # a real basket is a few dozen at most
+    city: Optional[str] = Query(None, max_length=60, description="Only stores whose city contains this text"),
+    chain: Optional[str] = Query(None, max_length=60, description="Only stores of this chain (exact name)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -553,12 +577,16 @@ async def compare_basket(
         raise HTTPException(status_code=400, detail="Basket cannot be empty")
 
     # Step 1: Get all barcodes from the basket
-    barcodes = [item.barcode for item in items]
-    quantity_map = {item.barcode: item.quantity for item in items}
+    # The same product listed twice counts once with the quantities added (otherwise it would look
+    # "missing" at every store).
+    quantity_map: dict[str, int] = {}
+    for item in items:
+        quantity_map[item.barcode] = min(99, quantity_map.get(item.barcode, 0) + item.quantity)
+    barcodes = list(quantity_map)
 
     # Step 2: Find all products in the basket
     products_result = await db.execute(
-        select(Product).where(Product.barcode.in_(barcodes))
+        select(Product).where(Product.barcode.in_(barcodes), _real_barcode())
     )
     products = {p.barcode: p for p in products_result.scalars().all()}
 
@@ -571,9 +599,10 @@ async def compare_basket(
         .join(Chain, Store.chain_id == Chain.id)
         .where(
             Product.barcode.in_(barcodes),
+            _real_barcode(),
             Price.is_current == True,
             Price.price > 0,  # a 0 price means "none", never the cheapest
-            ~Store.name.ilike("%סיטונ%"),  # exclude wholesale stores
+            _not_wholesale(),  # exclude wholesale stores
         )
     )
     if city and city.strip():

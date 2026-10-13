@@ -3,6 +3,8 @@ import { useDocumentTitle } from '../lib/useDocumentTitle';
 const SCRAPER_REPO = 'https://github.com/OpenIsraeliSupermarkets/israeli-supermarket-scarpers';
 const PARSER_REPO = 'https://github.com/OpenIsraeliSupermarkets/israeli-supermarket-parsers';
 const FEEDBACK = 'https://github.com/liabenyehonatan/supermarket-prices/issues';
+// The address is put together here rather than written out, so simple scrapers do not harvest it.
+const MAIL = ['liabenyehonatan', 'gmail.com'].join('@');
 
 /** About, disclaimer, privacy and credits: the "small print" a public price site needs. */
 export function AboutPage() {
@@ -48,10 +50,12 @@ export function AboutPage() {
           תמונות המוצרים מגיעות מהקטלוג הציבורי של שופרסל אונליין, והלוגואים שייכים לרשתות. כולם שייכים לבעליהם.
         </p>
 
-        <h2>דיווח על שגיאה</h2>
+        <h2>פניות ודיווח על שגיאה</h2>
         <p>
-          מצאת מחיר שגוי או תקלה? אפשר לדווח{' '}
-          <a href={FEEDBACK} target="_blank" rel="noopener noreferrer">כאן</a>.
+          מצאת מחיר שגוי או תקלה, או שיש לך שאלה? אפשר לכתוב אלינו:{' '}
+          <a href={`mailto:${MAIL}`} dir="ltr">{MAIL}</a>
+          {' '}או לדווח{' '}
+          <a href={FEEDBACK} target="_blank" rel="noopener noreferrer">באתר הפרויקט</a>.
         </p>
       </div>
     </div>
