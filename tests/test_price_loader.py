@@ -200,3 +200,13 @@ async def test_last_full_at_is_not_set_for_partial_files_or_truncated_full_files
     stats = await load(session, store, [item("0", "5.00")], full=True)
     assert stats.full_close_skipped
     assert (await session.execute(select(Store.last_full_at).where(Store.id == store.id))).scalar_one() is None
+
+
+def test_hot_queries_use_a_predicate_the_partial_indexes_can_match():
+    """`is_current IS TRUE` cannot use the partial indexes (WHERE is_current): the loader's per-chunk
+    lookup then scanned all 11.6M price rows (3 s instead of 1 ms) and kept the database saturated."""
+    from pathlib import Path
+
+    for name in ("app/parser/price_loader.py", "app/api/routes.py"):
+        text = (Path(__file__).resolve().parent.parent / name).read_text()
+        assert "is_current.is_(True)" not in text, f"{name}: use `Price.is_current` or `== True`"

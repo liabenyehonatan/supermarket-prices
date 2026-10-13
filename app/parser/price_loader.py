@@ -180,7 +180,7 @@ async def _apply_chunk(
             Price.price_updated_at,
         ).where(
             Price.store_id == store.id,
-            Price.is_current.is_(True),
+            Price.is_current,
             Price.product_id.in_(list(product_ids.values())),
         )
     )
@@ -242,7 +242,7 @@ async def _close_missing(session: AsyncSession, store: Store, stats: LoadStats) 
     """After a PriceFull file: close current prices the chain no longer lists."""
     current = (await session.execute(
         select(Price.id, Price.product_id).where(
-            Price.store_id == store.id, Price.is_current.is_(True)
+            Price.store_id == store.id, Price.is_current
         )
     )).all()
     if not current:
