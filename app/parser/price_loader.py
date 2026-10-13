@@ -294,6 +294,7 @@ async def load_price_rows(
     if is_full and stats.valid > 0:
         await _close_missing(session, store, stats)
         if not stats.full_close_skipped:
-            # A complete file: everything it lists (and nothing else) is current as of now.
+            # A complete file: everything it lists (and nothing else) is current as of now. (Wall-clock
+            # time, not the file's date: re-loading an old file by hand would also stamp 'now'.)
             await session.execute(update(Store).where(Store.id == store.id).values(last_full_at=func.now()))
     return stats
