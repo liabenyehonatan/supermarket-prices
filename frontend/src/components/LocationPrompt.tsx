@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, MapPinOff, X } from 'lucide-react';
 import { fetchCities } from '../api/client';
 import { CityPicker } from './CityPicker';
@@ -20,6 +21,10 @@ const COPY: Record<LocationProblem, { title: string; body: string }> = {
   timeout: {
     title: 'איתור המיקום לקח יותר מדי זמן',
     body: 'אפשר לבחור עיר ידנית או לנסות שוב.',
+  },
+  insecure: {
+    title: 'איתור מיקום דורש חיבור מאובטח',
+    body: 'הדפדפן נותן את המיקום רק לאתרים מאובטחים (https), והאתר עדיין לא כזה. בינתיים אפשר לבחור עיר ידנית.',
   },
   unsupported: {
     title: 'המכשיר לא תומך באיתור מיקום',
@@ -56,7 +61,8 @@ export function LocationPrompt({ problem, onRetry, onConfirm, onPickCity, sugges
   const isAsk = problem === 'ask';
   const suggestion = suggestedCity && cities.includes(suggestedCity) ? suggestedCity : '';
 
-  return (
+  // In the page body, above any sheet that is open (the filter sheet is a portal too and used to cover this).
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-card"
@@ -90,6 +96,7 @@ export function LocationPrompt({ problem, onRetry, onConfirm, onPickCity, sugges
           <button className="btn btn-secondary btn-full" onClick={onClose}>{isAsk ? 'לא עכשיו' : 'סגור'}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
