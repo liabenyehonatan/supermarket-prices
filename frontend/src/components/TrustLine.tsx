@@ -25,14 +25,12 @@ export function TrustLine() {
   useEffect(() => { fetchStats().then(setStats).catch(() => {}); }, []);
 
   // Only brag about what looks good: freshness when it is recent, the chain count when there are several
-  const ageDays = stats?.last_updated ? (Date.now() - new Date(stats.last_updated).getTime()) / 86400000 : Infinity;
-  const parts = stats
-    ? [
-        ageDays <= 3 ? whenUpdated(stats.last_updated as string) : '',
-        stats.chains > 1 ? `${stats.chains} רשתות` : '',
-        `${compactCount(stats.products)} מוצרים`,
-      ].filter(Boolean)
-    : ['מחירים מעודכנים מכל הרשתות'];
+  if (!stats) return null;                 // no data from the server: do not promise anything
+  const parts = [
+    stats.last_updated ? whenUpdated(stats.last_updated) : '',   // also when it is old: do not hide staleness
+    stats.chains > 1 ? `${stats.chains} רשתות` : '',
+    `${compactCount(stats.products)} מוצרים`,
+  ].filter(Boolean);
 
   return (
     <p className="trust-line">
