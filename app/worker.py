@@ -332,6 +332,16 @@ async def serve() -> None:
         logger.warning("could not read data age (%s); running now", exc)
         age = None
     run_now = age is None or age > longest_gap_hours() + 1
+    if run_now:
+        # A crash-looping container must not re-scrape every chain on every restart: if a cycle was
+        # started in the last 2 hours (whatever its outcome), wait for the schedule instead.
+        try:
+            since = await runs.hours_since_last_cycle_started()
+        except Exception:
+            since = None
+        if since is not None and since < 2:
+            logger.warning("A cycle started %.1f h ago; not starting another one at boot", since)
+            run_now = False
     retries = 0
 
     while not STOP.is_set():
