@@ -121,4 +121,8 @@ GEOCODE_MINUTES = _float("GEOCODE_MINUTES", 10)
 
 # ── Monitoring ────────────────────────────────────────────────────────────────
 # Healthchecks.io-style URL: GET <url>/start, <url>, <url>/fail.
+# A chain with no full price file loaded for this many days is reported (a few days: chains skip holidays).
+STALE_CHAIN_DAYS = _float("STALE_CHAIN_DAYS", 5)
 HEALTHCHECK_URL = _env("HEALTHCHECK_URL") or None
+# Optional 4th healthchecks.io check: pinged after each cycle, /fail with the list when a chain looks dead.
+HEALTHCHECK_CHAINS_URL = _env("HEALTHCHECK_CHAINS_URL") or None
