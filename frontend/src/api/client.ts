@@ -117,6 +117,7 @@ export function compareBasket(
   const params = new URLSearchParams();
   if (filters.city?.trim()) params.set('city', filters.city.trim());
   if (filters.chain?.trim()) params.set('chain', filters.chain.trim());
+  params.set('limit', '100');          // the best 100 stores are plenty to show; the full list is ~1.3 MB
   const qs = params.toString();
   return request<BasketCompareResponse>(`/api/v1/basket/compare${qs ? `?${qs}` : ''}`, {
     method: 'POST',

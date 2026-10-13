@@ -72,6 +72,9 @@ export interface BasketCompareResponse {
   total_items_requested: number;
   cheapest_store: string;
   max_savings: number;
+  /** All matching stores (the list above is cut to the best N) and the highest total among complete baskets. */
+  total_stores?: number;
+  max_total?: number | string;
 }
 
 export interface LocalBasketItem {

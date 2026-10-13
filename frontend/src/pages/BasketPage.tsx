@@ -307,9 +307,13 @@ export function BasketPage() {
   const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity);
 
   const completeStores = results ? results.stores.filter(s => s.items_missing === 0) : [];
-  const maxTotal = completeStores.length >= 2
-    ? Math.max(...completeStores.map(s => s.total_price))
-    : results && results.stores.length ? Math.max(...results.stores.map(s => s.total_price)) : 0;
+  // Savings are measured against the most expensive complete basket among ALL stores (the server sends it,
+  // since the list here only holds the best ones).
+  const maxTotal = results?.max_total != null
+    ? Number(results.max_total)
+    : completeStores.length >= 2
+      ? Math.max(...completeStores.map(s => Number(s.total_price)))
+      : results && results.stores.length ? Math.max(...results.stores.map(s => Number(s.total_price))) : 0;
   const minTotal = results && results.stores.length > 0 ? results.stores[0].total_price : 0;
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
 
@@ -567,7 +571,7 @@ export function BasketPage() {
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TrendingUp size={20} strokeWidth={2} color="var(--green-600)" />
-                  {results.stores.length} סניפים · ממוין מהזול ליקר
+                  {results.total_stores ?? results.stores.length} סניפים · ממוין מהזול ליקר{results.total_stores != null && results.total_stores > results.stores.length ? ` (מוצגים ${results.stores.length} הזולים)` : ''}
                 </div>
                 <div className="section-subtitle">
                   עבור {results.total_items_requested} מוצרים בסל
