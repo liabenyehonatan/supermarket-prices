@@ -184,3 +184,19 @@ def test_normalize_row_uses_fallback_timestamp_and_quantises():
     assert rec.updated_at == T0
     assert rec.price == Decimal("1.01")
     assert isinstance(rec.price, Decimal)
+
+
+async def test_last_full_at_is_not_set_for_partial_files_or_truncated_full_files(session, store):
+    # a delta (non-full) file never confirms the whole store
+    await load(session, store, [item("111", "5.00")], full=False)
+    assert (await session.execute(select(Store.last_full_at).where(Store.id == store.id))).scalar_one() is None
+
+    # a full file that lists under half of what we hold is treated as truncated: not a confirmation
+    await load(session, store, [item(str(i), "5.00") for i in range(10)], full=True)
+    stamp = (await session.execute(select(Store.last_full_at).where(Store.id == store.id))).scalar_one()
+    assert stamp is not None
+    await session.execute(update(Store).where(Store.id == store.id).values(last_full_at=None))
+    await session.commit()
+    stats = await load(session, store, [item("0", "5.00")], full=True)
+    assert stats.full_close_skipped
+    assert (await session.execute(select(Store.last_full_at).where(Store.id == store.id))).scalar_one() is None
