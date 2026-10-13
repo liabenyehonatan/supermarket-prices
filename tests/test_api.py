@@ -397,3 +397,4 @@ async def test_basket_limit_keeps_the_best_stores_and_reports_the_totals(client,
     assert full["stores"][-1]["items_missing"] == 1                      # the incomplete store comes last
     assert float(full["stores"][0]["total_price"]) == 21.0               # 10*2 + 1
     assert float(full["max_total"]) == 30.0 == float(cut["max_total"])   # most expensive COMPLETE basket: s3 = 13*2 + 4
+    assert [i["barcode"] for i in full["stores"][0]["item_prices"]] == ["7290000000201", "7290000000202"]   # basket order
