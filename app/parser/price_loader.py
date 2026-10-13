@@ -11,15 +11,16 @@
 #      ones (first-seen name wins, race-safe)
 #   3. one query for the store's current prices of those products
 #   4. decide in Python: new / changed / unchanged / older-than-what-we-hold
-#   5. at most one UPDATE (close old rows), one INSERT (new rows), one UPDATE
-#      (touch scraped_at)
+#   5. at most one UPDATE (close old rows) and one INSERT (new rows). Unchanged
+#      prices are NOT written: the store's last_full_at records that its full
+#      file confirmed them (rewriting 11 million rows a day kept the DB saturated)
 #
 # Money is Decimal end to end and quantised to the column's 2 places before it
 # is compared, so "12.345" never looks like a change against a stored 12.35.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import AsyncIterator, Optional
 
@@ -120,7 +121,6 @@ class LoadStats:
     inserted: int = 0          # first price we hold for (store, product)
     changed: int = 0           # price differs: old row closed, new row inserted
     unchanged: int = 0
-    touched: int = 0           # unchanged rows whose scraped_at was refreshed
     stale_ignored: int = 0     # file held an older price than the DB already has
     closed_missing: int = 0    # current prices a full file no longer lists
     full_close_skipped: bool = False
@@ -172,14 +172,12 @@ async def _apply_chunk(
 ) -> None:
     product_ids = await _resolve_products(session, records)
 
-    touch_after = timedelta(hours=settings.TOUCH_INTERVAL_HOURS)
     existing_rows = await session.execute(
         select(
             Price.id,
             Price.product_id,
             Price.price,
             Price.price_updated_at,
-            (func.now() - Price.scraped_at > touch_after).label("needs_touch"),
         ).where(
             Price.store_id == store.id,
             Price.is_current.is_(True),
@@ -190,7 +188,6 @@ async def _apply_chunk(
 
     to_close: list[int] = []
     to_insert: list[dict] = []
-    to_touch: list[int] = []
 
     for rec in records:
         pid = product_ids.get(rec.barcode)
@@ -220,8 +217,6 @@ async def _apply_chunk(
             stats.changed += 1
         else:
             stats.unchanged += 1
-            if current.needs_touch:
-                to_touch.append(current.id)
 
     # Order matters: close the old rows before inserting their replacements, or
     # the "one current row per (store, product)" unique index rejects the insert.
@@ -231,11 +226,6 @@ async def _apply_chunk(
         )
     if to_insert:
         await session.execute(insert(Price), to_insert)
-    if to_touch:
-        await session.execute(
-            update(Price).where(Price.id.in_(to_touch)).values(scraped_at=func.now())
-        )
-        stats.touched += len(to_touch)
 
 
 def _dedupe(records: list[PriceRecord]) -> list[PriceRecord]:
@@ -303,4 +293,7 @@ async def load_price_rows(
 
     if is_full and stats.valid > 0:
         await _close_missing(session, store, stats)
+        if not stats.full_close_skipped:
+            # A complete file: everything it lists (and nothing else) is current as of now.
+            await session.execute(update(Store).where(Store.id == store.id).values(last_full_at=func.now()))
     return stats

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import Price, Product
+from app.db.models import Price, Product, Store
 from app.parser.price_loader import load_price_rows, normalize_row
 
 T0 = datetime(2026, 5, 1, 10, 0)
@@ -77,18 +77,21 @@ async def test_unchanged_price_writes_nothing_new(session, store):
     assert len(await current(session, store)) == 1
 
 
-async def test_unchanged_price_touch_is_throttled(session, store):
-    await load(session, store, [item("111", "5.00")])
+async def test_unchanged_prices_are_never_rewritten_but_the_store_records_the_full_file(session, store):
+    await load(session, store, [item("111", "5.00")], full=True)
     first_seen = (await session.execute(select(Price.scraped_at))).scalar_one()
-
-    stats = await load(session, store, [item("111", "5.00")])
-    assert stats.touched == 0  # seen again moments later: no write
-    assert (await session.execute(select(Price.scraped_at))).scalar_one() == first_seen
+    first_full = (await session.execute(select(Store.last_full_at).where(Store.id == store.id))).scalar_one()
+    assert first_full is not None
 
     await session.execute(update(Price).values(scraped_at=func.now() - timedelta(hours=30)))
     await session.commit()
-    stats = await load(session, store, [item("111", "5.00")])
-    assert stats.touched == 1  # older than the touch interval: refreshed once
+    stale_stamp = (await session.execute(select(Price.scraped_at))).scalar_one()
+
+    stats = await load(session, store, [item("111", "5.00")], full=True)
+    assert (stats.unchanged, stats.changed, stats.inserted) == (1, 0, 0)
+    # the price row was not touched (still the old stamp), the store's confirmation moved forward
+    assert (await session.execute(select(Price.scraped_at))).scalar_one() == stale_stamp
+    assert (await session.execute(select(Store.last_full_at).where(Store.id == store.id))).scalar_one() > first_full
 
 
 async def test_older_file_never_overwrites_newer_price(session, store):
