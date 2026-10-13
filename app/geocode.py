@@ -4,6 +4,7 @@
 # allows about one request per second with an identifying User-Agent, fine for a few thousand stores).
 # The price files give no coordinates, so "near me" and distances depend on this.
 
+import math
 import re
 from typing import Optional
 
@@ -26,6 +27,16 @@ class GeocodeError(Exception):
     def __init__(self, message: str, retryable: bool = True):
         super().__init__(message)
         self.retryable = retryable
+
+
+MAX_KM_FROM_CITY = 30
+_city_centres: dict[str, Optional[tuple[float, float]]] = {}
+
+
+def _km(a: tuple[float, float], b: tuple[float, float]) -> float:
+    (lat1, lng1), (lat2, lng2) = a, b
+    x = math.radians(lng2 - lng1) * math.cos(math.radians((lat1 + lat2) / 2))
+    return 6371 * math.hypot(x, math.radians(lat2 - lat1))
 
 
 def _inside_israel(lat: float, lng: float) -> bool:
@@ -75,6 +86,17 @@ async def geocode(client: httpx.AsyncClient, address: Optional[str], city: Optio
     """(lat, lng, 'address'|'city') or None. `sleep` is awaited between requests (rate limit)."""
     address = (address or "").strip()
     city = (city or "").strip()
+    if city and city not in _city_centres:
+        _city_centres[city] = await _search(client, city=city)
+        await sleep()
+
+    def plausible(hit: Optional[tuple[float, float]]) -> Optional[tuple[float, float]]:
+        """A street of the same name in another town is the usual wrong match: reject it."""
+        centre = _city_centres.get(city) if city else None
+        if hit and centre and _km(hit, centre) > MAX_KM_FROM_CITY:
+            return None
+        return hit
+
     if (not address or JUNK_ADDRESS.match(address)) and not city:
         tail = address_in_name(name)
         if tail:
@@ -83,27 +105,32 @@ async def geocode(client: httpx.AsyncClient, address: Optional[str], city: Optio
             if hit:
                 return hit[0], hit[1], "address"
     if address and not JUNK_ADDRESS.match(address) and city:
-        hit = await _search(client, street=address, city=city)
+        hit = plausible(await _search(client, street=address, city=city))
         await sleep()
         if hit is None:
-            hit = await _search(client, q=f"{address}, {city}")
+            hit = plausible(await _search(client, q=f"{address}, {city}"))
             await sleep()
         if hit is None:
             # "הסנה 15 א תעשיה": keep the street and number, drop trailing words that confuse the search
             short = re.match(r"^(\D+?\s\d+)", address)
             if short and short.group(1) != address:
-                hit = await _search(client, street=short.group(1), city=city)
+                hit = plausible(await _search(client, street=short.group(1), city=city))
                 await sleep()
         if hit:
             return hit[0], hit[1], "address"
-    elif address and not JUNK_ADDRESS.match(address):
-        hit = await _search(client, q=address)      # no city on record: let the search work it out
+    elif address and not JUNK_ADDRESS.match(address) and name:
+        # No city on record. A bare street ("צה\"ל 34") matches the wrong town, but the store name
+        # usually carries the town ("חדרה חדש", "נתניה", "ירושלים תלפיות"): search with both.
+        hit = await _search(client, q=f"{address}, {expand_abbreviations(name)}")
         await sleep()
         if hit:
             return hit[0], hit[1], "address"
-    if city:
-        hit = await _search(client, city=city)
-        await sleep()
-        if hit:
-            return hit[0], hit[1], "city"
+        # Street not found: at least put the store in the town its name mentions ("פרדס חנה", "חדרה חדש").
+        for place in dict.fromkeys([expand_abbreviations(name), " ".join(expand_abbreviations(name).split()[:2])]):
+            hit = await _search(client, q=place)
+            await sleep()
+            if hit:
+                return hit[0], hit[1], "city"
+    if city and _city_centres.get(city):
+        return _city_centres[city][0], _city_centres[city][1], "city"
     return None
