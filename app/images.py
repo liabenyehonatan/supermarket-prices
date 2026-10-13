@@ -5,6 +5,8 @@
 
 from typing import Optional
 
+from urllib.parse import urlparse
+
 import httpx
 
 SHUFERSAL_SEARCH = "https://www.shufersal.co.il/online/he/search/results"
@@ -16,6 +18,19 @@ def _names_similar(our_name: str, their_name: str) -> bool:
     if not our_words:
         return False
     return len(our_words & their_words) / len(our_words) >= 0.6
+
+
+# Pictures are only ever served from Shufersal's own image hosts (the API redirects the browser to them).
+_ALLOWED_HOST_SUFFIXES = ("cloudinary.com", "shufersal.co.il")
+
+
+def is_allowed_image_url(url: Optional[str]) -> bool:
+    try:
+        parts = urlparse(url or "")
+    except ValueError:
+        return False
+    host = (parts.hostname or "").lower()
+    return parts.scheme == "https" and any(host == h or host.endswith("." + h) for h in _ALLOWED_HOST_SUFFIXES)
 
 
 class ImageLookupError(Exception):
@@ -36,6 +51,7 @@ async def lookup_image_url(barcode: str, name: Optional[str]) -> Optional[str]:
             results = await search(barcode)
             if not results and name:
                 results = [r for r in await search(name) if _names_similar(name, r.get("name", ""))]
-        return results[0].get("baseProductImageMedium") if results else None
+        url = results[0].get("baseProductImageMedium") if results else None
+        return url if is_allowed_image_url(url) else None
     except (httpx.HTTPError, ValueError, AttributeError) as exc:
         raise ImageLookupError(str(exc)) from exc

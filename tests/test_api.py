@@ -193,3 +193,103 @@ async def test_robots_and_sitemap_use_the_address_they_are_asked_on(client):
     sitemap = await client.get("/sitemap.xml", headers={"host": "sali.example"})
     assert sitemap.status_code == 200 and "xml" in sitemap.headers["content-type"]
     assert "<loc>http://sali.example/</loc>" in sitemap.text
+
+
+async def test_timestamps_carry_a_timezone_so_browsers_do_not_misread_them(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף", last_full_at=datetime(2026, 10, 13, 6, 0))
+    product = Product(barcode="8", name="מוצר")
+    session.add_all([store, product])
+    await session.flush()
+    session.add(Price(product_id=product.id, store_id=store.id, price=5, scraped_at=datetime(2026, 10, 1),
+                      price_updated_at=datetime(2026, 1, 1, 0, 0), is_current=True))   # Israel local midnight
+    await session.commit()
+
+    row = (await client.get("/api/v1/products/8/compare")).json()["prices"][0]
+    assert row["scraped_at"] == "2026-10-13T06:00:00Z"                 # UTC, stated as such
+    assert row["price_updated_at"] == "2025-12-31T22:00:00Z"          # 00:00 in Israel (UTC+2 in January)
+    from app.api import routes
+    routes._stats_cache = None                                      # the stats answer is cached across tests
+    stats = (await client.get("/api/v1/stats")).json()
+    assert stats["last_updated"].endswith("Z")
+    routes._stats_cache = None
+
+
+async def test_examples_come_from_the_view_and_skip_placeholder_prices(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+    from app.pipeline import maintenance
+
+    chain = Chain(chain_id="1", name="רשת")
+    other = Chain(chain_id="2", name="אחרת")
+    session.add_all([chain, other])
+    await session.flush()
+    stores = [Store(chain_id=(chain if i % 2 else other).id, store_id=str(i), name=f"s{i}") for i in range(24)]
+    good = Product(barcode="7290000000011", name="גבינה לבנה", image_url="https://res.cloudinary.com/x.png")
+    coupon = Product(barcode="7290000000022", name="קופון", image_url="https://res.cloudinary.com/y.png")
+    internal = Product(barcode="12345", name="קוד פנימי", image_url="https://res.cloudinary.com/z.png")
+    session.add_all(stores + [good, coupon, internal])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    for i, st in enumerate(stores):
+        session.add(Price(product_id=good.id, store_id=st.id, price=5 + (i % 4), price_updated_at=now, is_current=True))
+        session.add(Price(product_id=coupon.id, store_id=st.id, price=0.01 if i == 0 else 90, price_updated_at=now, is_current=True))
+        session.add(Price(product_id=internal.id, store_id=st.id, price=5 + (i % 4), price_updated_at=now, is_current=True))
+    await session.commit()
+    await maintenance.refresh_popularity()
+
+    from app.api import routes
+    routes._examples_cache = None
+    r = await client.get("/api/v1/products/examples?limit=6")
+    assert [e["barcode"] for e in r.json()] == ["7290000000011"]       # not the 0.01-vs-90 coupon, not the short code
+    routes._examples_cache = None
+
+
+async def test_nearest_city_comes_from_our_own_stores(client, session):
+    from app.db.models import Chain, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    session.add_all([
+        Store(chain_id=chain.id, store_id="1", name="a", city="חיפה", latitude=32.80, longitude=34.99),
+        Store(chain_id=chain.id, store_id="2", name="b", city="אילת", latitude=29.55, longitude=34.95),
+    ])
+    await session.commit()
+    near = await client.get("/api/v1/location/city", params={"lat": 32.79, "lng": 35.0})
+    assert near.json()["city"] == "חיפה"
+    far = await client.get("/api/v1/location/city", params={"lat": 31.0, "lng": 35.0})   # nothing within 25 km
+    assert far.json() == {"city": None}
+    assert (await client.get("/api/v1/location/city", params={"lat": 48.0, "lng": 2.0})).status_code == 422
+
+
+async def test_images_only_for_known_products_and_only_from_allowed_hosts(client, session, monkeypatch):
+    from app.api import routes
+    from app.db.models import Product
+    from app.images import is_allowed_image_url
+
+    assert is_allowed_image_url("https://res.cloudinary.com/shufersal/a.png")
+    assert not is_allowed_image_url("http://res.cloudinary.com/a.png")            # not https
+    assert not is_allowed_image_url("https://evil.example/a.png")
+    assert not is_allowed_image_url("https://cloudinary.com.evil.example/a.png")
+    assert not is_allowed_image_url("javascript:alert(1)")
+
+    called = []
+
+    async def fake(barcode, name):
+        called.append(barcode)
+        return "https://res.cloudinary.com/a.png"
+
+    monkeypatch.setattr(routes, "_lookup_image_url", fake)
+    assert (await client.get("/api/v1/products/999999999/image")).status_code == 404
+    assert called == []                                                           # unknown barcode: no lookup
+
+    session.add(Product(barcode="5", name="x", image_url="https://evil.example/p.png"))
+    await session.commit()
+    r = await client.get("/api/v1/products/5/image", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == "https://res.cloudinary.com/a.png"   # bad stored URL replaced

@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
 from app.chains import display_chain_name, display_chain_name_sql
-from app.images import ImageLookupError
+from app.images import ImageLookupError, is_allowed_image_url
 from app.images import lookup_image_url as _lookup_image_url
 from app.db.models import Product, Price, Store, Chain
 from app.api.schemas import (
@@ -340,6 +340,34 @@ async def list_chains(db: AsyncSession = Depends(get_db)):
 
 
 @router.get(
+    "/location/city",
+    summary="The city nearest to a position, from the stores we hold (no third-party lookup)",
+)
+async def city_near(
+    lat: float = Query(..., ge=29.0, le=34.0),
+    lng: float = Query(..., ge=34.0, le=36.0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Used to suggest a city filter from the browser's position. Answers with the city of the
+    closest located store within 25 km, or null. The position is not stored or sent anywhere else."""
+    row = (await db.execute(
+        text(
+            """
+            SELECT city, sqrt(power(latitude - :lat, 2) + power((longitude - :lng) * 0.85, 2)) * 111 AS km
+              FROM stores
+             WHERE latitude IS NOT NULL AND city IS NOT NULL AND city <> '' AND city !~ '^[0-9]+$'
+             ORDER BY power(latitude - :lat, 2) + power((longitude - :lng) * 0.85, 2)
+             LIMIT 1
+            """
+        ),
+        {"lat": lat, "lng": lng},
+    )).first()
+    if row is None or row.km > 25:
+        return {"city": None}
+    return {"city": row.city, "km": round(row.km, 1)}
+
+
+@router.get(
     "/stats",
     response_model=StatsResponse,
     summary="How much data we hold and when prices were last refreshed",
@@ -381,31 +409,28 @@ async def example_comparisons(
     """
     Shows what the app does with real numbers: products sold in many stores whose
     cheapest and priciest current prices differ noticeably. "Widely stocked" stands in
-    for "popular". Cached for an hour, since the aggregate scans every current price.
+    for "popular". Cached for an hour.
     """
     global _examples_cache
     now = time.monotonic()
     if _examples_cache and now - _examples_cache[0] < _EXAMPLES_TTL_SECONDS:
         return _examples_cache[1][:limit]
 
-    candidates = (await db.execute(
-        select(
-            Price.product_id,
-            func.count().label("n"),
-            func.min(Price.price).label("lo"),
-            func.max(Price.price).label("hi"),
-        )
-        .where(Price.is_current, Price.price > 0)
-        .group_by(Price.product_id)
-        .having(func.count() >= 20)
-        .order_by(func.count().desc())
-        .limit(80)
-    )).all()
-
-    picked = [
-        c for c in candidates
-        if c.lo > 0 and (c.hi - c.lo) >= Decimal("0.50") and (c.hi - c.lo) / c.lo >= Decimal("0.10")
-    ]
+    # Straight from the precomputed view (refreshed after every cycle): widely stocked products that
+    # already have a picture. Short codes are chain-internal item numbers, and a spread above 8x is
+    # almost always a placeholder price (a coupon at 0.01), so neither makes a trustworthy example.
+    candidates = (await db.execute(text(
+        """
+        SELECT v.product_id, v.store_count AS n, v.min_price AS lo, v.max_price AS hi
+          FROM product_store_counts v JOIN products p ON p.id = v.product_id
+         WHERE v.store_count >= 20 AND p.image_url IS NOT NULL AND length(p.barcode) >= 7
+           AND v.min_price >= 0.5 AND v.max_price - v.min_price >= 0.5
+           AND v.max_price / v.min_price BETWEEN 1.1 AND 8
+         ORDER BY v.store_count DESC
+         LIMIT 80
+        """
+    ))).all()
+    picked = list(candidates)
 
     async def extreme(product_id: int, ascending: bool):
         order = Price.price.asc() if ascending else Price.price.desc()
@@ -419,9 +444,6 @@ async def example_comparisons(
         )).first()
         return row
 
-    # These cards are the first thing a visitor sees, so only products with a real picture qualify:
-    # use the stored one, or look it up once (and keep it). A cap keeps a cold start bounded.
-    lookups_left = 8
     seen_lines: set[str] = set()   # first word of the name, so three flavours of one snack don't fill the row
     results: list[ExampleComparison] = []
     for c in picked:
@@ -433,18 +455,6 @@ async def example_comparisons(
         line = (product.name.split() or [""])[0]
         if line in seen_lines:
             continue
-        if not product.image_url:
-            if lookups_left <= 0:
-                continue
-            lookups_left -= 1
-            try:
-                found = await _lookup_image_url(product.barcode, product.name)
-            except ImageLookupError:
-                found = None
-            if not found:
-                continue
-            product.image_url = found
-            await db.commit()
         cheap, pricey = await extreme(c.product_id, True), await extreme(c.product_id, False)
         if not cheap or not pricey:
             continue
@@ -481,7 +491,11 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Product).where(Product.barcode == barcode))
     product = result.scalar_one_or_none()
 
-    if product and product.image_url:
+    if product is None:
+        # Not a product we hold: no lookup (it would send an arbitrary barcode to Shufersal's site).
+        raise HTTPException(status_code=404, detail="No image found", headers=_IMAGE_MISS_HEADERS)
+
+    if product.image_url and is_allowed_image_url(product.image_url):
         return RedirectResponse(product.image_url, status_code=302, headers=_IMAGE_HIT_HEADERS)
 
     # A recent miss is not looked up again on every view.
@@ -491,16 +505,15 @@ async def get_product_image(barcode: str, db: AsyncSession = Depends(get_db)):
     )
     if not recently_missed:
         try:
-            image_url = await _lookup_image_url(barcode, product.name if product else None)
+            image_url = await _lookup_image_url(barcode, product.name)
         except ImageLookupError:
             # Shufersal could not be asked: say nothing about the picture and do not cache it.
             raise HTTPException(status_code=404, detail="No image found", headers={"Cache-Control": "no-store"})
-        if product:
-            if image_url:
-                product.image_url = image_url
-            else:
-                product.image_checked_at = datetime.utcnow()
-            await db.commit()
+        if image_url:
+            product.image_url = image_url
+        else:
+            product.image_checked_at = datetime.utcnow()
+        await db.commit()
         if image_url:
             return RedirectResponse(image_url, status_code=302, headers=_IMAGE_HIT_HEADERS)
 
