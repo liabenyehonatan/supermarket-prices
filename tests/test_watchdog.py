@@ -78,3 +78,34 @@ async def test_health_data_goes_503_when_a_chain_is_stale(client, session):
     r = await client.get("/health/data")
     assert r.status_code == 503
     assert r.json()["status"] == "chains_stale" and set(r.json()["stale_chains"]) == {"מתה", "לא נטענה"}
+
+
+async def test_clean_run_sends_a_success_ping(session, tmp_path, monkeypatch):
+    fresh = Chain(chain_id="1", name="חיה")
+    session.add(fresh)
+    await session.flush()
+    session.add(Store(chain_id=fresh.id, store_id="1", last_full_at=datetime.utcnow()))
+    await session.commit()
+    sent = []
+
+    async def fake_post(self, url, content=None, **kw):
+        sent.append(url)
+        return httpx.Response(200)
+
+    monkeypatch.setattr(settings, "HEALTHCHECK_CHAINS_URL", "https://hc.example/abc")
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    assert await watchdog.check_and_alert(tmp_path) == []
+    assert sent == ["https://hc.example/abc"]
+
+
+async def test_health_data_survives_a_failing_chain_check(client, session, monkeypatch):
+    session.add(IngestRun(phase="cycle", status="ok", finished_at=func.now()))
+    await session.commit()
+
+    async def boom(*a, **k):
+        raise RuntimeError("db slow")
+
+    monkeypatch.setattr(watchdog, "stale_chains", boom)
+    r = await client.get("/health/data")
+    assert r.status_code == 200 and r.json()["stale_chains_checked"] is False
