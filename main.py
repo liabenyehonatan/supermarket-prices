@@ -87,3 +87,31 @@ async def health_data():
         },
         status_code=200 if healthy else 503,
     )
+
+
+# ── Crawler files ─────────────────────────────────────────────────────────────
+# Built from the address the request came in on, so they are right on the IP today and on the
+# domain later without a change. nginx sends /robots.txt and /sitemap.xml here.
+
+from fastapi import Request  # noqa: E402
+from fastapi.responses import PlainTextResponse, Response  # noqa: E402
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return PlainTextResponse(f"User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: {base}/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml(request: Request):
+    base = str(request.base_url).rstrip("/")
+    # Product pages join this list once they have real addresses (today the app uses #/ routes,
+    # which search engines treat as the home page).
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"  <url><loc>{base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n"
+        "</urlset>\n"
+    )
+    return Response(body, media_type="application/xml")
