@@ -26,8 +26,9 @@ _STALE = text(
     SELECT c.name, max(s.last_full_at) AS newest
       FROM chains c LEFT JOIN stores s ON s.chain_id = c.id
      GROUP BY c.id, c.name
-    HAVING max(s.last_full_at) IS NULL
-        OR max(s.last_full_at) < now() - make_interval(days => :days)
+    HAVING count(s.id) > 0
+       AND (max(s.last_full_at) IS NULL
+            OR max(s.last_full_at) < now() - make_interval(days => :days))
      ORDER BY c.name
     """
 )
