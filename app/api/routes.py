@@ -200,7 +200,8 @@ async def compare_product_prices(
             price=price.price,
             unit_price=price.unit_price,
             price_updated_at=price.price_updated_at,
-            scraped_at=price.scraped_at,
+            # Confirmed when the store's last complete file was loaded (or when this very row was written).
+            scraped_at=max(filter(None, (price.scraped_at, store.last_full_at)), default=None),
             latitude=store.latitude,
             longitude=store.longitude,
             delivery_url=store.delivery_url,
@@ -353,7 +354,9 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     chains = (await db.execute(select(func.count(func.distinct(Store.chain_id))))).scalar_one()
     stores = (await db.execute(select(func.count(Store.id)))).scalar_one()
     products = (await db.execute(select(func.count(Product.id)))).scalar_one()
-    last_updated = (await db.execute(select(func.max(Price.scraped_at)))).scalar_one()
+    last_updated = (await db.execute(select(func.max(Store.last_full_at)))).scalar_one()
+    if last_updated is None:
+        last_updated = (await db.execute(select(func.max(Price.scraped_at)))).scalar_one()
 
     stats = StatsResponse(chains=chains, stores=stores, products=products, last_updated=last_updated)
     _stats_cache = (now, stats)
