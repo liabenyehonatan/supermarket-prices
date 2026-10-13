@@ -18,6 +18,7 @@ def _client(handler):
 
 
 async def test_address_hit_then_city_fallback_and_israel_bounds():
+    geo._city_centres.clear()
     seen = []
 
     def handler(request):
@@ -25,6 +26,8 @@ async def test_address_hit_then_city_fallback_and_israel_bounds():
         seen.append(params)
         if params.get("street") == "הרצל 1":
             return httpx.Response(200, json=[{"lat": "32.08", "lon": "34.78"}])
+        if params.get("city") == "תל אביב" and "street" not in params:
+            return httpx.Response(200, json=[{"lat": "32.07", "lon": "34.79"}])
         if params.get("city") and "street" not in params:
             return httpx.Response(200, json=[{"lat": "31.77", "lon": "35.21"}])
         if params.get("q") == "Paris":
@@ -130,3 +133,33 @@ async def test_address_is_read_from_the_name_when_the_chain_publishes_none():
     async with _client(handler) as c:
         got = await geo.geocode(c, "unknown", None, _no_sleep, name="סיטי מרקט, הרצוג 23 גבעתיים")
     assert got == (32.07, 34.81, "address") and queries[0]["q"] == "הרצוג 23 גבעתיים"
+
+
+async def test_without_a_city_the_store_name_is_used_never_the_bare_street():
+    queries = []
+
+    def handler(request):
+        queries.append(dict(request.url.params))
+        return httpx.Response(200, json=[{"lat": "32.43", "lon": "34.92"}])
+
+    async with _client(handler) as c:
+        got = await geo.geocode(c, 'צה"ל 34', None, _no_sleep, name="חדרה חדש")
+        assert got == (32.43, 34.92, "address")
+        assert queries[0]["q"] == 'צה"ל 34, חדרה חדש'
+        queries.clear()
+        assert await geo.geocode(c, 'צה"ל 34', None, _no_sleep) is None      # no city, no name: do not guess
+        assert queries == []
+
+
+async def test_a_street_match_in_another_town_is_rejected_for_the_city_centre():
+    geo._city_centres.clear()
+
+    def handler(request):
+        params = dict(request.url.params)
+        if "street" in params or "q" in params:
+            return httpx.Response(200, json=[{"lat": "31.80", "lon": "34.64"}])   # same street name, 55 km away
+        return httpx.Response(200, json=[{"lat": "31.77", "lon": "35.21"}])       # the city itself
+
+    async with _client(handler) as c:
+        got = await geo.geocode(c, "שד' משה דיין 160", "ירושלים", _no_sleep)
+    assert got == (31.77, 35.21, "city")
