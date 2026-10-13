@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { fetchNearestCity } from '../api/client';
 
-export type LocationProblem = 'denied' | 'unavailable' | 'timeout' | 'unsupported' | 'no-city' | 'ask';
+export type LocationProblem = 'denied' | 'unavailable' | 'timeout' | 'unsupported' | 'insecure' | 'no-city' | 'ask';
 export type Coords = { lat: number; lng: number };
 
 // The raw position is kept too (not just the city) so pages can show the
@@ -36,6 +36,7 @@ export function useCurrentCity(onCity: (city: string) => void, onCoords?: (coord
   /** The real browser/OS permission request. */
   const request = useCallback(() => {
     setProblem(null);
+    if (!window.isSecureContext) { setProblem('insecure'); return; }   // browsers only give a position to https pages
     if (!('geolocation' in navigator)) { setProblem('unsupported'); return; }
     try { sessionStorage.setItem(ASKED_KEY, '1'); } catch { /* storage blocked */ }
     setLocating(true);
@@ -89,6 +90,7 @@ export function useCurrentCity(onCity: (city: string) => void, onCoords?: (coord
    */
   const locate = useCallback(async () => {
     setProblem(null);
+    if (!window.isSecureContext) { setProblem('insecure'); return; }
     if (!('geolocation' in navigator)) { setProblem('unsupported'); return; }
     let state: PermissionState | undefined;
     try {
