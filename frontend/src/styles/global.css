@@ -78,7 +78,7 @@
   --deal:           var(--orange-500);
   --deal-tint:      var(--orange-50);
 
-  --font-sans: "Rubik", "Heebo", "Assistant", system-ui, sans-serif;
+  --font-sans: "Rubik Variable", "Rubik", "Heebo", "Assistant", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
   --tnum: "tnum" 1, "lnum" 1;
 
