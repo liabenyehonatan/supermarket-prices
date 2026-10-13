@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useFocusTrap } from '../lib/useFocusTrap';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ShoppingBasket, Check, Pencil, Trash2, Plus, X } from 'lucide-react';
 import { useBasket } from '../context/BasketContext';
@@ -8,6 +9,7 @@ function fmt(p: number) { return `₪${p.toFixed(2)}`; }
 
 /** Header control on the basket page: shows the active basket and opens the list of all baskets. */
 export function BasketSwitcher({ variant = 'title' }: { variant?: 'title' | 'pill' }) {
+  const trapRef = useFocusTrap();
   const { baskets, active, setActive, createBasket, renameBasket, deleteBasket } = useBasket();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export function BasketSwitcher({ variant = 'title' }: { variant?: 'title' | 'pil
 
       {open && createPortal(
         <div className="sheet-backdrop" onClick={close}>
-          <div className="location-sheet basket-sheet" role="dialog" aria-label="הסלים שלי" onClick={e => e.stopPropagation()}>
+          <div className="location-sheet basket-sheet" role="dialog" aria-modal="true" tabIndex={-1} ref={trapRef} aria-label="הסלים שלי" onClick={e => e.stopPropagation()}>
             <div className="sheet-grab"><span className="sheet-handle" /></div>
             <div className="location-sheet-head">
               <strong>הסלים שלי</strong>
