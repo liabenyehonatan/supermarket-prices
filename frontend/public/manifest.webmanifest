@@ -1,0 +1,17 @@
+{
+  "name": "סלי — השוואת מחירי סופרמרקט",
+  "short_name": "סלי",
+  "description": "חפשי מוצר או סל קניות וראי באיזו רשת הכי זול",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#178551",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
