@@ -653,6 +653,7 @@ async def compare_basket(
     # Step 6: Build the answer. The constructed models skip validation (the values come from the database)
     # and the JSON is written straight from them: a basket answer is ~1.3 MB, so this mattered.
     shown = ranked[:limit] if limit else ranked
+    basket_order = {barcode: n for n, barcode in enumerate(barcodes)}
     store_totals = [
         BasketStoreTotal.model_construct(
             store=StoreResponse.model_construct(
@@ -665,7 +666,8 @@ async def compare_basket(
             total_price=total,
             items_found=len(items_by_barcode),
             items_missing=missing,
-            item_prices=list(items_by_barcode.values()),
+            # In the order the items were listed in the basket (the database returns them in no fixed order).
+            item_prices=sorted(items_by_barcode.values(), key=lambda i: basket_order[i["barcode"]]),
         )
         for missing, total, r, items_by_barcode in shown
     ]
