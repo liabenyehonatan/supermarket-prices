@@ -38,6 +38,7 @@ _CENT = Decimal("0.01")
 # Numeric(10, 2) holds |x| < 10**8.
 _MAX_MONEY = Decimal("99999999.99")
 _MAX_BARCODE_LEN = 20  # products.barcode is String(20)
+_MIN_PRICE = Decimal("0.10")  # a shopping bag is 10 agorot; below that is a placeholder
 
 
 def _clean_text(value: Optional[str], max_len: Optional[int] = None) -> Optional[str]:
@@ -81,7 +82,7 @@ def normalize_row(row: dict, fallback_ts: Optional[datetime]) -> Optional[PriceR
         return None
 
     price = _money(_get(row, "ItemPrice", "itemprice", "ITEMPRICE"))
-    if price is None or price <= 0:   # 0 means "no price" (generic items, unavailable): never a bargain
+    if price is None or price < _MIN_PRICE:   # 0-9 agorot are placeholders (coupons, "no price"): never a bargain
         return None
 
     unit_price = _money(
