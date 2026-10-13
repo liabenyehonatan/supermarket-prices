@@ -395,7 +395,7 @@ async def example_comparisons(
             func.min(Price.price).label("lo"),
             func.max(Price.price).label("hi"),
         )
-        .where(Price.is_current.is_(True), Price.price > 0)
+        .where(Price.is_current, Price.price > 0)
         .group_by(Price.product_id)
         .having(func.count() >= 20)
         .order_by(func.count().desc())
@@ -413,7 +413,7 @@ async def example_comparisons(
             select(Price.price, display_chain_name_sql())
             .join(Store, Store.id == Price.store_id)
             .join(Chain, Chain.id == Store.chain_id)
-            .where(Price.product_id == product_id, Price.is_current.is_(True), Price.price > 0)
+            .where(Price.product_id == product_id, Price.is_current, Price.price > 0)
             .order_by(order)
             .limit(1)
         )).first()
