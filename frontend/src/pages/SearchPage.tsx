@@ -7,7 +7,7 @@ import {
 
 function SearchProductIcon() {
   // Reference illustration: magnifying glass with an apple
-  return <img src="/icons/search-apple.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
+  return <img src="/icons/search-apple.webp" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
 }
 
 function CompareTrendIcon() {
@@ -23,7 +23,7 @@ function CompareTrendIcon() {
 
 function BuildBasketIcon() {
   // Reference illustration: hand dropping a carton into a basket with a plant
-  return <img src="/icons/basket-plant.png" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
+  return <img src="/icons/basket-plant.webp" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
 }
 
 import { searchProducts, cheapestPricesBatch } from '../api/client';
