@@ -65,12 +65,17 @@ async def health_data():
     except Exception:
         return JSONResponse({"status": "degraded", "db": False}, status_code=503)
     fresh = age is not None and age <= settings.MAX_DATA_AGE_HOURS
+    import asyncio
+    import logging
+
     from app.pipeline.watchdog import stale_chains
 
+    checked = True
     try:
-        stale = [name for name, _ in await stale_chains()]
-    except Exception:
-        stale = []
+        stale = [name for name, _ in await asyncio.wait_for(stale_chains(), timeout=3)]
+    except Exception as exc:       # the chain check must never take the freshness answer down with it
+        logging.getLogger(__name__).warning("stale-chain check failed: %s", exc)
+        stale, checked = [], False
     healthy = fresh and not stale
     return JSONResponse(
         {
@@ -78,6 +83,7 @@ async def health_data():
             "data_age_hours": None if age is None else round(age, 1),
             "max_age_hours": settings.MAX_DATA_AGE_HOURS,
             "stale_chains": stale,
+            "stale_chains_checked": checked,
         },
         status_code=200 if healthy else 503,
     )
