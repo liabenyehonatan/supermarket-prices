@@ -1,9 +1,26 @@
 # app/api/schemas.py
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
+from zoneinfo import ZoneInfo
+
+_ISRAEL = ZoneInfo("Asia/Jerusalem")
+
+
+def _utc(value: Optional[datetime]) -> Optional[datetime]:
+    """The database stores UTC without a zone (now()); say so, so a browser does not read it as local time."""
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
+
+
+def _israel_to_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Chains publish PriceUpdateDate in Israel local time, without a zone."""
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=_ISRAEL).astimezone(timezone.utc)
 
 
 # BaseModel from Pydantic automatically:
@@ -16,6 +33,11 @@ class StatsResponse(BaseModel):
     stores: int
     products: int
     last_updated: Optional[datetime] = None
+
+    @field_validator("last_updated")
+    @classmethod
+    def _last_updated_is_utc(cls, v):
+        return _utc(v)
 
 
 class ExampleComparison(BaseModel):
@@ -88,6 +110,16 @@ class PriceAtStore(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     delivery_url: Optional[str]
+
+    @field_validator("scraped_at")
+    @classmethod
+    def _scraped_is_utc(cls, v):
+        return _utc(v)
+
+    @field_validator("price_updated_at")
+    @classmethod
+    def _updated_is_utc(cls, v):
+        return _israel_to_utc(v)
 
     class Config:
         from_attributes = True

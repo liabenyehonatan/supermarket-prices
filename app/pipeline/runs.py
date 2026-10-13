@@ -115,3 +115,13 @@ async def purge_old_ledger(keep_days: int = 120) -> int:
                 )
             )
             return result.rowcount or 0
+
+
+async def hours_since_last_cycle_started() -> Optional[float]:
+    """Age of the most recent cycle attempt of ANY outcome (None if there never was one)."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(func.extract("epoch", func.now() - func.max(IngestRun.started_at)) / 3600.0)
+            .where(IngestRun.phase == "cycle")
+        )).scalar_one_or_none()
+    return None if row is None else float(row)
