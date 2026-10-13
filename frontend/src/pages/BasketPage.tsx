@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
+import { money, safeHttpUrl } from '../lib/safe';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
@@ -40,7 +42,7 @@ function CartPercentIcon() {
   );
 }
 
-function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
+function fmt(p: number | string) { return money(p); }
 
 // Same navigation links as the product page's store rows — Waze and Google Maps
 // both accept a free-text destination, so no store coordinates are needed.
@@ -101,8 +103,8 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
           Maps
         </a>
         </>)}
-        {store.store.delivery_url && (
-          <a href={store.store.delivery_url} target="_blank" rel="noopener noreferrer">
+        {safeHttpUrl(store.store.delivery_url) && (
+          <a href={safeHttpUrl(store.store.delivery_url) as string} target="_blank" rel="noopener noreferrer">
             <Truck size={12} strokeWidth={2} />
             משלוח
             <ExternalLink size={10} strokeWidth={2} />
@@ -217,8 +219,10 @@ function SwipeRow({ onRemove, onClick, disabled, className, children }: {
 /* ── Main page ───────────────────────────────────────────── */
 export function BasketPage() {
   const navigate = useNavigate();
+  useDocumentTitle('הסל שלי | סלי');
   const { items, updateQty, removeItem, removeItems, clearBasket, activeId, active, recordCompare, openMove } = useBasket();
   const [results, setResults] = useState<BasketCompareResponse | null>(null);
+  const requestId = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [city, setCity]       = useState(readCityFilter);
@@ -226,7 +230,8 @@ export function BasketPage() {
   // How the previous comparison of this basket looked, to say what changed since then
   const [prevCompare, setPrevCompare] = useState<BasketSnapshot | null>(null);
   const [nowCompare, setNowCompare] = useState<BasketSnapshot | null>(null);
-  useEffect(() => { setResults(null); setPrevCompare(null); setNowCompare(null); setError(null); }, [activeId]);
+  // Switching baskets: forget the old results AND any comparison still in flight (its answer belongs to the other basket)
+  useEffect(() => { requestId.current++; setLoading(false); setResults(null); setPrevCompare(null); setNowCompare(null); setError(null); }, [activeId]);
   // Edit mode: pick several items and move or delete them in one go
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -259,7 +264,6 @@ export function BasketPage() {
   useEffect(() => { setShowAllItems(false); }, [activeId]);
   const allSelected = items.length > 0 && selected.size === items.length;
   const resultsRef = useRef<HTMLDivElement>(null);
-  const requestId  = useRef(0);
 
   async function runCompare(filters: { city: string; chain: string }) {
     if (!items.length) return;
@@ -277,13 +281,15 @@ export function BasketPage() {
       }
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch {
-      if (id === requestId.current) setError('לא הצלחנו להשוות. בדוק שהשרת פעיל ונסה שוב.');
+      if (id === requestId.current) setError('לא הצלחנו להשוות את הסל כרגע. נסי שוב בעוד רגע.');
     } finally {
       if (id === requestId.current) setLoading(false);
     }
   }
 
   const handleCompare = () => void runCompare({ city, chain });
+  // The totals on screen no longer match once a quantity changes: clear them (removing an item already does).
+  function changeQty(barcode: string, quantity: number) { setResults(null); updateQty(barcode, quantity); }
 
   // A filter change re-runs a comparison that is already on screen
   function changeCity(next: string) {
@@ -420,7 +426,7 @@ export function BasketPage() {
                   <div className="basket-item-controls">
                     <button
                       className="qty-btn"
-                      onClick={() => item.quantity <= 1 ? removeItem(item.barcode) : updateQty(item.barcode, item.quantity - 1)}
+                      onClick={() => item.quantity <= 1 ? removeItem(item.barcode) : changeQty(item.barcode, item.quantity - 1)}
                       aria-label={item.quantity <= 1 ? 'הסר מהסל' : 'הפחת כמות'}
                     >
                       {item.quantity <= 1
@@ -431,7 +437,7 @@ export function BasketPage() {
                     <span className="qty-value">{item.quantity}</span>
                     <button
                       className="qty-btn"
-                      onClick={() => updateQty(item.barcode, item.quantity + 1)}
+                      onClick={() => changeQty(item.barcode, item.quantity + 1)}
                       aria-label="הגדל כמות"
                     >
                       <Plus size={13} strokeWidth={2.5} />

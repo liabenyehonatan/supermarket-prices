@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { fetchNearestCity } from '../api/client';
 
 export type LocationProblem = 'denied' | 'unavailable' | 'timeout' | 'unsupported' | 'no-city' | 'ask';
 export type Coords = { lat: number; lng: number };
@@ -13,28 +14,9 @@ export function readMyCoords(): Coords | null {
   } catch { return null; }
 }
 
-/** Reverse-geocode coordinates to a Hebrew city name (OpenStreetMap Nominatim). */
+/** The city nearest to the coordinates, from our own stores (see fetchNearestCity): no third-party service. */
 async function cityFromCoords(lat: number, lon: number): Promise<string> {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=he`,
-  );
-  if (!res.ok) return '';
-  const json = await res.json();
-  const a = json.address ?? {};
-  return a.city || a.town || a.village || a.suburb || '';
-}
-
-/**
- * Rough city from the IP address — no permission needed, only used as a
- * suggestion the user can accept. Reuses the Hebrew reverse-geocoder so the
- * name matches the city list.
- */
-async function cityFromIp(): Promise<string> {
-  const res = await fetch('https://ipwho.is/?fields=success,latitude,longitude');
-  if (!res.ok) return '';
-  const j = await res.json();
-  if (!j.success) return '';
-  return cityFromCoords(j.latitude, j.longitude);
+  return fetchNearestCity(lat, lon);
 }
 
 const ASKED_KEY = 'locationSoftAsked';
@@ -48,15 +30,8 @@ export function useCurrentCity(onCity: (city: string) => void, onCoords?: (coord
   const [locating, setLocating] = useState(false);
   const [problem, setProblem] = useState<LocationProblem | null>(null);
 
-  const [suggestedCity, setSuggestedCity] = useState('');
-
-  // Whenever we land on a failure state, look up a quiet IP-based suggestion.
-  useEffect(() => {
-    if (!problem || problem === 'ask' || suggestedCity) return;
-    let live = true;
-    cityFromIp().then(c => { if (live) setSuggestedCity(c); }).catch(() => {});
-    return () => { live = false; };
-  }, [problem, suggestedCity]);
+  // (There used to be an IP-based suggestion here; it sent the visitor's IP to a third party, so it is gone.)
+  const suggestedCity = '';
 
   /** The real browser/OS permission request. */
   const request = useCallback(() => {

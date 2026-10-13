@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useFocusTrap } from '../lib/useFocusTrap';
 import { createPortal } from 'react-dom';
 import { Plus, X } from 'lucide-react';
 import { useBasket } from '../context/BasketContext';
 
 /** App-root UI for baskets: the bottom notice and the "which basket?" picker. */
 export function BasketOverlays() {
+  const trapRef = useFocusTrap();
   const { notice, dismissNotice, picker, closePicker, baskets, activeId, pickBasket, pickNew } = useBasket();
   const [name, setName] = useState('');
   const [naming, setNaming] = useState(false);
@@ -32,7 +34,7 @@ export function BasketOverlays() {
 
       {picker && createPortal(
         <div className="sheet-backdrop" onClick={closePicker}>
-          <div className="location-sheet basket-sheet" role="dialog" aria-label={title} onClick={e => e.stopPropagation()}>
+          <div className="location-sheet basket-sheet" role="dialog" aria-modal="true" tabIndex={-1} ref={trapRef} aria-label={title} onClick={e => e.stopPropagation()}>
             <div className="sheet-grab"><span className="sheet-handle" /></div>
             <div className="location-sheet-head">
               <strong>{title}</strong>
