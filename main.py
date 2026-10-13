@@ -65,11 +65,19 @@ async def health_data():
     except Exception:
         return JSONResponse({"status": "degraded", "db": False}, status_code=503)
     fresh = age is not None and age <= settings.MAX_DATA_AGE_HOURS
+    from app.pipeline.watchdog import stale_chains
+
+    try:
+        stale = [name for name, _ in await stale_chains()]
+    except Exception:
+        stale = []
+    healthy = fresh and not stale
     return JSONResponse(
         {
-            "status": "ok" if fresh else "stale",
+            "status": "ok" if healthy else ("stale" if not fresh else "chains_stale"),
             "data_age_hours": None if age is None else round(age, 1),
             "max_age_hours": settings.MAX_DATA_AGE_HOURS,
+            "stale_chains": stale,
         },
-        status_code=200 if fresh else 503,
+        status_code=200 if healthy else 503,
     )
