@@ -69,7 +69,7 @@ async def test_search_ranks_by_store_count_from_the_refreshed_view(client, sessi
     session.add(chain)
     await session.flush()
     stores = [Store(chain_id=chain.id, store_id=str(i), name=f"s{i}") for i in range(2)]
-    rare, common = Product(barcode="1", name="חלב נדיר"), Product(barcode="2", name="חלב נפוץ")
+    rare, common = Product(barcode="7290000000101", name="חלב נדיר"), Product(barcode="7290000000102", name="חלב נפוץ")
     session.add_all(stores + [rare, common])
     await session.flush()
     now = datetime(2026, 10, 12)
@@ -83,7 +83,7 @@ async def test_search_ranks_by_store_count_from_the_refreshed_view(client, sessi
     await maintenance.refresh_popularity()
 
     r = await client.get("/api/v1/products/search", params={"q": "חלב"})
-    assert [p["barcode"] for p in r.json()] == ["2", "1"]
+    assert [p["barcode"] for p in r.json()] == ["7290000000102", "7290000000101"]
 
 
 async def test_bitan_and_carrefour_are_told_apart_by_store_name(client, session):
@@ -101,7 +101,7 @@ async def test_bitan_and_carrefour_are_told_apart_by_store_name(client, session)
     await session.flush()
     bitan = Store(chain_id=chain.id, store_id="1", name="יינות ביתן טבעון")
     carrefour = Store(chain_id=chain.id, store_id="2", name="קרפור מרקט אילת")
-    product = Product(barcode="9", name="מוצר")
+    product = Product(barcode="7290000000109", name="מוצר")
     session.add_all([bitan, carrefour, product])
     await session.flush()
     now = datetime(2026, 10, 12)
@@ -111,10 +111,10 @@ async def test_bitan_and_carrefour_are_told_apart_by_store_name(client, session)
     ])
     await session.commit()
 
-    r = await client.get("/api/v1/products/9/compare")
+    r = await client.get("/api/v1/products/7290000000109/compare")
     assert [p["chain_name"] for p in r.json()["prices"]] == ["יינות ביתן", "קרפור"]
 
-    r = await client.post("/api/v1/basket/compare", params={"chain": "קרפור"}, json=[{"barcode": "9", "quantity": 1}])
+    r = await client.post("/api/v1/basket/compare", params={"chain": "קרפור"}, json=[{"barcode": "7290000000109", "quantity": 1}])
     assert [s["store"]["chain"]["name"] for s in r.json()["stores"]] == ["קרפור"]
 
 
@@ -152,7 +152,7 @@ async def test_zero_prices_are_never_served_or_loaded(client, session):
     session.add(chain)
     await session.flush()
     stores = [Store(chain_id=chain.id, store_id=str(i), name=f"s{i}") for i in range(2)]
-    product = Product(barcode="5", name="מוצר")
+    product = Product(barcode="7290000000105", name="מוצר")
     session.add_all(stores + [product])
     await session.flush()
     now = datetime(2026, 10, 12)
@@ -162,7 +162,7 @@ async def test_zero_prices_are_never_served_or_loaded(client, session):
     ])
     await session.commit()
 
-    r = await client.get("/api/v1/products/5/compare")
+    r = await client.get("/api/v1/products/7290000000105/compare")
     assert [p["price"] for p in r.json()["prices"]] == ["4.00"]
 
 
@@ -174,14 +174,14 @@ async def test_price_freshness_comes_from_the_stores_last_full_file(client, sess
     session.add(chain)
     await session.flush()
     store = Store(chain_id=chain.id, store_id="1", name="סניף", last_full_at=datetime(2026, 10, 13, 6, 0))
-    product = Product(barcode="7", name="מוצר")
+    product = Product(barcode="7290000000107", name="מוצר")
     session.add_all([store, product])
     await session.flush()
     session.add(Price(product_id=product.id, store_id=store.id, price=5, price_updated_at=datetime(2026, 1, 1),
                       scraped_at=datetime(2026, 10, 1), is_current=True))
     await session.commit()
 
-    r = await client.get("/api/v1/products/7/compare")
+    r = await client.get("/api/v1/products/7290000000107/compare")
     assert r.json()["prices"][0]["scraped_at"].startswith("2026-10-13T06:00")   # not the row's own old stamp
 
 
@@ -203,14 +203,14 @@ async def test_timestamps_carry_a_timezone_so_browsers_do_not_misread_them(clien
     session.add(chain)
     await session.flush()
     store = Store(chain_id=chain.id, store_id="1", name="סניף", last_full_at=datetime(2026, 10, 13, 6, 0))
-    product = Product(barcode="8", name="מוצר")
+    product = Product(barcode="7290000000108", name="מוצר")
     session.add_all([store, product])
     await session.flush()
     session.add(Price(product_id=product.id, store_id=store.id, price=5, scraped_at=datetime(2026, 10, 1),
                       price_updated_at=datetime(2026, 1, 1, 0, 0), is_current=True))   # Israel local midnight
     await session.commit()
 
-    row = (await client.get("/api/v1/products/8/compare")).json()["prices"][0]
+    row = (await client.get("/api/v1/products/7290000000108/compare")).json()["prices"][0]
     assert row["scraped_at"] == "2026-10-13T06:00:00Z"                 # UTC, stated as such
     assert row["price_updated_at"] == "2025-12-31T22:00:00Z"          # 00:00 in Israel (UTC+2 in January)
     from app.api import routes
@@ -293,3 +293,78 @@ async def test_images_only_for_known_products_and_only_from_allowed_hosts(client
     await session.commit()
     r = await client.get("/api/v1/products/5/image", follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == "https://res.cloudinary.com/a.png"   # bad stored URL replaced
+
+
+
+async def test_short_item_codes_and_tiny_prices_are_not_compared(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+    from app.parser.price_loader import normalize_row
+
+    assert normalize_row({"ItemCode": "7290000000111", "ItemName": "x", "ItemPrice": "0.01"}, None) is None
+    assert normalize_row({"ItemCode": "7290000000111", "ItemName": "x", "ItemPrice": "0.09"}, None) is None
+    assert normalize_row({"ItemCode": "7290000000111", "ItemName": "x", "ItemPrice": "0.10"}, None) is not None   # a bag
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף")
+    real, internal = Product(barcode="7290000000111", name="חלב אמיתי"), Product(barcode="12345", name="חלב קוד פנימי")
+    session.add_all([store, real, internal])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    for prod in (real, internal):
+        session.add(Price(product_id=prod.id, store_id=store.id, price=5, price_updated_at=now, is_current=True))
+    await session.commit()
+
+    found = await client.get("/api/v1/products/search", params={"q": "חלב"})
+    assert [p["barcode"] for p in found.json()] == ["7290000000111"]               # the internal code is hidden
+    assert (await client.get("/api/v1/products/12345/compare")).status_code == 404
+    assert (await client.get("/api/v1/products/7290000000111/compare")).status_code == 200
+    assert (await client.get("/api/v1/products/search", params={"q": "12345"})).json() == []
+
+
+async def test_basket_limits_and_duplicates(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף")
+    product = Product(barcode="7290000000112", name="מוצר")
+    session.add_all([store, product])
+    await session.flush()
+    session.add(Price(product_id=product.id, store_id=store.id, price=5, price_updated_at=datetime(2026, 10, 12), is_current=True))
+    await session.commit()
+
+    post = lambda body: client.post("/api/v1/basket/compare", json=body)
+    assert (await post([{"barcode": "7290000000112", "quantity": -5}])).status_code == 422       # negative total would rank first
+    assert (await post([{"barcode": "7290000000112", "quantity": 100}])).status_code == 422
+    assert (await post([{"barcode": "7290000000112" * 3, "quantity": 1}])).status_code == 422     # barcode too long
+    too_many = [{"barcode": f"72900000{i:05d}", "quantity": 1} for i in range(101)]
+    assert (await post(too_many)).status_code == 422
+
+    r = await post([{"barcode": "7290000000112", "quantity": 2}, {"barcode": "7290000000112", "quantity": 3}])
+    body = r.json()
+    assert r.status_code == 200 and body["total_items_requested"] == 1                            # duplicates merged
+    assert body["stores"][0]["items_missing"] == 0 and float(body["stores"][0]["total_price"]) == 25.0   # 5 x (2+3)
+
+    batch = await client.post("/api/v1/products/cheapest-batch", json={"barcodes": ["1"] * 101})
+    assert batch.status_code == 422
+
+
+async def test_search_input_limits(client):
+    assert (await client.get("/api/v1/products/search", params={"q": "ח" * 101})).status_code == 422
+    assert (await client.get("/api/v1/products/search", params={"q": "חלב", "offset": 10001})).status_code == 422
+    assert (await client.get("/api/v1/products/search", params={"q": "a b c d e f g h i j k l"})).status_code == 200   # extra words ignored
+    assert (await client.get("/api/v1/products/search", params={"q": "ח ב"})).json() == []         # only one-letter words
+
+
+async def test_fuzzy_search_still_forgives_a_typo(client, session):
+    from app.db.models import Product
+
+    session.add(Product(barcode="7290000000113", name="גבינה לבנה 5%"))
+    await session.commit()
+    r = await client.get("/api/v1/products/search", params={"q": "גבימה"})
+    assert [p["barcode"] for p in r.json()] == ["7290000000113"]
