@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useFocusTrap } from '../lib/useFocusTrap';
 import { createPortal } from 'react-dom';
 import { Navigation, X, Check, Search } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
@@ -16,6 +17,7 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
   onLocate: () => void;
   onClose: () => void;
 }) {
+  const trapRef = useFocusTrap();
   const [chainQuery, setChainQuery] = useState('');
   const chainNames = useChainNames();
   const visibleChains = chainNames.filter(name => name.includes(chainQuery.trim()));
@@ -28,7 +30,7 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
 
   return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="location-sheet filter-sheet" role="dialog" aria-label="סינון חנויות" onClick={e => e.stopPropagation()}>
+      <div className="location-sheet filter-sheet" role="dialog" aria-modal="true" tabIndex={-1} ref={trapRef} aria-label="סינון חנויות" onClick={e => e.stopPropagation()}>
         <div className="sheet-grab"><div className="sheet-handle" /></div>
         <div className="location-sheet-head">
           <strong>סינון חנויות</strong>

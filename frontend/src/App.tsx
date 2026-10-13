@@ -5,11 +5,14 @@ import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { BasketOverlays } from './components/BasketOverlays';
 import { SearchPage } from './pages/SearchPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { SiteFooter } from './components/SiteFooter';
 
 // The home page loads at once; the other pages (and the barcode scanner library inside ScanPage) are
 // fetched when first visited, which keeps the first download small.
 const ProductPage = lazy(() => import('./pages/ProductPage').then(m => ({ default: m.ProductPage })));
 const BasketPage = lazy(() => import('./pages/BasketPage').then(m => ({ default: m.BasketPage })));
+const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })));
 const ScanPage = lazy(() => import('./pages/ScanPage').then(m => ({ default: m.ScanPage })));
 import './styles/global.css';
 
@@ -22,6 +25,7 @@ if (typeof window !== 'undefined') {
 
 export function App() {
   return (
+    <ErrorBoundary>
     <BasketProvider>
       <HashRouter>
         <Header />
@@ -32,12 +36,15 @@ export function App() {
           <Route path="/product/:barcode" element={<ProductPage />} />
           <Route path="/scan" element={<ScanPage />} />
           <Route path="/basket" element={<BasketPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
+        <SiteFooter />
         <BottomNav />
         <BasketOverlays />
       </HashRouter>
     </BasketProvider>
+    </ErrorBoundary>
   );
 }

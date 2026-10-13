@@ -36,6 +36,7 @@ import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
+import { money } from '../lib/safe';
 import { useChainNames, readChainFilter, saveChainFilter } from '../lib/filters';
 
 /* ── constants ────────────────────────────────────────────── */
@@ -80,7 +81,7 @@ const POPULAR: { label: string; q: string }[] = [
 
 /* ── helpers ──────────────────────────────────────────────── */
 function fmt(p: number | string) {
-  return `₪${Number(p).toFixed(2)}`;
+  return money(p);
 }
 
 /* ── sub-components ───────────────────────────────────────── */
@@ -171,31 +172,40 @@ export function SearchPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownMax, setDropdownMax] = useState(360);
 
+  // Only the newest request may change what is on screen: a slow answer for "חל" must not replace the
+  // one for "חלב", and "load more" must not append to a different query.
+  const searchSeq = useRef(0);
+
   const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setResults([]); setHasMore(false); setError(null); return; }
+    const seq = ++searchSeq.current;
+    if (!q.trim()) { setResults([]); setHasMore(false); setError(null); setLoading(false); return; }
     setLoading(true); setError(null);
     try {
       const page = await searchProducts(q.trim(), PAGE_SIZE, 0);
+      if (seq !== searchSeq.current) return;
       setResults(page);
       setHasMore(page.length === PAGE_SIZE);
     } catch {
-      setError('לא הצלחנו לטעון. בדוק שהשרת פעיל ונסה שוב.');
+      if (seq !== searchSeq.current) return;
+      setError('לא הצלחנו לטעון את התוצאות כרגע. נסי שוב בעוד רגע.');
       setResults([]);
       setHasMore(false);
     } finally {
-      setLoading(false);
+      if (seq === searchSeq.current) setLoading(false);
     }
   }, []);
 
   async function loadMore() {
     if (!query.trim() || loadingMore) return;
+    const seq = searchSeq.current;
     setLoadingMore(true);
     try {
       const page = await searchProducts(query.trim(), PAGE_SIZE, results.length);
+      if (seq !== searchSeq.current) return;
       setResults(prev => [...prev, ...page]);
       setHasMore(page.length === PAGE_SIZE);
     } catch {
-      setError('לא הצלחנו לטעון עוד תוצאות. נסה שוב.');
+      if (seq === searchSeq.current) setError('לא הצלחנו לטעון עוד תוצאות. נסי שוב.');
     } finally {
       setLoadingMore(false);
     }
@@ -204,8 +214,11 @@ export function SearchPage() {
   useEffect(() => {
     const q = searchParams.get('q') ?? '';
     setQuery(q);
-    setChainFilter(searchParams.get('supermarket') ?? sessionStorage.getItem('chainFilter') ?? '');
+    setChainFilter(searchParams.get('supermarket') ?? readChainFilter());
+    // The saved snapshot only applies to the very first render (coming back from a product page);
+    // later searches (X, then Y, then X again) must load fresh results.
     const restore = initialSnap.current;
+    initialSnap.current = null;
     if (restore && restore.q === q) {
       // Came back from a product page: the results are already here, just restore the scroll
       if (restore.scrollY > 0) setTimeout(() => window.scrollTo(0, restore.scrollY), 0);
@@ -302,7 +315,11 @@ export function SearchPage() {
 
   const orderedResults = (() => {
     if (sortMode === 'price') {
-      return [...results].sort((a, b) => (cheapest[a.barcode] ?? Infinity) - (cheapest[b.barcode] ?? Infinity));
+      return [...results].sort((a, b) => {
+        const pa = cheapest[a.barcode], pb = cheapest[b.barcode];
+        if (pa == null || pb == null) return pa == null ? (pb == null ? 0 : 1) : -1;   // unknown prices last
+        return pa - pb;
+      });
     }
     return results;
   })();
