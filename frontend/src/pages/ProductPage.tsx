@@ -146,6 +146,10 @@ export function ProductPage() {
         .filter(row => !chainFilter || row.chain_name === chainFilter)
         .filter(row => row.latitude != null && row.longitude != null
           && distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude) <= NEARBY_KM)
+        // Cheapest first; among equal prices the closest store comes first.
+        .sort((a, b) => Number(a.price) - Number(b.price)
+          || distanceKm(myCoords.lat, myCoords.lng, a.latitude!, a.longitude!)
+           - distanceKm(myCoords.lat, myCoords.lng, b.latitude!, b.longitude!))
     : [];
   const nearbyMode = nearbyPrices.length > 0 && !showAll;
   const filteredPrices = nearbyMode ? nearbyPrices : matchingPrices;
