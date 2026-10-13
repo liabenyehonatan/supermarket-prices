@@ -85,7 +85,7 @@ Two cycles a day (`RUN_AT`, default 06:00 and 18:00 Israel time; a failed or par
 
 **Product names: first-seen wins.** The product insert is `ON CONFLICT (barcode) DO NOTHING`, so an existing product's name is never updated. This is intentional — don't change it to overwrite names on re-parse.
 
-**Price history via `is_current` flag.** Never delete price rows (the opt-in `HISTORY_RETENTION_DAYS` is the only exception and is off by default). When a price changes, set the old row's `is_current = False` and insert a new row, closing before inserting. When a price is unchanged, only `scraped_at` may be refreshed, and at most once per `TOUCH_INTERVAL_HOURS` (rewriting every unchanged row on every run bloats the table).
+**Price history via `is_current` flag.** Never delete price rows (the opt-in `HISTORY_RETENTION_DAYS` is the only exception and is off by default). When a price changes, set the old row's `is_current = False` and insert a new row, closing before inserting. When a price is unchanged, **write nothing** to its row: a complete (`PriceFull`) file sets `stores.last_full_at` once for the store, which confirms every price the file still lists (rewriting ~11 million unchanged rows a day kept the database saturated and bloated the table). The API reports `scraped_at` as the newer of the row's own stamp and the store's `last_full_at`.
 
 **Parser works in chunks of 500 items.** Each chunk is a handful of set-based statements (`PARSE_BATCH_SIZE`). Never go back to one query per row, and keep one transaction per file (data + ledger row), never one per item.
 

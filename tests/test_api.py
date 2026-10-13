@@ -164,3 +164,22 @@ async def test_zero_prices_are_never_served_or_loaded(client, session):
 
     r = await client.get("/api/v1/products/5/compare")
     assert [p["price"] for p in r.json()["prices"]] == ["4.00"]
+
+
+async def test_price_freshness_comes_from_the_stores_last_full_file(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף", last_full_at=datetime(2026, 10, 13, 6, 0))
+    product = Product(barcode="7", name="מוצר")
+    session.add_all([store, product])
+    await session.flush()
+    session.add(Price(product_id=product.id, store_id=store.id, price=5, price_updated_at=datetime(2026, 1, 1),
+                      scraped_at=datetime(2026, 10, 1), is_current=True))
+    await session.commit()
+
+    r = await client.get("/api/v1/products/7/compare")
+    assert r.json()["prices"][0]["scraped_at"].startswith("2026-10-13T06:00")   # not the row's own old stamp

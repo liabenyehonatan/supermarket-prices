@@ -103,8 +103,6 @@ PARSE_MAX_ATTEMPTS = _int("PARSE_MAX_ATTEMPTS", 3)
 
 # ── Price loading ─────────────────────────────────────────────────────────────
 PARSE_BATCH_SIZE = 500  # project rule: flush every 500 items
-# An unchanged price only gets its scraped_at refreshed, and at most this often.
-TOUCH_INTERVAL_HOURS = _float("TOUCH_INTERVAL_HOURS", 24)
 # A PriceFull file closes the store's prices it no longer lists, but only when
 # it lists at least this share of what we currently hold (guards against a
 # truncated or empty file wiping a store).
