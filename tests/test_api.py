@@ -368,3 +368,32 @@ async def test_fuzzy_search_still_forgives_a_typo(client, session):
     await session.commit()
     r = await client.get("/api/v1/products/search", params={"q": "גבימה"})
     assert [p["barcode"] for p in r.json()] == ["7290000000113"]
+
+
+async def test_basket_limit_keeps_the_best_stores_and_reports_the_totals(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    stores = [Store(chain_id=chain.id, store_id=str(i), name=f"s{i}") for i in range(5)]
+    a, b = Product(barcode="7290000000201", name="א"), Product(barcode="7290000000202", name="ב")
+    session.add_all(stores + [a, b])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    for i, st in enumerate(stores):
+        session.add(Price(product_id=a.id, store_id=st.id, price=10 + i, price_updated_at=now, is_current=True))
+        if i < 4:                                                       # store 4 lacks product b: incomplete
+            session.add(Price(product_id=b.id, store_id=st.id, price=1 + i, price_updated_at=now, is_current=True))
+    await session.commit()
+
+    body = [{"barcode": "7290000000201", "quantity": 2}, {"barcode": "7290000000202", "quantity": 1}]
+    full = (await client.post("/api/v1/basket/compare", json=body)).json()
+    cut = (await client.post("/api/v1/basket/compare", params={"limit": 2}, json=body)).json()
+
+    assert full["total_stores"] == cut["total_stores"] == 5 and len(full["stores"]) == 5 and len(cut["stores"]) == 2
+    assert [s["store"]["name"] for s in cut["stores"]] == [s["store"]["name"] for s in full["stores"][:2]] == ["s0", "s1"]
+    assert full["stores"][-1]["items_missing"] == 1                      # the incomplete store comes last
+    assert float(full["stores"][0]["total_price"]) == 21.0               # 10*2 + 1
+    assert float(full["max_total"]) == 30.0 == float(cut["max_total"])   # most expensive COMPLETE basket: s3 = 13*2 + 4
