@@ -5,10 +5,12 @@ import { DealCard } from '../components/DealCard';
 import { DealProductsSheet } from '../components/DealProductsSheet';
 import { DealsRulesBox } from '../components/DealsRulesBox';
 import { readDealsSnapshot, writeDealsSnapshot } from '../lib/dealsSnapshot';
+import { hasSeen, markSeen } from '../lib/firstVisit';
 import { onCityFilterChange, readCityFilter } from '../lib/filters';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const PAGE = 24;
+const INTRO_KEY = 'sali_deals_intro_seen';
 
 const filterKey = (f: { chain: string; city: string; sort: string; kind: string }) => `${f.chain}|${f.city}|${f.sort}|${f.kind}`;
 
@@ -31,6 +33,9 @@ export function DealsPage() {
   const [loading, setLoading] = useState(initial.current === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [picking, setPicking] = useState<Deal | null>(null);
+  // The explanation is for the first visit only; it counts as seen once it was really on screen (not before the rules load).
+  const [introOpen] = useState(() => !hasSeen(INTRO_KEY));
+  useEffect(() => { if (introOpen && rules) markSeen(INTRO_KEY); }, [introOpen, rules]);
   const generation = useRef(0);          // bumped by every filter change: an answer for an older filter is dropped
   const scrollY = useRef(initial.current?.scrollY ?? 0);
   const latest = useRef({ chain, sort, kind, city, deals, total, chains, rules });
@@ -116,7 +121,7 @@ export function DealsPage() {
           </div>
         </div>
 
-        {rules && <DealsRulesBox rules={rules} />}
+        {introOpen && rules && <DealsRulesBox rules={rules} />}
 
         <div className="filter-bar deals-filters" role="group" aria-label="סינון מבצעים לפי רשת">
           <button className={`filter-chip${chain === '' ? ' active' : ''}`} onClick={() => setChain('')}>כל הרשתות</button>
