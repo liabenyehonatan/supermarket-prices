@@ -393,3 +393,35 @@ async def test_a_file_of_only_cancelled_promotions_without_items_still_clears_th
     await parse_chain("SHUFERSAL")
 
     assert await stored_promos(session) == []
+
+
+async def promo_stamp(session):
+    return (await session.execute(select(Store.last_promo_at))).scalar_one()
+
+
+async def test_a_loaded_promo_file_stamps_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "p1", "desc": "2 ב-18", "items": ["111"]}]))
+
+    await parse_chain("SHUFERSAL")
+
+    assert await promo_stamp(session) is not None
+
+
+async def test_a_file_with_nothing_to_show_still_stamps_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "p9", "desc": "מבוטל", "items": []}]))
+
+    await parse_chain("SHUFERSAL")
+
+    assert await promo_stamp(session) is not None       # we know this store has no promotions today
+
+
+async def test_an_unreadable_promo_file_does_not_stamp_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    minified = promo_xml("777", [{"id": "p9", "desc": "3 ב-10", "items": ["111"]}]).replace("\n", "")
+    write(dumps, promo_name("777", "20260512-030500"), minified)
+
+    await parse_chain("SHUFERSAL")
+
+    assert await promo_stamp(session) is None            # nothing was understood: not "fresh promotion data"
