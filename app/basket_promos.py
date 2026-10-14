@@ -7,7 +7,8 @@
 #  - one promotion per line (promotions are not mixed: "2 for 13" and "3 for 18" on 5 units is
 #    priced with the better single one, repeated, never with a 2 + 3 split)
 #  - a promotion that is not below the shelf price per unit is ignored, and so is one that charges
-#    N units no more than one unit costs (that is a per-unit price misread as a total for N)
+#    N units no more than one unit costs (that may be a per-unit price misread as a total for N) unless
+#    the description confirms the total ("2ב18" with N=2, price=18)
 #  - a purchase limit (max_qty) caps the units that get the promotion price; the rest cost shelf price
 
 from dataclasses import dataclass
@@ -22,6 +23,9 @@ class BasketPromo:
     min_qty: int
     price: Decimal
     max_qty: Optional[int]
+    # The promotion's own description states "N ב-price" with this very N and price: the price is the
+    # total for N units, not a per-unit price.
+    price_is_total: bool = False
 
 
 @dataclass(frozen=True)
@@ -38,8 +42,8 @@ def price_line(unit_price: Decimal, quantity: int, promos: Sequence[BasketPromo]
     for promo in sorted(promos, key=lambda p: p.promotion_id):
         if promo.min_qty < 1 or promo.price <= 0 or promo.price >= unit_price * promo.min_qty:
             continue
-        if promo.min_qty > 1 and promo.price <= unit_price:
-            continue            # "N for less than one unit" is a per-unit price, not a total: never trust it
+        if promo.min_qty > 1 and promo.price <= unit_price and not promo.price_is_total:
+            continue            # "N for less than one unit" may be a per-unit price: trust it only when confirmed
         covered = quantity if promo.max_qty is None else min(quantity, promo.max_qty)
         sets = covered // promo.min_qty
         if sets == 0:

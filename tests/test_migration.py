@@ -124,3 +124,16 @@ async def test_basket_promotion_columns_exist_and_default_to_not_eligible(_datab
         assert index and "WHERE" in index
     finally:
         await conn.close()
+
+
+async def test_price_is_total_defaults_to_false(_database):
+    conn = await asyncpg.connect(_dsn())
+    try:
+        await conn.execute("TRUNCATE chains RESTART IDENTITY CASCADE")
+        await conn.execute("INSERT INTO chains (chain_id, name) VALUES ('1', 'c')")
+        await conn.execute("INSERT INTO stores (chain_id, store_id) VALUES (1, 's')")
+        await conn.execute("INSERT INTO products (barcode, name) VALUES ('a', 'n')")
+        await conn.execute("INSERT INTO promotions (product_id, store_id, promotion_id, is_active) VALUES (1, 1, 'p', true)")
+        assert await conn.fetchval("SELECT price_is_total FROM promotions") is False
+    finally:
+        await conn.close()
