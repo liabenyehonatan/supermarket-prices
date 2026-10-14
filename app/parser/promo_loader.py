@@ -46,6 +46,8 @@ class PromoRecord:
     start_date: Optional[datetime]
     end_date: Optional[datetime]
     barcodes: list[str] = field(default_factory=list)
+    basket_eligible: bool = False        # safe to compute a basket price with (Phase B1)
+    max_qty: Optional[int] = None        # most units one purchase gets at the promotion price
 
 
 def _as_list(value: Any) -> list:
@@ -135,6 +137,35 @@ def _min_qty(raw: Optional[str]) -> Optional[int]:
     return int(qty)
 
 
+BASKET_REWARD_TYPES = {"1", "10"}
+
+
+def _positive_int(raw: Optional[str]) -> Optional[int]:
+    """'5', '5.00' -> 5; '0', 'NO_BODY', '' and anything else -> None."""
+    value = _safe_decimal(raw)
+    if value is None or not value.is_finite() or value < 1 or value != value.to_integral_value():
+        return None
+    return int(value)
+
+
+def _basket_eligible(
+    row: dict, items: list[dict], rewards: set[str], barcodes: dict, min_qty: Optional[int],
+    price: Optional[Decimal], max_qty: Optional[int],
+) -> bool:
+    """One product, "N for X" (reward 1 or 10), nothing that changes what N units cost at the till."""
+    if len(barcodes) != 1 or not rewards <= BASKET_REWARD_TYPES:
+        return False
+    if min_qty is None or price is None or price <= 0:
+        return False
+    if _text(row, "isweightedpromo") == "1" or any(_text(i, "bisweighted") == "1" for i in items):
+        return False
+    if _text(row, "isgiftitem") == "1" or any(_text(i, "isgiftitem") == "1" for i in items):
+        return False
+    if _text(row, "redemptionlimit") not in (None, "0"):
+        return False
+    return max_qty is None or max_qty >= min_qty
+
+
 def promotion_is_cancelled(row: dict) -> bool:
     return _CANCELLED in (_text(row, "promotiondescription") or "")
 
@@ -176,14 +207,19 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
 
     first = items[0] if items else {}
     price = _money(_text(row, "discountedprice") or _text(first, "discountedprice"))
+    price = price if price and price > 0 else None
+    min_qty = _min_qty(_text(row, "minqty") or _text(first, "minqty"))
+    max_qty = _positive_int(_text(row, "maxqty")) or _positive_int(_text(first, "maxqty"))
     return PromoRecord(
         promotion_id=promotion_id,
         description=description,
-        discounted_price=price if price and price > 0 else None,
-        min_qty=_min_qty(_text(row, "minqty") or _text(first, "minqty")),
+        discounted_price=price,
+        min_qty=min_qty,
         start_date=_when(row, "promotionstartdatetime", "promotionstartdate", "promotionstarthour", end=False),
         end_date=end,
         barcodes=list(barcodes),
+        basket_eligible=_basket_eligible(row, items, rewards, barcodes, min_qty, price, max_qty),
+        max_qty=max_qty,
     )
 
 
