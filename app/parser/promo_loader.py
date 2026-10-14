@@ -20,6 +20,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
+from sqlalchemy import delete, insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import settings
+from app.db.models import Product, Promotion, Store
 from app.parser.price_loader import _clean_text, _money
 from app.parser.universal_parser import _safe_datetime, _safe_decimal
 
@@ -163,3 +168,45 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
         end_date=end,
         barcodes=barcodes,
     )
+
+
+@dataclass
+class PromoLoadStats:
+    promotions: int = 0
+    rows_inserted: int = 0
+    unknown_barcodes: int = 0
+
+
+async def replace_store_promotions(
+    session: AsyncSession, store: Store, records: list[PromoRecord]
+) -> PromoLoadStats:
+    """Make `records` the store's whole promotion list. Runs in the caller's transaction."""
+    stats = PromoLoadStats(promotions=len(records))
+    wanted = sorted({code for record in records for code in record.barcodes})
+    product_ids: dict[str, int] = {}
+    for start in range(0, len(wanted), settings.PARSE_BATCH_SIZE):
+        chunk = wanted[start:start + settings.PARSE_BATCH_SIZE]
+        result = await session.execute(select(Product.barcode, Product.id).where(Product.barcode.in_(chunk)))
+        product_ids.update(result.all())
+    stats.unknown_barcodes = len(wanted) - len(product_ids)
+
+    rows: list[dict] = []
+    seen: set[tuple[str, int]] = set()
+    for record in records:
+        for code in record.barcodes:
+            product_id = product_ids.get(code)
+            if product_id is None or (record.promotion_id, product_id) in seen:
+                continue
+            seen.add((record.promotion_id, product_id))
+            rows.append({
+                "product_id": product_id, "store_id": store.id, "promotion_id": record.promotion_id,
+                "description": record.description, "discounted_price": record.discounted_price,
+                "min_qty": record.min_qty, "start_date": record.start_date, "end_date": record.end_date,
+                "is_active": True,
+            })
+
+    await session.execute(delete(Promotion).where(Promotion.store_id == store.id))
+    for start in range(0, len(rows), settings.PARSE_BATCH_SIZE):
+        await session.execute(insert(Promotion), rows[start:start + settings.PARSE_BATCH_SIZE])
+    stats.rows_inserted = len(rows)
+    return stats
