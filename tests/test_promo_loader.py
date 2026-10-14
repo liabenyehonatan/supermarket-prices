@@ -88,3 +88,87 @@ def test_everything_we_cannot_show_honestly_is_dropped(over):
 def test_a_hundred_items_is_still_fine():
     items = {"item": [{"itemcode": str(i)} for i in range(100)]}
     assert len(normalize_promotion(row(promotionitems=items), as_of=AS_OF).barcodes) == 100
+
+
+# ── replace_store_promotions (needs the test database) ────────────────────────
+
+from sqlalchemy import select
+
+from app.db.models import Product, Promotion
+from app.parser.promo_loader import PromoRecord, replace_store_promotions
+
+
+def rec(pid, barcodes, desc="2 ב-18", **over):
+    base = dict(promotion_id=pid, description=desc, discounted_price=Decimal("18.00"), min_qty=2,
+                start_date=None, end_date=None, barcodes=barcodes)
+    base.update(over)
+    return PromoRecord(**base)
+
+
+async def stored(session):
+    rows = await session.execute(
+        select(Promotion.promotion_id, Product.barcode, Promotion.description)
+        .join(Product, Promotion.product_id == Product.id)
+        .order_by(Promotion.promotion_id, Product.barcode)
+    )
+    return rows.all()
+
+
+async def test_writes_one_row_per_product_and_skips_unknown_barcodes(session, store):
+    session.add_all([Product(barcode="111", name="a"), Product(barcode="222", name="b")])
+    await session.commit()
+
+    stats = await replace_store_promotions(session, store, [rec("p1", ["111", "222", "999"])])
+    await session.commit()
+
+    assert await stored(session) == [("p1", "111", "2 ב-18"), ("p1", "222", "2 ב-18")]
+    assert (stats.promotions, stats.rows_inserted, stats.unknown_barcodes) == (1, 2, 1)
+    assert (await session.execute(select(Product).where(Product.barcode == "999"))).first() is None
+
+
+async def test_a_newer_file_replaces_the_stores_old_promotions(session, store):
+    session.add(Product(barcode="111", name="a"))
+    await session.commit()
+    await replace_store_promotions(session, store, [rec("old", ["111"])])
+    await session.commit()
+
+    await replace_store_promotions(session, store, [rec("new", ["111"], desc="3 ב-10")])
+    await session.commit()
+
+    assert await stored(session) == [("new", "111", "3 ב-10")]
+
+
+async def test_a_file_with_no_promotions_clears_the_store(session, store):
+    session.add(Product(barcode="111", name="a"))
+    await session.commit()
+    await replace_store_promotions(session, store, [rec("old", ["111"])])
+    await session.commit()
+
+    await replace_store_promotions(session, store, [])
+    await session.commit()
+
+    assert await stored(session) == []
+
+
+async def test_the_same_promotion_listed_twice_does_not_break_the_load(session, store):
+    session.add(Product(barcode="111", name="a"))
+    await session.commit()
+
+    await replace_store_promotions(session, store, [rec("p1", ["111"]), rec("p1", ["111"], desc="again")])
+    await session.commit()
+
+    assert await stored(session) == [("p1", "111", "2 ב-18")]   # the first one wins
+
+
+async def test_other_stores_keep_their_promotions(session, store):
+    from app.db.models import Store
+    other = Store(chain_id=store.chain_id, store_id="002", name="Other")
+    session.add_all([other, Product(barcode="111", name="a")])
+    await session.commit()
+    await replace_store_promotions(session, other, [rec("keep", ["111"])])
+    await session.commit()
+
+    await replace_store_promotions(session, store, [rec("mine", ["111"])])
+    await session.commit()
+
+    assert [p for p, _, _ in await stored(session)] == ["keep", "mine"]
