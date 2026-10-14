@@ -79,6 +79,32 @@ export interface ExampleComparison {
   priciest_price: number | string; priciest_chain: string; stores_count: number;
 }
 
+export interface DealProduct { barcode: string; name: string; brand?: string; image_url?: string; unit_of_measure?: string }
+export interface Deal {
+  deal_id: string; brand: string; description: string; kind: 'single' | 'group';
+  min_qty: number; price: number | string; unit_price: number | string; ref_price: number | string;
+  saving_pct: number | string;            // a fraction: 0.25 is 25%
+  stores: number; products: number; max_qty?: number | null; ends_at?: string | null; sample_products: DealProduct[];
+}
+export interface DealsResponse { total: number; deals: Deal[]; chains: { name: string; count: number }[] }
+
+export function fetchDeals(p: {
+  chain?: string; city?: string; kind?: 'single' | 'group'; sort?: 'best' | 'ending'; diverse?: boolean; limit?: number; offset?: number;
+} = {}): Promise<DealsResponse> {
+  const q = new URLSearchParams();
+  if (p.chain) q.set('chain', p.chain);
+  if (p.city) q.set('city', p.city);
+  if (p.kind) q.set('kind', p.kind);
+  if (p.sort) q.set('sort', p.sort);
+  if (p.diverse) q.set('diverse', 'true');
+  if (p.limit) q.set('limit', String(p.limit));
+  if (p.offset) q.set('offset', String(p.offset));
+  return request<DealsResponse>(`/api/v1/deals?${q.toString()}`);
+}
+export function fetchDealProducts(dealId: string): Promise<DealProduct[]> {
+  return request<DealProduct[]>(`/api/v1/deals/${encodeURIComponent(dealId)}/products`);
+}
+
 /** The city nearest to a position, answered by our own server from the stores we hold. The position is
  *  rounded to ~1 km before it leaves the phone; nothing is sent to a third party. */
 export async function fetchNearestCity(lat: number, lng: number): Promise<string> {
