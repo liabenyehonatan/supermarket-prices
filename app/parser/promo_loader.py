@@ -256,6 +256,7 @@ async def replace_store_promotions(
                 "description": record.description, "discounted_price": record.discounted_price,
                 "min_qty": record.min_qty, "start_date": record.start_date, "end_date": record.end_date,
                 "is_active": True,
+                "basket_eligible": record.basket_eligible, "max_qty": record.max_qty,
             })
 
     await session.execute(delete(Promotion).where(Promotion.store_id == store.id))

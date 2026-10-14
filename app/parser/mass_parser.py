@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from lxml import etree
+from sqlalchemy import func, update
 from il_supermarket_parsers.parser_factory import ParserFactory
 from il_supermarket_parsers.utils import DumpFile
 from il_supermarket_parsers.utils.loading_utils import file_name_to_components
@@ -32,6 +33,7 @@ from il_supermarket_scarper.utils.folders_name import DumpFolderNames
 
 from app import settings
 from app.db.database import AsyncSessionLocal
+from app.db.models import Store
 from app.parser import ledger
 from app.parser.price_loader import load_price_rows
 from app.parser.promo_loader import (
@@ -313,6 +315,7 @@ async def _parse_promo_file(dump_file: DumpFile, parser_cls, folder_name: str) -
                 records = []
             else:
                 stats = await replace_store_promotions(session, store, records)
+                await session.execute(update(Store).where(Store.id == store.id).values(last_promo_at=func.now()))
             await ledger.record_done(
                 session, folder_name, dump_file.file_name, "promo_full",
                 rows_total=seen, rows_applied=stats.rows_inserted, rows_skipped=seen - len(records),
