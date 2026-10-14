@@ -39,6 +39,7 @@ from app.api.schemas import (
     DealProduct,
     Deal,
     DealFacet,
+    DealRules,
     DealsResponse,
 )
 
@@ -807,6 +808,7 @@ async def compare_basket(
 
 MIN_DEAL_SAVING = Decimal("0.10")     # under 10% is not worth a card
 MAX_DEAL_SAVING = Decimal("0.60")     # over 60% is almost always a pack price read as a unit price
+MIN_REFERENCE_PRICE = Decimal("0.50")  # the cheapest price must be at least this: pennies are placeholders (the view uses the same 0.5)
 DEAL_SAMPLES = 4
 _DEALS_FILTER = (
     "saving_pct BETWEEN :lo AND :hi AND (ends_at IS NULL OR ends_at >= (now() AT TIME ZONE 'Asia/Jerusalem'))"
@@ -896,7 +898,10 @@ async def list_deals(
              sample_products=samples.get(r.deal_id, []))
         for r in rows
     ]
-    return DealsResponse(total=total, deals=deals, chains=[DealFacet(name=b, count=n) for b, n in facets])
+    return DealsResponse(
+        total=total, deals=deals, chains=[DealFacet(name=b, count=n) for b, n in facets],
+        rules=DealRules(min_saving=MIN_DEAL_SAVING, max_saving=MAX_DEAL_SAVING, min_reference_price=MIN_REFERENCE_PRICE),
+    )
 
 
 @router.get("/deals/{deal_id}/products", response_model=List[DealProduct], summary="The products of one promotion")

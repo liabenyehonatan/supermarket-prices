@@ -28,7 +28,7 @@ export function DealsStrip({ chain }: { chain: string }) {
       <div className="section-header home-section-head">
         <div>
           <div className="section-title">מבצעים</div>
-          <div className="section-subtitle">הכי זולים מהמחיר שמצאנו ברשתות</div>
+          <div className="section-subtitle">רק מבצעים שבאמת זולים מהמחיר שמצאנו ברשתות</div>
         </div>
         <Link className="deals-all-link" to="/promotions">כל המבצעים</Link>
       </div>
