@@ -178,3 +178,89 @@ def test_a_tie_is_decided_by_promotion_id():
     lines = {1: (D("4.00"), 3)}
     first, second = sp("a", products=(1,)), sp("b", products=(1,))
     assert price_store(lines, [second, first])[0].promo.promotion_id == "a"
+
+
+def test_a_group_whose_cheapest_set_saves_nothing_takes_nothing():
+    # "any 2 for 20" on products at 8 and 15, basket 2 x 8 + 2 x 15. Taking [15, 15] would credit 10.00, but a
+    # till that pairs [8, 15] and [8, 15] saves only 3 + 3: when the cheapest pairing saves nothing we claim nothing.
+    lines = {1: (D("8.00"), 2), 2: (D("15.00"), 2)}
+    assert price_store(lines, [sp(n=2, price="20.00")]) == []
+
+
+# ── the engine must stay fast and must equal the plain per-unit definition ────
+
+import random
+import time
+
+
+def _reference_price_store(lines, promos):
+    """The definition, one list entry per unit and everything re-evaluated every round: slow but obvious."""
+    locked = set()
+    remaining = sorted(promos, key=lambda p: p.promotion_id)
+    applied = []
+
+    def evaluate(promo):
+        if promo.min_qty < 1 or promo.price <= 0:
+            return None
+        pool = sorted((lines[pid][0], pid) for pid in promo.product_ids
+                      if pid in lines and pid not in locked for _ in range(lines[pid][1]))
+        if not pool:
+            return None
+        if promo.min_qty > 1 and promo.price <= pool[0][0] and not promo.price_is_total:
+            return None
+        if promo.max_qty is not None:
+            pool = pool[:promo.max_qty]
+        n, covered, saving, sets = promo.min_qty, {}, D("0"), 0
+        for start in range(0, len(pool) - n + 1, n):
+            window = pool[start:start + n]
+            gain = sum((price for price, _ in window), D("0")) - promo.price
+            if gain <= 0:
+                if n > 1:
+                    break
+                continue
+            saving += gain
+            sets += 1
+            for _, pid in window:
+                covered[pid] = covered.get(pid, 0) + 1
+        return (promo.promotion_id, sets, covered, saving) if sets else None
+
+    while remaining:
+        best = None
+        for promo in remaining:
+            candidate = evaluate(promo)
+            if candidate is not None and (best is None or candidate[3] > best[3]):
+                best = candidate
+        if best is None:
+            break
+        applied.append(best)
+        locked |= set(best[2])
+        remaining = [p for p in remaining if p.promotion_id != best[0]]
+    return applied
+
+
+def test_the_engine_equals_the_plain_per_unit_definition_on_random_baskets():
+    rng = random.Random(20261014)
+    for _ in range(400):
+        lines = {pid: (D(rng.choice(["2.00", "4.50", "6.00", "8.00", "11.90", "15.00"])), rng.randint(1, 6))
+                 for pid in range(1, rng.randint(2, 7))}
+        promos = [
+            StorePromo(f"p{k}", "x", rng.randint(1, 4), D(rng.choice(["5.00", "8.00", "10.00", "16.00", "20.00"])),
+                       rng.choice([None, None, 1, 3, 5, 8]), rng.random() < 0.7,
+                       frozenset(rng.sample(sorted(lines), rng.randint(1, len(lines)))))
+            for k in range(rng.randint(1, 5))
+        ]
+        got = [(a.promo.promotion_id, a.sets, a.units, a.saving) for a in price_store(lines, promos)]
+        assert got == _reference_price_store(lines, promos), (lines, promos)
+
+
+def test_a_big_basket_with_many_promotions_is_priced_quickly():
+    # 100 products x quantity 99, 100 single-product promotions and 20 groups of 20 products: the worst basket the
+    # API accepts. It is priced once per store with promotion data, in the async request, for up to ~2,000 stores.
+    rng = random.Random(7)
+    lines = {pid: (D(rng.choice(["4.00", "6.00", "9.90"])), 99) for pid in range(100)}
+    promos = [StorePromo(f"s{pid}", "x", 2, D("7.00"), None, True, frozenset({pid})) for pid in range(100)]
+    promos += [StorePromo(f"g{g}", "x", 3, D("12.00"), None, True, frozenset(range(g * 5, g * 5 + 20))) for g in range(20)]
+    started = time.perf_counter()
+    for _ in range(30):
+        price_store(lines, promos)
+    assert (time.perf_counter() - started) / 30 < 0.02       # 20 ms per store; 2,000 stores would take 40 s at the limit
