@@ -60,6 +60,7 @@ Tables: `chains` → `stores` → `prices` ← `products`, and `promotions`; plu
 - `Product`: keyed by barcode (GTIN). First-seen name wins; later chains don't overwrite it.
 - `Price`: uses `Numeric(10, 2)` — never `Float` for money.
 - `Promotion`: one row per product of a promotion in a store (unique on `promotion_id, store_id, product_id`), loaded from promo XML files; empty until `SCRAPE_PROMOS` is on.
+- `promo_deals` (materialized view, refreshed by the worker after `product_store_counts`, which it joins): one row per brand and promotion terms for the promotions section, with the stores and products it covers and `saving_pct` against the cheapest shelf price of its products.
 
 Requires the `pg_trgm` PostgreSQL extension (enabled in the initial migration) for the GIN trigram index on `products.name`, which powers Hebrew text search with `ILIKE`.
 
@@ -68,6 +69,7 @@ Three endpoints under `/api/v1`:
 - `GET /products/search?q=` — barcode (exact) or Hebrew name (`ILIKE %q%`)
 - `GET /products/{barcode}/compare` — prices across all stores, sorted cheapest first; each row carries `promotions` (up to 3 running now, soonest end first, the chain's wording only)
 - `POST /basket/compare` — total cost of a list of `{barcode, quantity}` items per store, sorted cheapest first. A line is priced with the best single-product "N for X" promotion (`promotions.basket_eligible`, reward codes 1/10) only for stores whose `last_promo_at` is within 7 days; `unit_price` is the shelf price, `line_total` is promotion-adjusted, each store reports `savings` and `promotions_known`; a promotion that covers several basket products is returned as a store-level entry in `promo_adjustments` and subtracted from `total_price`
+- `GET /deals` — promotions across brands (home strip and `/promotions` page): filters `chain`, `city`, `kind`, `sort`, `diverse`; `GET /deals/{deal_id}/products` lists a group promotion's products
 
 All DB access is async (`AsyncSession` via `asyncpg`). FastAPI dependency `get_db` provides a session per request.
 
@@ -93,6 +95,8 @@ Two cycles a day (`RUN_AT`, default 06:00 and 18:00 Israel time; a failed or par
 **Schema changes need a migration.** Any schema change (new column, new index) requires a new Alembic migration: `python -m alembic revision --autogenerate -m "description"`. The `pg_trgm` extension is already enabled — don't re-create it. The production API connects as the read-only `api_ro` role, so a new table is readable automatically (default privileges) but any new API *write* needs an explicit grant in a migration.
 
 **Files are deduplicated by name, in two places.** The scraper skips names its status database has verified (`dumps/status`), and the parser skips names whose `ingested_files` row is `done`. Don't change either: re-downloading wastes bandwidth and re-parsing wastes DB writes. Never decide "already loaded" from the presence of a file on disk.
+
+**A deal is shown only if it is clearly cheaper than the market.** `promo_deals` holds running, `basket_eligible` promotions of stores whose promotion data is at most 7 days old, on products with a real barcode (7+ characters) and a trusted price (the text confirmed the total for N, or it is a one-unit price), with `saving_pct` against the cheapest shelf price of the deal's products (`product_store_counts.min_price`, at least 0.50). `vs_market` says whether another brand also sells every product (otherwise the reference is the brand's own shelf and the card says so); deals compared with the market rank first, and every order ends with `deal_id` so paging is stable. `/deals` returns these rules in `rules` (a test pins the 0.50 to the view) and shows 10% to 60% savings only (`MIN_DEAL_SAVING`, `MAX_DEAL_SAVING` in `app/api/routes.py`) and re-checks the end date at query time. The brand is split like `display_chain_name` (a test pins the SQL).
 
 **API responses sort cheapest first.** `/products/{barcode}/compare` and `/basket/compare` both return results ordered by price ascending. Maintain this contract when modifying these endpoints.
 

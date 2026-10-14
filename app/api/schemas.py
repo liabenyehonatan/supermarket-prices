@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 from decimal import Decimal
 from datetime import datetime, timezone
-from typing import Annotated, Optional, List
+from typing import Annotated, Literal, Optional, List
 from zoneinfo import ZoneInfo
 
 _ISRAEL = ZoneInfo("Asia/Jerusalem")
@@ -203,3 +203,54 @@ class ChainListItem(BaseModel):
     """A chain as users know it (brands told apart), with how many stores we hold for it."""
     name: str
     stores: int
+
+
+class DealProduct(BaseModel):
+    barcode: str
+    name: str
+    brand: Optional[str] = None
+    image_url: Optional[str] = None
+    unit_of_measure: Optional[str] = None
+
+
+class Deal(BaseModel):
+    """A promotion at a brand, measured against the cheapest shelf price we know of its products."""
+    deal_id: str
+    brand: str
+    description: str
+    kind: Literal["single", "group"]
+    min_qty: int
+    price: Decimal                 # for min_qty units
+    unit_price: Decimal
+    ref_price: Decimal             # cheapest shelf price anywhere (of the cheapest product, for a group)
+    saving_pct: Decimal            # a fraction: 0.25 is 25%
+    vs_market: bool = False        # the reference includes another brand's price (else: the brand's own shelf only)
+    stores: int
+    products: int
+    max_qty: Optional[int] = None
+    ends_at: Optional[datetime] = None
+    sample_products: List[DealProduct] = []
+
+    @field_validator("ends_at")
+    @classmethod
+    def _ends_is_utc(cls, v):
+        return _israel_to_utc(v)
+
+
+class DealFacet(BaseModel):
+    name: str
+    count: int
+
+
+class DealRules(BaseModel):
+    """The rules a promotion must pass to be listed: the page explains them to shoppers, so they come from here."""
+    min_saving: Decimal            # a fraction: 0.10 is 10%
+    max_saving: Decimal            # above this a "saving" is almost always a data error
+    min_reference_price: Decimal   # a lower cheapest price is a placeholder, never a basis for comparison
+
+
+class DealsResponse(BaseModel):
+    total: int
+    deals: List[Deal]
+    chains: List[DealFacet]
+    rules: DealRules
