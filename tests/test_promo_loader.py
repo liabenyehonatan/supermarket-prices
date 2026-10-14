@@ -245,9 +245,11 @@ def test_what_is_not_a_plain_n_for_x_is_not_eligible(over):
     assert rec is None or rec.basket_eligible is False
 
 
-def test_two_products_are_never_eligible():
-    rec = normalize_promotion(row(), as_of=AS_OF)              # the default row lists two items
-    assert rec is not None and rec.basket_eligible is False
+def test_two_products_are_eligible_only_with_a_confirmed_price():
+    unconfirmed = normalize_promotion(row(promotiondescription="מבצע"), as_of=AS_OF)   # the default row lists two items
+    assert unconfirmed is not None and unconfirmed.basket_eligible is False
+    confirmed = normalize_promotion(row(), as_of=AS_OF)                              # description "2 ב-18", MinQty 2, price 18
+    assert confirmed.basket_eligible is True
 
 
 def test_a_weighted_item_is_not_eligible():
@@ -321,3 +323,77 @@ async def test_price_is_total_is_stored(session, store):
     await session.commit()
 
     assert (await session.execute(select(Promotion.price_is_total))).scalar_one() is True
+
+
+# ── group promotions (Phase B2) ───────────────────────────────────────────────
+
+def group(**over):
+    """A Rami-Levy-shaped '3 for 10' on four products, text confirms the price."""
+    base = dict(
+        promotiondescription="פטרוזליה/כוסברה/שמיר/נענע 3ב10", minqty="3.00", discountedprice="10.00",
+        promotionitems={"item": [{"itemcode": c} for c in ("111", "222", "333", "444")]},
+    )
+    base.update(over)
+    return row(**base)
+
+
+def test_a_group_promotion_whose_text_confirms_the_price_is_eligible():
+    rec = normalize_promotion(group(), as_of=AS_OF)
+    assert rec.basket_eligible is True and rec.price_is_total is True and len(rec.barcodes) == 4
+
+
+def test_a_group_promotion_whose_text_does_not_confirm_the_price_is_not_eligible():
+    rec = normalize_promotion(group(promotiondescription="מבצע ירקות"), as_of=AS_OF)
+    assert rec is not None and rec.basket_eligible is False
+
+
+@pytest.mark.parametrize("over", [
+    {"promotionitems": {"item": [{"itemcode": "1", "discountedprice": "10"}, {"itemcode": "2", "discountedprice": "12"}]}},
+    {"isweightedpromo": "1"},
+    {"isgiftitem": "1"},
+    {"redemptionlimit": "2"},
+    {"rewardtype": "3"},
+    {"maxqty": "2"},                                          # below the set size of 3
+])
+def test_group_promotions_with_anything_unsafe_are_not_eligible(over):
+    rec = normalize_promotion(group(**over), as_of=AS_OF)
+    assert rec is None or rec.basket_eligible is False
+
+
+def test_a_promotion_spread_over_several_groups_is_never_pooled():
+    two_groups = {"group": [
+        {"groupid": "1", "promotionitems": {"promotionitem": {"itemcode": "111"}}},
+        {"groupid": "2", "promotionitems": {"promotionitem": {"itemcode": "222"}}},
+    ]}
+    rec = normalize_promotion(group(promotionitems=None, groups=two_groups), as_of=AS_OF)
+    assert rec is not None and rec.basket_eligible is False
+
+
+def test_a_single_group_in_the_group_layout_is_pooled():
+    one_group = {"group": {"groupid": "1", "promotionitems": {"promotionitem": [
+        {"itemcode": "111"}, {"itemcode": "222"}]}}}
+    rec = normalize_promotion(group(promotionitems=None, groups=one_group), as_of=AS_OF)
+    assert rec.basket_eligible is True
+
+
+def test_a_one_unit_sale_price_for_a_group_needs_the_text_to_show_that_price():
+    ok = normalize_promotion(group(promotiondescription="פסטה/ריגטי-ב12.90", minqty="1", discountedprice="12.90"), as_of=AS_OF)
+    assert ok.basket_eligible is True
+    percent = normalize_promotion(group(promotiondescription="בי 40% הנחה לוריאל", minqty="1", discountedprice="36.90"), as_of=AS_OF)
+    assert percent.basket_eligible is False
+    unlabelled = normalize_promotion(group(promotiondescription="יין לבן ברקן", minqty="1", discountedprice="34.90"), as_of=AS_OF)
+    assert unlabelled.basket_eligible is False
+
+
+@pytest.mark.parametrize("description, minqty, price, expected", [
+    ("מבצע שלגון תמרה 2 יח ב 20 שח", "2.00", "20.00", True),
+    ("מנה חמה נודלס 3 יח' ב 24 שח", "3.00", "24.00", True),
+    ("נוזל רצפות אולטרה ב10", "1.00", "10.00", True),
+    ("פסטה פטוצ'יני-ב12.90", "1.00", "12.90", True),
+    ("נוזל רצפות ב10", "2.00", "10.00", False),            # a bare "ב10" confirms nothing when N is 2
+    ("בי 40% הנחה לוריאל", "1.00", "36.90", False),
+    ("יין לבן ברקן 750 מ\"ל", "1.00", "34.90", False),
+])
+def test_more_wordings_of_the_total_are_recognised(description, minqty, price, expected):
+    rec = normalize_promotion(single(promotiondescription=description, minqty=minqty, discountedprice=price), as_of=AS_OF)
+    assert rec.price_is_total is expected
