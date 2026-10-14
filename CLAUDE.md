@@ -37,7 +37,7 @@ Environment: requires a `.env` file with `DATABASE_URL` (async PostgreSQL URL, e
 **Data pipeline:** Scraper → `dumps/<Chain>/*.xml` → Parser → PostgreSQL → FastAPI (the XML is deleted after it is committed in production)
 
 ### Scraper layer (`app/scraper/`)
-- `mass_scraper.py`: `scrape_chain()` downloads one chain's store and FULL price files via `il-supermarket-scraper` (delta files are not used: a daily full file is self-correcting); `run_mass_scraper()` loops chains and keeps going when one fails. 
+- `mass_scraper.py`: `scrape_chain()` downloads one chain's store and FULL price files via `il-supermarket-scraper` (delta files are not used: a daily full file is self-correcting), plus FULL promo files when `SCRAPE_PROMOS` is on for that chain (`PROMO_CHAINS` limits it, see `settings.promos_enabled_for`); `run_mass_scraper()` loops chains and keeps going when one fails. 
 - `run_chain.py`: one chain in its own process. The worker launches it per chain so a hang can be killed on a timeout.
 - `preflight.py`: downloads one small file per chain to verify a machine can reach them (use it on every new server).
 - **Download dedup is the library's own status database** (`dumps/status/<chain>.json`, by file name), *not* "file exists on disk". That is what makes deleting loaded files safe. Keep `dumps/status` on persistent storage.
@@ -47,6 +47,7 @@ Environment: requires a `.env` file with `DATABASE_URL` (async PostgreSQL URL, e
 - `mass_parser.py`: `parse_chain(name)` loads one chain's files. Per file: check the XML is well-formed (the chain parsers silently "repair" truncated files in place), load in one transaction together with its `ingested_files` ledger row, delete the file after commit. Of the full price files only the newest per store is loaded; older ones are recorded as `superseded` and skipped. Files are applied oldest first, stores before prices. A file that fails 3 times is moved to `dumps/_quarantine/`.
 - `price_loader.py`: set-based product/price load in chunks of 500 (a few queries per chunk, not per row).
 - `ledger.py`: the `ingested_files` ledger and file housekeeping. A file is loaded when its ledger row says `done`, never because of what is on disk.
+- `promo_loader.py` and the `PromoFull` path in `mass_parser.py`: loads promo files (only when `promos_enabled_for(chain)`), after the price files, newest per store, one transaction with the ledger row (`file_type` `promo_full`). `promotions` is a per-store snapshot: each newer full file replaces that store's rows (the "never delete" rule is for `prices`). `normalize_promotion` keeps only promotions for everybody (no club/coupon audience), reward codes 1/2/3/10, still running, with at most 100 items; reward 6's `DiscountedPrice` is the gift's price, so those are dropped. Phase A only shows the chain's own text: **no price is computed from a promotion**.
 - `universal_parser.py`: field-name helpers, chain and store upserts.
 - **Price history strategy**: each price row has `is_current`; the database allows exactly one current row per `(store, product)` (partial unique index). On a price change the old row is set `is_current=False` and a new row is inserted. A file with an older `price_updated_at` than the stored one is ignored. A full file closes products it no longer lists, unless it lists under half of what we hold (truncated-file guard).
 
@@ -58,14 +59,14 @@ Tables: `chains` → `stores` → `prices` ← `products`, and `promotions`; plu
 - `Store`: one branch. Identified by `(chain_id, store_id)` composite unique index — store IDs are chain-scoped (same "001" exists in multiple chains).
 - `Product`: keyed by barcode (GTIN). First-seen name wins; later chains don't overwrite it.
 - `Price`: uses `Numeric(10, 2)` — never `Float` for money.
-- `Promotion`: deal info from promo XML files.
+- `Promotion`: one row per product of a promotion in a store (unique on `promotion_id, store_id, product_id`), loaded from promo XML files; empty until `SCRAPE_PROMOS` is on.
 
 Requires the `pg_trgm` PostgreSQL extension (enabled in the initial migration) for the GIN trigram index on `products.name`, which powers Hebrew text search with `ILIKE`.
 
 ### API layer (`app/api/`)
 Three endpoints under `/api/v1`:
 - `GET /products/search?q=` — barcode (exact) or Hebrew name (`ILIKE %q%`)
-- `GET /products/{barcode}/compare` — prices across all stores, sorted cheapest first
+- `GET /products/{barcode}/compare` — prices across all stores, sorted cheapest first; each row carries `promotions` (up to 3 running now, soonest end first, the chain's wording only)
 - `POST /basket/compare` — total cost of a list of `{barcode, quantity}` items per store, sorted cheapest first
 
 All DB access is async (`AsyncSession` via `asyncpg`). FastAPI dependency `get_db` provides a session per request.

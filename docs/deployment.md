@@ -201,6 +201,19 @@ sudo apt-get install -y iptables-persistent && sudo netfilter-persistent save   
 
 Do not touch the rule for port 22 (SSH), or you lock yourself out.
 
+## Promotions
+
+The product page can show the promotions a store runs on a product (the chain's own wording; the price shown is still the shelf price). They are off by default because the files take disk and database space.
+
+```bash
+bash deploy/set-env.sh SCRAPE_PROMOS=true PROMO_CHAINS=SHUFERSAL,RAMI_LEVY
+docker compose up -d
+```
+
+Start with one or two chains and watch, after the next cycle: the table size (`select pg_size_pretty(pg_total_relation_size('promotions'));`), free disk, the cycle duration in `ingest_runs`, and any `failed` rows in `ingested_files` with `file_type = 'promo_full'`. Add chains in small groups; the chains with the biggest files per store (Tiv Taam, Hazi Hinam, Fresh Market) go last. Leave `PROMO_CHAINS` empty to turn promotions on for every chain.
+
+To turn them off set `SCRAPE_PROMOS=false`. Rows already loaded stay and keep being filtered by their dates; `TRUNCATE promotions;` clears them.
+
 ## Settings reference
 
 See `.env.example` and `app/settings.py` for every variable and its default.
