@@ -149,15 +149,18 @@ def _min_qty(raw: Optional[str]) -> Optional[int]:
 
 
 BASKET_REWARD_TYPES = {"1", "10"}
-_N_FOR_X = re.compile(r"(\d+)\s*ב\s*-?\s*(\d+(?:\.\d+)?)")
+_N_FOR_X = re.compile(r"(\d+)\s*(?:יח(?:ידות|['׳])?\s*)?ב\s*-?\s*(\d+(?:\.\d+)?)")
+_FOR_X = re.compile(r"(?<!\w)ב\s*-?\s*(\d+(?:\.\d+)?)")
 
 
 def _price_is_total(description: str, min_qty: Optional[int], price: Optional[Decimal]) -> bool:
-    """The text says "2ב18" and the file says MinQty 2, price 18: two independent fields agree that the
-    price is the total for N units (not a per-unit price)."""
+    """The text says "2ב18" / "2 יח ב 20" and the file says MinQty 2, price 18: two independent fields agree
+    that the price is the total for N units. For one unit a bare "-ב12.90" with the same price is enough."""
     if min_qty is None or price is None:
         return False
-    return any(int(n) == min_qty and Decimal(x) == price for n, x in _N_FOR_X.findall(description))
+    if any(int(n) == min_qty and Decimal(x) == price for n, x in _N_FOR_X.findall(description)):
+        return True
+    return min_qty == 1 and any(Decimal(x) == price for x in _FOR_X.findall(description))
 
 
 def _positive_int(raw: Optional[str]) -> Optional[int]:
@@ -168,12 +171,19 @@ def _positive_int(raw: Optional[str]) -> Optional[int]:
     return int(value)
 
 
+def _group_count(row: dict) -> int:
+    """How many <Group> elements the promotion has (0 for the flat layout)."""
+    groups = row.get("groups")
+    return len(_as_list(groups.get("group"))) if isinstance(groups, dict) else 0
+
+
 def _basket_eligible(
     row: dict, items: list[dict], rewards: set[str], barcodes: dict, min_qty: Optional[int],
-    price: Optional[Decimal], max_qty: Optional[int],
+    price: Optional[Decimal], max_qty: Optional[int], price_is_total: bool,
 ) -> bool:
-    """One product, "N for X" (reward 1 or 10), nothing that changes what N units cost at the till."""
-    if len(barcodes) != 1 or not rewards <= BASKET_REWARD_TYPES:
+    """"N for X" (reward 1 or 10) on one product, or on a group of products when the text confirms the
+    price; nothing that changes what N units cost at the till."""
+    if not barcodes or not rewards <= BASKET_REWARD_TYPES:
         return False
     if min_qty is None or price is None or price <= 0:
         return False
@@ -183,7 +193,13 @@ def _basket_eligible(
         return False
     if _text(row, "redemptionlimit") not in (None, "0"):
         return False
-    return max_qty is None or max_qty >= min_qty
+    if max_qty is not None and max_qty < min_qty:
+        return False
+    if len(barcodes) > 1:
+        item_prices = {_text(i, "discountedprice") for i in items} - {None}
+        if _group_count(row) > 1 or len(item_prices) > 1 or not price_is_total:
+            return False
+    return True
 
 
 def promotion_is_cancelled(row: dict) -> bool:
@@ -230,6 +246,7 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
     price = price if price and price > 0 else None
     min_qty = _min_qty(_text(row, "minqty") or _text(first, "minqty"))
     max_qty = _positive_int(_text(row, "maxqty")) or _positive_int(_text(first, "maxqty"))
+    price_is_total = _price_is_total(description, min_qty, price)
     return PromoRecord(
         promotion_id=promotion_id,
         description=description,
@@ -238,9 +255,9 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
         start_date=_when(row, "promotionstartdatetime", "promotionstartdate", "promotionstarthour", end=False),
         end_date=end,
         barcodes=list(barcodes),
-        basket_eligible=_basket_eligible(row, items, rewards, barcodes, min_qty, price, max_qty),
+        basket_eligible=_basket_eligible(row, items, rewards, barcodes, min_qty, price, max_qty, price_is_total),
         max_qty=max_qty,
-        price_is_total=_price_is_total(description, min_qty, price),
+        price_is_total=price_is_total,
     )
 
 
