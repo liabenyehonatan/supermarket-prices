@@ -338,11 +338,12 @@ class Promotion(Base):
     __table_args__ = (
         Index("ix_promotions_product_store", "product_id", "store_id"),
         Index("ix_promotions_active", "is_active"),
-        # Prevents inserting the same promotion twice for the same store.
+        # One row per product of a promotion in a store (a promotion lists many products).
         Index(
             "ix_promotions_unique",
             "promotion_id",
             "store_id",
+            "product_id",
             unique=True,
         ),
     )
