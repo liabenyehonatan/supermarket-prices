@@ -75,6 +75,15 @@ export interface ItemPrice {
   promo?: ItemPromo | null;
 }
 
+export interface PromoAdjustment {
+  description: string;
+  min_qty: number;
+  price: number | string;
+  sets: number;
+  saving: number | string;
+  barcodes: string[];
+}
+
 export interface BasketStoreTotal {
   store: StoreResponse;
   total_price: number;
@@ -84,6 +93,7 @@ export interface BasketStoreTotal {
   /** What promotions took off this store's shelf total, and whether we hold fresh promotion data for it. */
   savings?: number | string;
   promotions_known?: boolean;
+  promo_adjustments?: PromoAdjustment[];
 }
 
 export interface BasketCompareResponse {

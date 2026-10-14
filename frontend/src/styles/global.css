@@ -2733,3 +2733,6 @@ img { max-width: 100%; display: block; }
 .basket-breakdown-saving { background: var(--orange-50); color: var(--orange-700); }
 .basket-no-promo { padding: var(--sp-2) var(--sp-4); color: var(--ink-400); }
 .basket-promo-note { margin-bottom: var(--sp-3); font-size: var(--fs-12); color: var(--ink-400); }
+
+/* Basket group promotions: the saving row of a promotion that covers several items */
+.basket-breakdown-adjustment { background: var(--orange-50); }

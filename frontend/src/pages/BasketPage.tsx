@@ -124,6 +124,9 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
               {item.promo && (
                 <div className="basket-breakdown-promo">מבצע: {item.promo.description}{item.promo.sets > 1 ? ` (×${item.promo.sets})` : ''}</div>
               )}
+              {!item.promo && (store.promo_adjustments ?? []).some(a => a.barcodes.includes(item.barcode)) && (
+                <div className="basket-breakdown-promo">במבצע משותף</div>
+              )}
             </div>
             {item.missing
               ? <span className="basket-breakdown-missing">לא זמין</span>
@@ -137,6 +140,14 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
           </div>
         ))}
 
+        {(store.promo_adjustments ?? []).map((a, i) => (
+          <div key={`adj-${i}`} className="basket-breakdown-row basket-breakdown-adjustment">
+            <div className="basket-breakdown-name" title={a.description}>
+              <div className="basket-breakdown-promo">מבצע: {a.description}{a.sets > 1 ? ` (×${a.sets})` : ''}</div>
+            </div>
+            <span className="basket-breakdown-line tabular">−{fmt(a.saving)}</span>
+          </div>
+        ))}
         {promoSavings > 0.005 && (
           <div className="basket-breakdown-row basket-breakdown-saving">
             <div className="basket-breakdown-name">הסכום כולל מבצעים</div>
@@ -587,7 +598,7 @@ export function BasketPage() {
 
             {results.stores.some(s => s.promotions_known) && (
               <div className="basket-promo-note">
-                הסכומים כוללים מבצעי &quot;N ב-X&quot; על מוצר בודד, בסניפים שיש לנו עבורם נתוני מבצעים. מבצעי מועדון, קופונים ומבצעים על כמה מוצרים יחד לא נכללים.
+                הסכומים כוללים מבצעי &quot;N ב-X&quot; (על מוצר בודד או על קבוצת מוצרים), בסניפים שיש לנו עבורם נתוני מבצעים. מבצעי מועדון וקופונים לא נכללים.
               </div>
             )}
 
