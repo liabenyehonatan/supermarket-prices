@@ -267,3 +267,14 @@ def test_the_item_level_purchase_limit_is_used_when_the_promotion_has_none():
 
 def test_a_limit_below_the_set_size_makes_it_not_eligible():
     assert normalize_promotion(single(maxqty="2"), as_of=AS_OF).basket_eligible is False
+
+
+async def test_the_eligibility_and_the_limit_are_stored(session, store):
+    session.add(Product(barcode="111", name="a"))
+    await session.commit()
+
+    await replace_store_promotions(session, store, [rec("p1", ["111"], basket_eligible=True, max_qty=5)])
+    await session.commit()
+
+    row = (await session.execute(select(Promotion.basket_eligible, Promotion.max_qty))).one()
+    assert (row.basket_eligible, row.max_qty) == (True, 5)
