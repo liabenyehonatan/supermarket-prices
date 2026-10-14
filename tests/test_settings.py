@@ -60,3 +60,20 @@ def test_env_example_has_no_inline_comments():
         if re.match(r"^[A-Z_0-9]+=.*\s#", line)
     ]
     assert bad == []
+
+
+def test_promos_are_off_unless_scraping_them_is_on(reloaded):
+    s = reloaded(SCRAPE_PROMOS="false", PROMO_CHAINS="")
+    assert s.promos_enabled_for("SHUFERSAL") is False
+
+
+def test_promos_on_for_every_chain_when_the_list_is_empty(reloaded):
+    s = reloaded(SCRAPE_PROMOS="true", PROMO_CHAINS="")
+    assert s.promos_enabled_for("SHUFERSAL") is True and s.promos_enabled_for("RAMI_LEVY") is True
+
+
+def test_promos_limited_to_the_listed_chains(reloaded):
+    s = reloaded(SCRAPE_PROMOS="true", PROMO_CHAINS="shufersal, RAMI_LEVY   # first two")
+    assert s.PROMO_CHAINS == {"SHUFERSAL", "RAMI_LEVY"}
+    assert s.promos_enabled_for("RAMI_LEVY") is True
+    assert s.promos_enabled_for("VICTORY_NEW_SOURCE") is False

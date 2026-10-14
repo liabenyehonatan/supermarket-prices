@@ -196,10 +196,13 @@ async def test_successful_cycle_is_not_retried(monkeypatch):
 def test_scraper_asks_for_store_and_full_price_files_only(monkeypatch):
     from app.scraper import mass_scraper
 
+    monkeypatch.setattr(settings, "PROMO_CHAINS", set())
     monkeypatch.setattr(settings, "SCRAPE_PROMOS", False)
-    assert mass_scraper._file_types() == ["STORE_FILE", "PRICE_FULL_FILE"]
+    assert mass_scraper._file_types("SHUFERSAL") == ["STORE_FILE", "PRICE_FULL_FILE"]
     monkeypatch.setattr(settings, "SCRAPE_PROMOS", True)
-    assert mass_scraper._file_types() == ["STORE_FILE", "PRICE_FULL_FILE", "PROMO_FULL_FILE"]
+    assert mass_scraper._file_types("SHUFERSAL") == ["STORE_FILE", "PRICE_FULL_FILE", "PROMO_FULL_FILE"]
+    monkeypatch.setattr(settings, "PROMO_CHAINS", {"RAMI_LEVY"})
+    assert mass_scraper._file_types("SHUFERSAL") == ["STORE_FILE", "PRICE_FULL_FILE"]
 
 
 async def test_old_ledger_rows_are_purged(session):
