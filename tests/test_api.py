@@ -398,3 +398,73 @@ async def test_basket_limit_keeps_the_best_stores_and_reports_the_totals(client,
     assert float(full["stores"][0]["total_price"]) == 21.0               # 10*2 + 1
     assert float(full["max_total"]) == 30.0 == float(cut["max_total"])   # most expensive COMPLETE basket: s3 = 13*2 + 4
     assert [i["barcode"] for i in full["stores"][0]["item_prices"]] == ["7290000000201", "7290000000202"]   # basket order
+
+
+async def _promo_fixture(session):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from app.db.models import Chain, Price, Product, Promotion, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף")
+    product = Product(barcode="7290000000111", name="מוצר")
+    session.add_all([store, product])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    session.add(Price(product_id=product.id, store_id=store.id, price=5, price_updated_at=now, is_current=True))
+    local_now = datetime.now(ZoneInfo("Asia/Jerusalem")).replace(tzinfo=None)
+
+    def promo(pid, desc, start, end):
+        return Promotion(product_id=product.id, store_id=store.id, promotion_id=pid, description=desc,
+                         min_qty=2, start_date=start, end_date=end, is_active=True)
+
+    session.add_all([
+        promo("run", "2 ב-18", local_now - timedelta(days=1), local_now + timedelta(days=3)),
+        promo("open", "מבצע פתוח", None, None),
+        promo("over", "נגמר", local_now - timedelta(days=9), local_now - timedelta(days=1)),
+        promo("later", "עוד לא התחיל", local_now + timedelta(days=1), local_now + timedelta(days=5)),
+    ])
+    await session.commit()
+    return product, store
+
+
+async def test_compare_lists_only_running_promotions_soonest_end_first(client, session):
+    product, _ = await _promo_fixture(session)
+    r = await client.get(f"/api/v1/products/{product.barcode}/compare")
+    promos = r.json()["prices"][0]["promotions"]
+    assert [p["description"] for p in promos] == ["2 ב-18", "מבצע פתוח"]
+    assert promos[0]["min_qty"] == 2 and promos[0]["ends_at"] is not None
+    assert promos[1]["ends_at"] is None
+
+
+async def test_compare_returns_an_empty_promotion_list_when_there_are_none(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף")
+    product = Product(barcode="7290000000112", name="מוצר")
+    session.add_all([store, product])
+    await session.flush()
+    session.add(Price(product_id=product.id, store_id=store.id, price=5, price_updated_at=datetime(2026, 10, 12), is_current=True))
+    await session.commit()
+
+    r = await client.get("/api/v1/products/7290000000112/compare")
+    assert r.json()["prices"][0]["promotions"] == []
+
+
+async def test_compare_shows_at_most_three_promotions_per_store(client, session):
+    from app.db.models import Promotion
+    product, store = await _promo_fixture(session)
+    session.add_all([
+        Promotion(product_id=product.id, store_id=store.id, promotion_id=f"x{i}", description=f"x{i}",
+                  start_date=None, end_date=None, is_active=True)
+        for i in range(5)
+    ])
+    await session.commit()
+    r = await client.get(f"/api/v1/products/{product.barcode}/compare")
+    assert len(r.json()["prices"][0]["promotions"]) == 3

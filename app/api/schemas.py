@@ -96,6 +96,18 @@ class ProductSearchResult(BaseModel):
         from_attributes = True
 
 
+class PromoInfo(BaseModel):
+    """A promotion a store runs on a product: the chain's own wording, not a computed price."""
+    description: str
+    min_qty: Optional[int] = None
+    ends_at: Optional[datetime] = None
+
+    @field_validator("ends_at")
+    @classmethod
+    def _ends_is_utc(cls, v):
+        return _israel_to_utc(v)
+
+
 class PriceAtStore(BaseModel):
     """A single price entry at a specific store."""
     store_id: int
@@ -110,6 +122,7 @@ class PriceAtStore(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     delivery_url: Optional[str]
+    promotions: List[PromoInfo] = []
 
     @field_validator("scraped_at")
     @classmethod
