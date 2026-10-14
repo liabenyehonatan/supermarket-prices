@@ -9,6 +9,12 @@ export interface Product {
   image_url?: string;
 }
 
+export interface PromoInfo {
+  description: string;
+  min_qty?: number;
+  ends_at?: string;
+}
+
 export interface PriceAtStore {
   store_id: number;
   store_name: string;
@@ -22,6 +28,7 @@ export interface PriceAtStore {
   latitude?: number;
   longitude?: number;
   delivery_url?: string;
+  promotions?: PromoInfo[];
 }
 
 export interface ProductCompareResponse {
@@ -50,6 +57,13 @@ export interface StoreResponse {
   chain: ChainResponse;
 }
 
+export interface ItemPromo {
+  description: string;
+  min_qty: number;
+  price: number | string;
+  sets: number;
+}
+
 export interface ItemPrice {
   product_name: string;
   barcode: string;
@@ -57,6 +71,17 @@ export interface ItemPrice {
   quantity: number;
   line_total: number;
   missing?: boolean;
+  regular_line_total?: number | string;
+  promo?: ItemPromo | null;
+}
+
+export interface PromoAdjustment {
+  description: string;
+  min_qty: number;
+  price: number | string;
+  sets: number;
+  saving: number | string;
+  barcodes: string[];
 }
 
 export interface BasketStoreTotal {
@@ -65,6 +90,10 @@ export interface BasketStoreTotal {
   items_found: number;
   items_missing: number;
   item_prices: ItemPrice[];
+  /** What promotions took off this store's shelf total, and whether we hold fresh promotion data for it. */
+  savings?: number | string;
+  promotions_known?: boolean;
+  promo_adjustments?: PromoAdjustment[];
 }
 
 export interface BasketCompareResponse {

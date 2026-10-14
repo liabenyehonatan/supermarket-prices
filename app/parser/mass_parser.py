@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from lxml import etree
+from sqlalchemy import func, update
 from il_supermarket_parsers.parser_factory import ParserFactory
 from il_supermarket_parsers.utils import DumpFile
 from il_supermarket_parsers.utils.loading_utils import file_name_to_components
@@ -32,8 +33,16 @@ from il_supermarket_scarper.utils.folders_name import DumpFolderNames
 
 from app import settings
 from app.db.database import AsyncSessionLocal
+from app.db.models import Store
 from app.parser import ledger
 from app.parser.price_loader import load_price_rows
+from app.parser.promo_loader import (
+    normalize_promotion,
+    promotion_has_items,
+    promotion_is_cancelled,
+    PromoLoadStats,
+    replace_store_promotions,
+)
 from app.pipeline.shutdown import STOP
 from app.scraper import status_store
 from app.parser.universal_parser import (
@@ -50,6 +59,7 @@ _FILE_TYPE_LABEL = {
     FileTypesFilters.STORE_FILE: "store",
     FileTypesFilters.PRICE_FULL_FILE: "price_full",
     FileTypesFilters.PRICE_FILE: "price",
+    FileTypesFilters.PROMO_FULL_FILE: "promo_full",
 }
 
 
@@ -171,16 +181,17 @@ def _sort_key(dump_file: DumpFile):
 
 
 def split_superseded(
-    pending: list[DumpFile], newest_loaded: dict[str, datetime]
+    pending: list[DumpFile], newest_loaded: dict[str, datetime],
+    full_type: FileTypesFilters = FileTypesFilters.PRICE_FULL_FILE,
 ) -> tuple[list[DumpFile], list[DumpFile]]:
     """
-    Keep only the newest full price file per store. A full file is the whole
-    store, so an older one for the same store changes nothing the newer one will
-    not overwrite. Returns (to_load, skipped). Store and delta files pass through.
+    Keep only the newest full file of `full_type` per store. A full file is the whole store, so an
+    older one for the same store changes nothing the newer one will not overwrite. Returns
+    (to_load, skipped). Files of any other type pass through.
     """
     newest_pending: dict[str, DumpFile] = {}
     for f in pending:
-        if f.detected_filetype != FileTypesFilters.PRICE_FULL_FILE:
+        if f.detected_filetype != full_type:
             continue
         store = f.extracted_store_number
         if store not in newest_pending or (f.extracted_date, f.file_name) > (
@@ -190,7 +201,7 @@ def split_superseded(
 
     keep, skipped = [], []
     for f in pending:
-        if f.detected_filetype != FileTypesFilters.PRICE_FULL_FILE:
+        if f.detected_filetype != full_type:
             keep.append(f)
             continue
         store = f.extracted_store_number
@@ -264,6 +275,58 @@ async def _parse_price_file(dump_file: DumpFile, parser_cls, folder_name: str) -
     return stats.rows_total, stats.rows_applied, summary
 
 
+async def _parse_promo_file(dump_file: DumpFile, parser_cls, folder_name: str) -> tuple[int, int, str]:
+    """Load one PromoFull file as the store's whole promotion list. Returns (rows_total, rows_applied, summary)."""
+    if not dump_file.extracted_store_number:
+        raise ValueError("file name carries no store number")
+
+    path = Path(dump_file.get_full_path)
+    await asyncio.to_thread(assert_well_formed, path)
+    parser = parser_cls()
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            chain = await get_or_create_chain(
+                session, chain_id=dump_file.extracted_chain_id, folder_name=folder_name
+            )
+            store = await get_or_create_store_from_price_file(
+                session, chain, store_id=dump_file.extracted_store_number
+            )
+            seen = candidates = with_items = 0
+            records = []
+            async for row in parser.read(dump_file):
+                seen += 1
+                if not promotion_is_cancelled(row):
+                    candidates += 1
+                    with_items += promotion_has_items(row)
+                record = normalize_promotion(row, as_of=dump_file.extracted_date)
+                if record is not None:
+                    records.append(record)
+            if seen == 0 and path.stat().st_size > _EMPTY_OK_BYTES:
+                raise CorruptFile(f"parsed 0 promotions from {path.stat().st_size} bytes")
+            if candidates and not with_items:
+                # Promotions that name no products at all: the library did not understand this file's
+                # layout (one-line file, flattened rows). Nothing here is evidence that the store has no
+                # promotions, so keep what we hold instead of wiping it.
+                logger.warning(
+                    "%s: %s has %d promotions but no item lists; keeping the store's current promotions",
+                    folder_name, dump_file.file_name, candidates,
+                )
+                stats = PromoLoadStats(promotions=0)
+                records = []
+            else:
+                stats = await replace_store_promotions(session, store, records)
+                await session.execute(update(Store).where(Store.id == store.id).values(last_promo_at=func.now()))
+            await ledger.record_done(
+                session, folder_name, dump_file.file_name, "promo_full",
+                rows_total=seen, rows_applied=stats.rows_inserted, rows_skipped=seen - len(records),
+            )
+    summary = (
+        f"{seen:,} promotions: {len(records)} shown, {stats.rows_inserted} product rows, "
+        f"{stats.unknown_barcodes} unknown barcodes"
+    )
+    return seen, stats.rows_inserted, summary
+
+
 async def _record_failure(folder_name: str, dump_file: DumpFile, error: str) -> str:
     async with AsyncSessionLocal() as session:
         async with session.begin():
@@ -303,19 +366,24 @@ async def parse_chain(chain_name: str) -> ChainParseResult:
         FileTypesFilters.PRICE_FULL_FILE,
         FileTypesFilters.PRICE_FILE,
     )
+    if settings.promos_enabled_for(chain_name):
+        wanted_types += (FileTypesFilters.PROMO_FULL_FILE,)
     # Newest full file already loaded (or skipped as outdated) per store: nothing
     # older than that may be applied, or it would roll the store back.
     newest_loaded: dict[str, datetime] = {}
+    newest_loaded_promo: dict[str, datetime] = {}
     on_disk = _dump_files_in(folder)
     for name, entry in ledger_rows.items():
-        if entry.file_type == "price_full" and entry.status == ledger.DONE:
-            try:
-                known = file_name_to_components(str(folder), name)
-            except Exception:
-                continue
-            store = known.extracted_store_number
-            if store not in newest_loaded or known.extracted_date > newest_loaded[store]:
-                newest_loaded[store] = known.extracted_date
+        if entry.status != ledger.DONE or entry.file_type not in ("price_full", "promo_full"):
+            continue
+        try:
+            known = file_name_to_components(str(folder), name)
+        except Exception:
+            continue
+        target = newest_loaded if entry.file_type == "price_full" else newest_loaded_promo
+        store = known.extracted_store_number
+        if store not in target or known.extracted_date > target[store]:
+            target[store] = known.extracted_date
 
     pending: list[DumpFile] = []
     for dump_file in on_disk:
@@ -333,18 +401,25 @@ async def parse_chain(chain_name: str) -> ChainParseResult:
         else:
             pending.append(dump_file)
 
-    pending, superseded = split_superseded(pending, newest_loaded)
-    if superseded:
+    pending, old_prices = split_superseded(pending, newest_loaded)
+    pending, old_promos = split_superseded(pending, newest_loaded_promo, FileTypesFilters.PROMO_FULL_FILE)
+    for label, files in (("price_full", old_prices), ("promo_full", old_promos)):
+        if not files:
+            continue
         async with AsyncSessionLocal() as session:
             async with session.begin():
-                await ledger.record_superseded(session, folder_name, [f.file_name for f in superseded])
-        for dump_file in superseded:
+                await ledger.record_superseded(session, folder_name, [f.file_name for f in files], label)
+        for dump_file in files:
             ledger.delete_loaded_file(folder / dump_file.file_name)
-        result.files_skipped += len(superseded)
-        logger.info("%s: %d older full files skipped (a newer one exists per store)", folder_name, len(superseded))
+        result.files_skipped += len(files)
+        logger.info("%s: %d older %s files skipped (a newer one exists per store)", folder_name, len(files), label)
 
-    # Stores first (so price files find their store), then oldest-first.
-    pending.sort(key=lambda f: (f.detected_filetype != FileTypesFilters.STORE_FILE, _sort_key(f)))
+    # Stores first (so price files find their store), then prices, then promotions (they need the
+    # products), each oldest-first.
+    def _rank(f: DumpFile) -> int:
+        return {FileTypesFilters.STORE_FILE: 0, FileTypesFilters.PROMO_FULL_FILE: 2}.get(f.detected_filetype, 1)
+
+    pending.sort(key=lambda f: (_rank(f), _sort_key(f)))
     if pending:
         logger.info("%s: %d files to load (%d already done)", folder_name, len(pending), result.files_skipped)
 
@@ -358,6 +433,8 @@ async def parse_chain(chain_name: str) -> ChainParseResult:
             if is_store:
                 _, applied = await _parse_store_file(dump_file, parser_cls, folder_name)
                 summary = f"{applied} stores"
+            elif dump_file.detected_filetype == FileTypesFilters.PROMO_FULL_FILE:
+                _, applied, summary = await _parse_promo_file(dump_file, parser_cls, folder_name)
             else:
                 _, applied, summary = await _parse_price_file(dump_file, parser_cls, folder_name)
         except asyncio.CancelledError:

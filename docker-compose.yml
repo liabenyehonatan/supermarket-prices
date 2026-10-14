@@ -123,6 +123,7 @@ services:
       RETRY_AFTER_HOURS: ${RETRY_AFTER_HOURS:-2}
       MIN_FREE_DISK_GB: ${MIN_FREE_DISK_GB:-5}
       SCRAPE_PROMOS: ${SCRAPE_PROMOS:-false}
+      PROMO_CHAINS: ${PROMO_CHAINS:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

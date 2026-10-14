@@ -63,6 +63,7 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
   const [open, setOpen] = useState(false);
   const isWinner  = rank === 0;
   const savings   = maxTotal - store.total_price;
+  const promoSavings = Number(store.savings ?? 0);
   const savingsPct = maxTotal > 0 ? Math.round((savings / maxTotal) * 100) : 0;
 
   return (
@@ -120,14 +121,42 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
               {item.quantity > 1 && (
                 <span style={{ color: 'var(--ink-400)', marginInlineStart: 4 }}>×{item.quantity}</span>
               )}
+              {item.promo && (
+                <div className="basket-breakdown-promo">מבצע: {item.promo.description}{item.promo.sets > 1 ? ` (×${item.promo.sets})` : ''}</div>
+              )}
+              {!item.promo && (store.promo_adjustments ?? []).some(a => a.barcodes.includes(item.barcode)) && (
+                <div className="basket-breakdown-promo">במבצע משותף</div>
+              )}
             </div>
             {item.missing
               ? <span className="basket-breakdown-missing">לא זמין</span>
-              : <span className="basket-breakdown-line tabular">{fmt(item.line_total)}</span>
+              : <span className="basket-breakdown-line tabular">
+                  {item.promo && item.regular_line_total != null && (
+                    <s className="basket-breakdown-was">{fmt(item.regular_line_total)}</s>
+                  )}
+                  {fmt(item.line_total)}
+                </span>
             }
           </div>
         ))}
 
+        {(store.promo_adjustments ?? []).map((a, i) => (
+          <div key={`adj-${i}`} className="basket-breakdown-row basket-breakdown-adjustment">
+            <div className="basket-breakdown-name" title={a.description}>
+              <div className="basket-breakdown-promo">מבצע: {a.description}{a.sets > 1 ? ` (×${a.sets})` : ''}</div>
+            </div>
+            <span className="basket-breakdown-line tabular">−{fmt(a.saving)}</span>
+          </div>
+        ))}
+        {promoSavings > 0.005 && (
+          <div className="basket-breakdown-row basket-breakdown-saving">
+            <div className="basket-breakdown-name">הסכום כולל מבצעים</div>
+            <span className="basket-breakdown-line tabular">חיסכון {fmt(promoSavings)}</span>
+          </div>
+        )}
+        {store.promotions_known === false && (
+          <div className="store-row-sub basket-no-promo">אין לנו נתוני מבצעים לסניף הזה, ייתכן שהמחיר בפועל נמוך יותר.</div>
+        )}
         <div className="basket-breakdown-row"
           style={{ background: 'var(--surface-50)', borderTop: '2px solid var(--line)' }}>
           <div className="basket-breakdown-name" style={{ fontWeight: 700 }}>סה״כ</div>
@@ -566,6 +595,12 @@ export function BasketPage() {
             <div className="section-divider" ref={resultsRef}>תוצאות ההשוואה</div>
 
             {nowCompare && <CompareDelta prev={prevCompare} now={nowCompare} />}
+
+            {results.stores.some(s => s.promotions_known) && (
+              <div className="basket-promo-note">
+                הסכומים כוללים מבצעי &quot;N ב-X&quot; (על מוצר בודד או על קבוצת מוצרים), בסניפים שיש לנו עבורם נתוני מבצעים. מבצעי מועדון וקופונים לא נכללים.
+              </div>
+            )}
 
             <div className="section-header" style={{ marginBottom: 16 }}>
               <div>
