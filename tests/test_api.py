@@ -608,3 +608,78 @@ async def test_the_same_promotion_without_confirmation_is_not_applied(client, se
     await _basket_world(session, min_qty=2, promo_price="8.00", shelf_b="10.00", shelf_a="12.00", price_is_total=False)
     b = _by_chain(await _basket(client, 2))["רשת ב"]
     assert float(b["total_price"]) == 20.0 and b["item_prices"][0]["promo"] is None
+
+
+async def _group_world(session, *, with_group=True, group_age_days=0):
+    """Store A is cheaper on the shelf; store B runs '3 for 10' on any of milk, yogurt and cheese."""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, update
+    from zoneinfo import ZoneInfo
+    from app.db.models import Chain, Price, Product, Promotion, Store
+
+    chain_a, chain_b = Chain(chain_id="1", name="רשת א"), Chain(chain_id="2", name="רשת ב")
+    session.add_all([chain_a, chain_b])
+    await session.flush()
+    store_a = Store(chain_id=chain_a.id, store_id="1", name="סניף א")
+    store_b = Store(chain_id=chain_b.id, store_id="1", name="סניף ב")
+    products = [Product(barcode=f"729000000030{i}", name=name) for i, name in enumerate(("חלב", "יוגורט", "גבינה"), 1)]
+    session.add_all([store_a, store_b, *products])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    shelf_a, shelf_b = ("4.00", "5.00", "6.00"), ("5.00", "6.00", "7.00")
+    for product, a, b in zip(products, shelf_a, shelf_b):
+        session.add_all([
+            Price(product_id=product.id, store_id=store_a.id, price=a, price_updated_at=now, is_current=True),
+            Price(product_id=product.id, store_id=store_b.id, price=b, price_updated_at=now, is_current=True),
+        ])
+    local_now = datetime.now(ZoneInfo("Asia/Jerusalem")).replace(tzinfo=None)
+    if with_group:
+        for product in products:
+            session.add(Promotion(
+                product_id=product.id, store_id=store_b.id, promotion_id="g1", description="3 מוצרי חלב ב-10",
+                min_qty=3, discounted_price="10.00", basket_eligible=True, price_is_total=True, is_active=True,
+                start_date=local_now - timedelta(days=5), end_date=local_now + timedelta(days=5)))
+    await session.commit()
+    await session.execute(update(Store).where(Store.id == store_b.id).values(
+        last_promo_at=func.now() - timedelta(days=group_age_days)))
+    await session.commit()
+    return products
+
+
+async def _group_basket(client, quantities):
+    body = [{"barcode": f"729000000030{i}", "quantity": q} for i, q in enumerate(quantities, 1) if q]
+    r = await client.post("/api/v1/basket/compare", json=body)
+    assert r.status_code == 200
+    return r.json()
+
+
+async def test_a_group_promotion_pools_different_products_and_can_flip_the_ranking(client, session):
+    await _group_world(session)
+    body = await _group_basket(client, (1, 1, 1))           # A: 4+5+6 = 15.00, B: shelf 18.00, promotion 10.00
+    assert [s["store"]["chain"]["name"] for s in body["stores"]] == ["רשת ב", "רשת א"]
+    b = _by_chain(body)["רשת ב"]
+    assert (float(b["total_price"]), float(b["savings"]), b["promotions_known"]) == (10.0, 8.0, True)
+    [adjustment] = b["promo_adjustments"]
+    assert adjustment["description"] == "3 מוצרי חלב ב-10" and adjustment["sets"] == 1
+    assert float(adjustment["saving"]) == 8.0 and sorted(adjustment["barcodes"]) == ["7290000000301", "7290000000302", "7290000000303"]
+    assert all(line["promo"] is None for line in b["item_prices"])         # group savings are not spread over lines
+    assert sum(float(line["line_total"]) for line in b["item_prices"]) == 18.0
+
+
+async def test_the_basket_below_the_set_size_gets_no_group_promotion(client, session):
+    await _group_world(session)
+    body = await _group_basket(client, (1, 1, 0))
+    b = _by_chain(body)["רשת ב"]
+    assert float(b["total_price"]) == 11.0 and b["promo_adjustments"] == []
+
+
+async def test_a_store_without_fresh_promotion_data_gets_no_group_promotion(client, session):
+    await _group_world(session, group_age_days=8)
+    b = _by_chain(await _group_basket(client, (1, 1, 1)))["רשת ב"]
+    assert (float(b["total_price"]), b["promo_adjustments"], b["promotions_known"]) == (18.0, [], False)
+
+
+async def test_stores_without_any_promotion_report_an_empty_adjustment_list(client, session):
+    await _group_world(session, with_group=False)
+    for store in (await _group_basket(client, (1, 1, 1)))["stores"]:
+        assert store["promo_adjustments"] == []
