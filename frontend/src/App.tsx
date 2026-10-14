@@ -13,6 +13,7 @@ import { SiteFooter } from './components/SiteFooter';
 const ProductPage = lazy(() => import('./pages/ProductPage').then(m => ({ default: m.ProductPage })));
 const BasketPage = lazy(() => import('./pages/BasketPage').then(m => ({ default: m.BasketPage })));
 const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })));
+const DealsPage = lazy(() => import('./pages/DealsPage').then(m => ({ default: m.DealsPage })));
 const ScanPage = lazy(() => import('./pages/ScanPage').then(m => ({ default: m.ScanPage })));
 import './styles/global.css';
 
@@ -37,6 +38,7 @@ export function App() {
           <Route path="/scan" element={<ScanPage />} />
           <Route path="/basket" element={<BasketPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/promotions" element={<DealsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

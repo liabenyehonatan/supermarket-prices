@@ -32,6 +32,7 @@ import { HeroBanner } from '../components/HeroBanner';
 import { TrustLine } from '../components/TrustLine';
 import { useBasketWatch } from '../lib/basketWatch';
 import { ExampleComparisons } from '../components/ExampleComparisons';
+import { DealsStrip } from '../components/DealsStrip';
 import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
@@ -595,6 +596,8 @@ export function SearchPage() {
             )}
 
             <ExampleComparisons />
+
+            <DealsStrip chain={chainFilter} />
 
             <div className="section-header home-section-head">
               <div>

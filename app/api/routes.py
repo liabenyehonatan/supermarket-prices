@@ -4,7 +4,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,6 +36,11 @@ from app.api.schemas import (
     StatsResponse,
     ExampleComparison,
     UnitPriceInfo,
+    DealProduct,
+    Deal,
+    DealFacet,
+    DealRules,
+    DealsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -797,3 +802,113 @@ async def compare_basket(
         max_total=max_total,
     )
     return Response(content=response.model_dump_json(), media_type="application/json")
+
+
+# ─── Promotions section: deals across brands ─────────────────────────────────
+
+MIN_DEAL_SAVING = Decimal("0.10")     # under 10% is not worth a card
+MAX_DEAL_SAVING = Decimal("0.60")     # over 60% is almost always a pack price read as a unit price
+MIN_REFERENCE_PRICE = Decimal("0.50")  # the cheapest price must be at least this: pennies are placeholders (the view uses the same 0.5)
+DEAL_SAMPLES = 4
+_DEALS_FILTER = (
+    "saving_pct BETWEEN :lo AND :hi AND (ends_at IS NULL OR ends_at >= (now() AT TIME ZONE 'Asia/Jerusalem'))"
+)
+
+
+def _deals_where(chain, city, kind, ending) -> tuple[str, dict]:
+    where, params = [_DEALS_FILTER], {"lo": MIN_DEAL_SAVING, "hi": MAX_DEAL_SAVING}
+    if chain and chain.strip():
+        where.append("brand = :chain")
+        params["chain"] = chain.strip()
+    if city and city.strip():
+        where.append("store_ids && ARRAY(SELECT id FROM stores WHERE city ILIKE :city)")
+        params["city"] = f"%{city.strip().replace('%', '').replace('_', '')}%"
+    if kind == "single":
+        where.append("products = 1")
+    elif kind == "group":
+        where.append("products > 1")
+    if ending:
+        where.append("ends_at IS NOT NULL AND ends_at <= (now() AT TIME ZONE 'Asia/Jerusalem') + interval '14 days'")
+    return " AND ".join(where), params
+
+
+async def _sample_products(db: AsyncSession, rows) -> dict[str, list[DealProduct]]:
+    """Up to DEAL_SAMPLES products per deal, preferring ones with a picture (only ~7% have one)."""
+    wanted = {r.deal_id: list(r.sample_ids) for r in rows}
+    all_ids = sorted({i for ids in wanted.values() for i in ids})
+    found = {}
+    if all_ids:
+        result = await db.execute(select(Product).where(Product.id.in_(all_ids)))
+        found = {p.id: p for p in result.scalars().all()}
+    samples = {}
+    for deal_id, ids in wanted.items():
+        products = [found[i] for i in ids if i in found]
+        products.sort(key=lambda p: p.image_url is None)          # stable: pictured ones first
+        samples[deal_id] = [
+            DealProduct(barcode=p.barcode, name=p.name, brand=p.brand, image_url=p.image_url,
+                        unit_of_measure=p.unit_of_measure)
+            for p in products[:DEAL_SAMPLES]
+        ]
+    return samples
+
+
+@router.get("/deals", response_model=DealsResponse, summary="Promotions across brands, cheapest versus the market first")
+async def list_deals(
+    chain: Optional[str] = Query(None, max_length=60, description="Only this brand (exact name)"),
+    city: Optional[str] = Query(None, max_length=60, description="Only promotions running in a store of this city"),
+    kind: Optional[Literal["single", "group"]] = Query(None),
+    sort: Literal["best", "ending"] = Query("best"),
+    diverse: bool = Query(False, description="At most two per brand, for the home strip"),
+    limit: int = Query(24, ge=1, le=60),
+    offset: int = Query(0, ge=0, le=1000),
+    db: AsyncSession = Depends(get_db),
+):
+    where, params = _deals_where(chain, city, kind, ending=sort == "ending")
+    # With a city filter the card counts the stores of that city, not all the stores of the promotion.
+    stores_expr = ("cardinality(ARRAY(SELECT unnest(store_ids) INTERSECT SELECT id FROM stores WHERE city ILIKE :city))"
+                   if "city" in params else "stores")
+    # Deals compared with other brands come first; every order ends with deal_id so ties page deterministically.
+    order = ("vs_market DESC, ends_at ASC, saving_pct DESC, deal_id" if sort == "ending"
+             else "vs_market DESC, saving_pct DESC, stores DESC, deal_id")
+    fetch = limit * 3 if diverse else limit
+    rows = (await db.execute(text(
+        f"""
+        SELECT deal_id, brand, description, min_qty, price, unit_price, ref_price, saving_pct, vs_market,
+               {stores_expr} AS stores, products, max_qty, ends_at, product_ids[1:12] AS sample_ids
+          FROM promo_deals WHERE {where} ORDER BY {order} LIMIT :fetch OFFSET :offset
+        """), {**params, "fetch": fetch, "offset": offset})).all()
+    if diverse:
+        per_brand: dict[str, int] = {}
+        kept = []
+        for r in rows:
+            if per_brand.get(r.brand, 0) < 2:
+                per_brand[r.brand] = per_brand.get(r.brand, 0) + 1
+                kept.append(r)
+        rows = kept[:limit]
+    total = (await db.execute(text(f"SELECT count(*) FROM promo_deals WHERE {where}"), params)).scalar_one()
+    facet_where, facet_params = _deals_where(None, city, kind, ending=sort == "ending")
+    facets = (await db.execute(text(
+        f"SELECT brand, count(*) AS n FROM promo_deals WHERE {facet_where} GROUP BY brand ORDER BY n DESC, brand"),
+        facet_params)).all()
+    samples = await _sample_products(db, rows)
+    deals = [
+        Deal(deal_id=r.deal_id, brand=r.brand, description=r.description, kind="single" if r.products == 1 else "group",
+             min_qty=r.min_qty, price=r.price, unit_price=r.unit_price, ref_price=r.ref_price, saving_pct=r.saving_pct,
+             vs_market=r.vs_market, stores=r.stores, products=r.products, max_qty=r.max_qty, ends_at=r.ends_at,
+             sample_products=samples.get(r.deal_id, []))
+        for r in rows
+    ]
+    return DealsResponse(
+        total=total, deals=deals, chains=[DealFacet(name=b, count=n) for b, n in facets],
+        rules=DealRules(min_saving=MIN_DEAL_SAVING, max_saving=MAX_DEAL_SAVING, min_reference_price=MIN_REFERENCE_PRICE),
+    )
+
+
+@router.get("/deals/{deal_id}/products", response_model=List[DealProduct], summary="The products of one promotion")
+async def deal_products(deal_id: str, db: AsyncSession = Depends(get_db)):
+    row = (await db.execute(text("SELECT product_ids[1:100] AS ids FROM promo_deals WHERE deal_id = :id"), {"id": deal_id})).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    result = await db.execute(select(Product).where(Product.id.in_(list(row.ids)), _real_barcode()).order_by(Product.name))
+    return [DealProduct(barcode=p.barcode, name=p.name, brand=p.brand, image_url=p.image_url,
+                        unit_of_measure=p.unit_of_measure) for p in result.scalars().all()]
