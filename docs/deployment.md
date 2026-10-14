@@ -223,6 +223,18 @@ select p.barcode, pr.description, pr.min_qty, pr.discounted_price, price.price
  limit 50;
 ```
 
+**Group promotions.** A promotion on several products ("any 3 of these 4 for 10") is priced in the basket when its text confirms the price; the basket pools the quantities of its products, takes the cheapest units first (the safe reading: it can only overstate a total) and shows it as a saving row. They become `basket_eligible` as each store's next promotion file loads, so the first cycle after the deploy fills them. Check the biggest ones before switching on more chains:
+
+```sql
+select pr.store_id, pr.promotion_id, pr.description, pr.min_qty, pr.discounted_price, count(*) as products
+  from promotions pr
+ where pr.basket_eligible
+ group by 1, 2, 3, 4, 5
+having count(*) > 1
+ order by products desc
+ limit 30;
+```
+
 Basket totals drop once promotions are on, so the basket page's "last time" comparison shows the first promotion-priced comparison as a price drop.
 
 To turn them off set `SCRAPE_PROMOS=false`. Rows already loaded stay and keep being filtered by their dates; `TRUNCATE promotions;` clears them.
