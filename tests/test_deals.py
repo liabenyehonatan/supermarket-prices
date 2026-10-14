@@ -87,3 +87,97 @@ async def test_the_mixed_bitan_carrefour_chain_is_split_by_store_name_like_displ
     assert sorted(r.brand for r in rows) == sorted([display_chain_name(MIXED_CHAIN, "יינות ביתן טבעון"),
                                                    display_chain_name(MIXED_CHAIN, "קרפור מרקט אילת")])
     assert all(r.stores == 1 for r in rows)
+
+
+import httpx
+from httpx import ASGITransport
+
+from main import app
+
+
+@pytest.fixture
+async def client():
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+
+
+async def test_the_list_returns_a_deal_with_its_numbers_and_a_picture(client, session):
+    await make_world(session)
+    body = (await client.get("/api/v1/deals")).json()
+    assert body["total"] == 1 and body["chains"] == [{"name": "רשת א", "count": 1}]
+    [deal] = body["deals"]
+    assert (deal["brand"], deal["kind"], deal["min_qty"], deal["stores"], deal["products"]) == ("רשת א", "single", 3, 2, 1)
+    assert float(deal["unit_price"]) == 3.0 and float(deal["ref_price"]) == 4.0 and round(float(deal["saving_pct"]), 2) == 0.25
+    assert [p["barcode"] for p in deal["sample_products"]] == ["7290000000501"]
+    assert deal["sample_products"][0]["image_url"] == "https://img.example/x.png"
+
+
+@pytest.mark.parametrize("price", ["12.00", "11.00", "3.00"])       # 0% (not cheaper), 8% (too small), 75% (suspicious)
+async def test_deals_that_are_not_clearly_cheaper_or_look_wrong_are_hidden(client, session, price):
+    await make_world(session, price=price, market_min="4.00")
+    assert (await client.get("/api/v1/deals")).json()["deals"] == []
+
+
+async def test_a_promotion_that_ended_after_the_last_refresh_disappears_at_query_time(client, session):
+    import asyncio
+    await make_world(session, ends=NOW_IL() + timedelta(seconds=3))     # still running when the view is refreshed
+    assert len((await client.get("/api/v1/deals")).json()["deals"]) == 1
+    await asyncio.sleep(3.5)                                        # the view is not refreshed, the query still checks the date
+    assert (await client.get("/api/v1/deals")).json()["deals"] == []
+
+
+async def test_chain_and_city_filters(client, session):
+    await make_world(session)
+    assert len((await client.get("/api/v1/deals", params={"chain": "רשת א"})).json()["deals"]) == 1
+    assert (await client.get("/api/v1/deals", params={"chain": "רשת ב"})).json()["deals"] == []
+    assert len((await client.get("/api/v1/deals", params={"city": "עכו"})).json()["deals"]) == 1
+    assert (await client.get("/api/v1/deals", params={"city": "אילת"})).json()["deals"] == []
+
+
+async def test_kind_filter_separates_single_products_from_groups(client, session):
+    await make_world(session)
+    assert len((await client.get("/api/v1/deals", params={"kind": "single"})).json()["deals"]) == 1
+    assert (await client.get("/api/v1/deals", params={"kind": "group"})).json()["deals"] == []
+
+
+async def test_the_diverse_list_takes_at_most_two_deals_per_brand(client, session):
+    await make_world(session)
+    chain = (await session.execute(text("select id from chains where name = 'רשת א'"))).scalar_one()
+    store_ids = [r[0] for r in (await session.execute(text("select id from stores where chain_id = :c"), {"c": chain})).all()]
+    local = NOW_IL()
+    for n in range(4):                                              # four more products and deals in chain A
+        product = Product(barcode=f"72900000006{n:02d}", name=f"עוד {n}")
+        session.add(product)
+        await session.flush()
+        for sid in store_ids:
+            session.add(Price(product_id=product.id, store_id=sid, price="5.00", price_updated_at=datetime(2026, 10, 12), is_current=True))
+            session.add(Promotion(product_id=product.id, store_id=sid, promotion_id=f"x{n}", description="3 ב-9",
+                                  min_qty=3, discounted_price="9.00", basket_eligible=True, price_is_total=True, is_active=True,
+                                  start_date=local - timedelta(days=1), end_date=local + timedelta(days=4)))
+    await session.commit()
+    await maintenance.refresh_popularity()
+    await maintenance.refresh_deals()
+    everything = (await client.get("/api/v1/deals", params={"limit": 10})).json()
+    diverse = (await client.get("/api/v1/deals", params={"limit": 10, "diverse": "true"})).json()
+    assert len(everything["deals"]) == 5 and len(diverse["deals"]) == 2
+
+
+async def test_ending_sort_lists_the_soonest_first_and_pages(client, session):
+    await make_world(session)
+    body = (await client.get("/api/v1/deals", params={"sort": "ending", "limit": 1, "offset": 0})).json()
+    assert body["total"] == 1 and len(body["deals"]) == 1
+    assert (await client.get("/api/v1/deals", params={"limit": 1, "offset": 1})).json()["deals"] == []
+
+
+async def test_a_deals_products_are_listed_and_an_unknown_deal_is_404(client, session):
+    await make_world(session)
+    deal_id = (await client.get("/api/v1/deals")).json()["deals"][0]["deal_id"]
+    products = (await client.get(f"/api/v1/deals/{deal_id}/products")).json()
+    assert [p["barcode"] for p in products] == ["7290000000501"]
+    assert (await client.get("/api/v1/deals/nope/products")).status_code == 404
+
+
+async def test_the_limits_are_enforced(client):
+    assert (await client.get("/api/v1/deals", params={"limit": 61})).status_code == 422
+    assert (await client.get("/api/v1/deals", params={"offset": 1001})).status_code == 422
+    assert (await client.get("/api/v1/deals", params={"sort": "random"})).status_code == 422
