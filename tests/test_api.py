@@ -468,3 +468,130 @@ async def test_compare_shows_at_most_three_promotions_per_store(client, session)
     await session.commit()
     r = await client.get(f"/api/v1/products/{product.barcode}/compare")
     assert len(r.json()["prices"][0]["promotions"]) == 3
+
+
+async def _basket_world(session, *, promo_age_days=0, eligible=True, max_qty=None, ends_yesterday=False,
+                        min_qty=3, promo_price="10.00", shelf_a="4.00", shelf_b="5.00"):
+    """Two stores sell one product. A is cheaper on the shelf. B runs '3 for 10' (when eligible)."""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, update
+    from zoneinfo import ZoneInfo
+    from app.db.models import Chain, Price, Product, Promotion, Store
+
+    chain_a, chain_b = Chain(chain_id="1", name="רשת א"), Chain(chain_id="2", name="רשת ב")
+    session.add_all([chain_a, chain_b])
+    await session.flush()
+    store_a = Store(chain_id=chain_a.id, store_id="1", name="סניף א")
+    store_b = Store(chain_id=chain_b.id, store_id="1", name="סניף ב")
+    product = Product(barcode="7290000000201", name="חלב")
+    session.add_all([store_a, store_b, product])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    session.add_all([
+        Price(product_id=product.id, store_id=store_a.id, price=shelf_a, price_updated_at=now, is_current=True),
+        Price(product_id=product.id, store_id=store_b.id, price=shelf_b, price_updated_at=now, is_current=True),
+    ])
+    local_now = datetime.now(ZoneInfo("Asia/Jerusalem")).replace(tzinfo=None)
+    session.add(Promotion(
+        product_id=product.id, store_id=store_b.id, promotion_id="p1", description="3 ב-10",
+        min_qty=min_qty, discounted_price=promo_price, max_qty=max_qty, basket_eligible=eligible, is_active=True,
+        start_date=local_now - timedelta(days=5),
+        end_date=local_now - timedelta(days=1) if ends_yesterday else local_now + timedelta(days=5),
+    ))
+    await session.commit()
+    await session.execute(update(Store).where(Store.id == store_b.id).values(
+        last_promo_at=func.now() - timedelta(days=promo_age_days)))
+    await session.commit()
+    return product
+
+
+async def _basket(client, qty):
+    r = await client.post("/api/v1/basket/compare", json=[{"barcode": "7290000000201", "quantity": qty}])
+    assert r.status_code == 200
+    return r.json()
+
+
+def _by_chain(body):
+    return {s["store"]["chain"]["name"]: s for s in body["stores"]}
+
+
+async def test_a_promotion_can_make_the_dearer_shelf_store_win(client, session):
+    await _basket_world(session)
+    body = await _basket(client, 3)
+    assert [s["store"]["chain"]["name"] for s in body["stores"]] == ["רשת ב", "רשת א"]       # B: 10.00 < A: 12.00
+    b = _by_chain(body)["רשת ב"]
+    assert (float(b["total_price"]), float(b["savings"]), b["promotions_known"]) == (10.0, 5.0, True)
+    line = b["item_prices"][0]
+    assert float(line["unit_price"]) == 5.0 and float(line["regular_line_total"]) == 15.0
+    assert float(line["line_total"]) == 10.0
+    assert line["promo"] == {"description": "3 ב-10", "min_qty": 3, "price": "10.00", "sets": 1}
+    a = _by_chain(body)["רשת א"]
+    assert (float(a["savings"]), a["promotions_known"], a["item_prices"][0]["promo"]) == (0.0, False, None)
+
+
+async def test_below_the_set_size_the_shelf_price_decides(client, session):
+    await _basket_world(session)
+    body = await _basket(client, 2)
+    assert [s["store"]["chain"]["name"] for s in body["stores"]] == ["רשת א", "רשת ב"]       # 8.00 < 10.00
+    assert float(_by_chain(body)["רשת ב"]["savings"]) == 0.0
+
+
+async def test_the_remainder_and_the_purchase_limit_are_priced_at_shelf(client, session):
+    await _basket_world(session, min_qty=1, promo_price="3.00", max_qty=3)
+    body = await _basket(client, 5)
+    b = _by_chain(body)["רשת ב"]
+    assert float(b["total_price"]) == 19.0                  # 3 x 3.00 + 2 x 5.00
+    assert b["item_prices"][0]["promo"]["sets"] == 3
+
+
+async def test_a_store_without_fresh_promotion_data_gets_no_promotion(client, session):
+    await _basket_world(session, promo_age_days=8)
+    b = _by_chain(await _basket(client, 3))["רשת ב"]
+    assert (float(b["total_price"]), b["promotions_known"], b["item_prices"][0]["promo"]) == (15.0, False, None)
+
+
+async def test_an_ineligible_promotion_never_changes_a_total(client, session):
+    await _basket_world(session, eligible=False)
+    assert float(_by_chain(await _basket(client, 3))["רשת ב"]["total_price"]) == 15.0
+
+
+async def test_an_ended_promotion_is_not_applied(client, session):
+    await _basket_world(session, ends_yesterday=True)
+    assert float(_by_chain(await _basket(client, 3))["רשת ב"]["total_price"]) == 15.0
+
+
+async def test_a_promotion_that_is_not_cheaper_is_ignored(client, session):
+    await _basket_world(session, promo_price="15.00")        # 3 for 15.00 = the shelf price
+    b = _by_chain(await _basket(client, 3))["רשת ב"]
+    assert float(b["total_price"]) == 15.0 and b["item_prices"][0]["promo"] is None
+
+
+async def test_complete_baskets_still_rank_before_incomplete_ones_with_promotions(client, session):
+    from datetime import datetime
+    from sqlalchemy import select
+    from app.db.models import Chain, Price, Product, Store
+
+    await _basket_world(session)                              # A: 4.00, B: 5.00 with "3 for 10"
+    milk = (await session.execute(select(Product).where(Product.barcode == "7290000000201"))).scalar_one()
+    bread = Product(barcode="7290000000202", name="לחם")
+    chain_c = Chain(chain_id="3", name="רשת ג")
+    session.add_all([bread, chain_c])
+    await session.flush()
+    store_c = Store(chain_id=chain_c.id, store_id="1", name="סניף ג")
+    session.add(store_c)
+    await session.flush()
+    stores = {s.name: s for s in (await session.execute(select(Store))).scalars().all()}
+    now = datetime(2026, 10, 12)
+    session.add_all([
+        Price(product_id=bread.id, store_id=stores["סניף א"].id, price="1.00", price_updated_at=now, is_current=True),
+        Price(product_id=bread.id, store_id=stores["סניף ב"].id, price="1.00", price_updated_at=now, is_current=True),
+        Price(product_id=milk.id, store_id=store_c.id, price="1.00", price_updated_at=now, is_current=True),   # C has no bread
+    ])
+    await session.commit()
+
+    r = await client.post("/api/v1/basket/compare", json=[
+        {"barcode": "7290000000201", "quantity": 3}, {"barcode": "7290000000202", "quantity": 1}])
+    stores_out = r.json()["stores"]
+    assert [(s["store"]["chain"]["name"], s["items_missing"]) for s in stores_out] == [
+        ("רשת ב", 0), ("רשת א", 0), ("רשת ג", 1)]               # B 11.00 (promotion), A 13.00, then the cheap incomplete C
+    assert [float(s["total_price"]) for s in stores_out] == [11.0, 13.0, 3.0]

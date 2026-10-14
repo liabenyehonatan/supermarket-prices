@@ -175,6 +175,10 @@ class BasketStoreTotal(BaseModel):
     items_missing: int
     # Breakdown per item
     item_prices: List[dict]
+    # What the promotions took off this store's shelf total (0 when none applied), and whether we hold
+    # fresh promotion data for it (a store without it is priced at shelf price, which may be too high).
+    savings: Decimal = Decimal("0")
+    promotions_known: bool = False
 
 
 class BasketCompareResponse(BaseModel):

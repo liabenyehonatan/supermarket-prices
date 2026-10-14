@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
+from app.basket_promos import BasketPromo, price_line
 from app.chains import display_chain_name, display_chain_name_sql
 from app.images import ImageLookupError, is_allowed_image_url
 from app.images import lookup_image_url as _lookup_image_url
@@ -157,17 +158,27 @@ async def search_products(
 MAX_PROMOS_PER_STORE = 3
 
 
-async def _running_promotions(db: AsyncSession, product_id: int, store_ids: list[int]) -> dict[int, list[PromoInfo]]:
-    """Promotions running now (chains publish Israel local time without a zone) per store, soonest end first."""
+PROMO_FRESH_DAYS = 7      # a store's promotions count in the basket only if its promotion file was loaded this recently
+
+
+def _running_now():
+    """The promotion is inside its dates now (chains publish Israel local time without a zone)."""
     now_il = func.timezone("Asia/Jerusalem", func.now())
+    return and_(
+        Promotion.is_active,
+        or_(Promotion.start_date.is_(None), Promotion.start_date <= now_il),
+        or_(Promotion.end_date.is_(None), Promotion.end_date >= now_il),
+    )
+
+
+async def _running_promotions(db: AsyncSession, product_id: int, store_ids: list[int]) -> dict[int, list[PromoInfo]]:
+    """Promotions running now per store, soonest end first."""
     rows = await db.execute(
         select(Promotion.store_id, Promotion.description, Promotion.min_qty, Promotion.end_date)
         .where(
             Promotion.product_id == product_id,
             Promotion.store_id.in_(store_ids),
-            Promotion.is_active,
-            or_(Promotion.start_date.is_(None), Promotion.start_date <= now_il),
-            or_(Promotion.end_date.is_(None), Promotion.end_date >= now_il),
+            _running_now(),
         )
         .order_by(Promotion.store_id, Promotion.end_date.asc().nulls_last(), Promotion.promotion_id)
     )
@@ -177,6 +188,27 @@ async def _running_promotions(db: AsyncSession, product_id: int, store_ids: list
         if len(bucket) < MAX_PROMOS_PER_STORE:
             bucket.append(PromoInfo(description=description or "", min_qty=min_qty, ends_at=end_date))
     return by_store
+
+
+async def _basket_promotions(db: AsyncSession, product_ids: list[int]) -> dict[tuple[int, int], list[BasketPromo]]:
+    """Promotions safe to price a basket with, running now, per (store, product)."""
+    rows = await db.execute(
+        select(
+            Promotion.store_id, Promotion.product_id, Promotion.promotion_id, Promotion.description,
+            Promotion.min_qty, Promotion.discounted_price, Promotion.max_qty,
+        ).where(
+            Promotion.product_id.in_(product_ids),
+            Promotion.basket_eligible,
+            Promotion.min_qty.is_not(None),
+            Promotion.discounted_price.is_not(None),
+            _running_now(),
+        )
+    )
+    by_line: dict[tuple[int, int], list[BasketPromo]] = {}
+    for store_id, product_id, promotion_id, description, min_qty, price, max_qty in rows.all():
+        by_line.setdefault((store_id, product_id), []).append(
+            BasketPromo(promotion_id, description or "", min_qty, price, max_qty))
+    return by_line
 
 
 # ─── Endpoint 2: Compare Product Prices ──────────────────────────────────────
@@ -628,6 +660,7 @@ async def compare_basket(
             Price.price, Price.product_id,
             Store.id.label("store_pk"), Store.store_id, Store.name.label("store_name"), Store.city,
             Store.address, Store.latitude, Store.longitude,
+            func.coalesce(Store.last_promo_at >= func.now() - timedelta(days=PROMO_FRESH_DAYS), False).label("promo_known"),
             Chain.id.label("chain_pk"), Chain.name.label("chain_name"), Chain.chain_id.label("chain_code"),
         )
         .join(Store, Price.store_id == Store.id)
@@ -646,6 +679,7 @@ async def compare_basket(
         prices_query = prices_query.where(display_chain_name_sql() == chain.strip())
 
     all_price_rows = (await db.execute(prices_query)).all()
+    promos_by_line = await _basket_promotions(db, list(by_id)) if by_id else {}
 
     # Step 4: Group prices by store: store_pk -> (row, {barcode -> item})
     grouped: dict = {}
@@ -655,29 +689,37 @@ async def compare_basket(
         entry = grouped.get(r.store_pk)
         if entry is None:
             entry = grouped[r.store_pk] = (r, {})
+        line = price_line(
+            r.price, qty, promos_by_line.get((r.store_pk, r.product_id), []) if r.promo_known else [])
         entry[1][product.barcode] = {
             "product_name": product.name,
             "barcode": product.barcode,
             "unit_price": r.price,
             "quantity": qty,
-            "line_total": r.price * qty,
+            "line_total": line.total,
+            "regular_line_total": line.regular_total,
+            "promo": None if line.promo is None else {
+                "description": line.promo.description, "min_qty": line.promo.min_qty,
+                "price": line.promo.price, "sets": line.sets,
+            },
         }
 
     # Step 5: Total per store (of the items it has), then sort: complete baskets first, cheapest first
     ranked = []
     for r, items_by_barcode in grouped.values():
         total = sum((info["line_total"] for info in items_by_barcode.values()), Decimal("0"))
-        ranked.append((len(barcodes) - len(items_by_barcode), total, r, items_by_barcode))
+        savings = sum((info["regular_line_total"] - info["line_total"] for info in items_by_barcode.values()), Decimal("0"))
+        ranked.append((len(barcodes) - len(items_by_barcode), total, savings, r, items_by_barcode))
     ranked.sort(key=lambda x: (x[0], x[1]))
 
-    complete_totals = [t for missing, t, _, _ in ranked if missing == 0]
+    complete_totals = [t for missing, t, _, _, _ in ranked if missing == 0]
     if len(complete_totals) >= 2:
         max_savings = complete_totals[-1] - complete_totals[0]
         max_total = complete_totals[-1]
     else:
         max_savings = Decimal("0")
-        max_total = max((t for _, t, _, _ in ranked), default=Decimal("0"))
-    cheapest_store = ranked[0][2].store_name if ranked else None
+        max_total = max((t for _, t, _, _, _ in ranked), default=Decimal("0"))
+    cheapest_store = ranked[0][3].store_name if ranked else None
 
     # Step 6: Build the answer. The constructed models skip validation (the values come from the database)
     # and the JSON is written straight from them: a basket answer is ~1.3 MB, so this mattered.
@@ -695,10 +737,12 @@ async def compare_basket(
             total_price=total,
             items_found=len(items_by_barcode),
             items_missing=missing,
+            savings=savings,
+            promotions_known=bool(r.promo_known),
             # In the order the items were listed in the basket (the database returns them in no fixed order).
             item_prices=sorted(items_by_barcode.values(), key=lambda i: basket_order[i["barcode"]]),
         )
-        for missing, total, r, items_by_barcode in shown
+        for missing, total, savings, r, items_by_barcode in shown
     ]
 
     response = BasketCompareResponse.model_construct(
