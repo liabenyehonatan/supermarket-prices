@@ -17,6 +17,14 @@ async def refresh_popularity() -> None:
         await conn.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY product_store_counts"))
 
 
+async def refresh_deals() -> None:
+    """Rebuild promo_deals (the promotions section). Run after refresh_popularity: it joins product_store_counts.
+    CONCURRENTLY keeps the API readable meanwhile; it cannot run inside a transaction, hence AUTOCOMMIT."""
+    async with engine.connect() as conn:
+        conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY promo_deals"))
+
+
 async def prune_history(days: int, batch: int = 20000) -> int:
     """
     Delete NON-current price rows older than `days`. Opt-in only (see
