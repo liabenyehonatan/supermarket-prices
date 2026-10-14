@@ -77,9 +77,17 @@ DELETE_AFTER_INGEST = _bool("DELETE_AFTER_INGEST", False)
 MIN_FREE_DISK_GB = _float("MIN_FREE_DISK_GB", 5)
 
 # ── Ingestion worker ──────────────────────────────────────────────────────────
-# Download promotion files too. Nothing parses them yet, so by default they are
-# not fetched (they would only pile up on disk). Turn on together with a promo loader.
+# Download and load promotion files. Off by default: they take disk and database space.
 SCRAPE_PROMOS = _bool("SCRAPE_PROMOS", False)
+# Limit promotions to these chains (scraper names, comma separated). Empty = every chain.
+PROMO_CHAINS = {c.upper() for c in _list("PROMO_CHAINS")}
+
+
+def promos_enabled_for(chain: str) -> bool:
+    """Whether promotion files are downloaded and loaded for this chain (a ScraperFactory name)."""
+    return SCRAPE_PROMOS and (not PROMO_CHAINS or chain.upper() in PROMO_CHAINS)
+
+
 SKIP_BLOCKED_CHAINS = _bool("SKIP_BLOCKED_CHAINS", False)
 # Scraper names never run by the schedule (comma separated, e.g. SUPER_PHARM). For a
 # chain that fails every time on this server, so it does not mark every cycle "partial".

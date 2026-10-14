@@ -89,3 +89,51 @@ async def test_zero_id_chain_is_merged_into_the_real_chain(_database):
         assert await conn.fetchval("SELECT count(*) FROM prices WHERE is_current") == 3
     finally:
         await conn.close()
+
+
+async def test_one_promotion_can_cover_many_products_in_a_store(_database):
+    conn = await asyncpg.connect(_dsn())
+    try:
+        await conn.execute("TRUNCATE chains RESTART IDENTITY CASCADE")
+        await conn.execute("INSERT INTO chains (chain_id, name) VALUES ('1', 'c')")
+        await conn.execute("INSERT INTO stores (chain_id, store_id) VALUES (1, 's')")
+        await conn.execute("INSERT INTO products (barcode, name) VALUES ('a', 'n'), ('b', 'n')")
+        await conn.execute(
+            "INSERT INTO promotions (product_id, store_id, promotion_id, is_active) VALUES (1, 1, 'p', true), (2, 1, 'p', true)"
+        )
+        with pytest.raises(asyncpg.UniqueViolationError):
+            await conn.execute(
+                "INSERT INTO promotions (product_id, store_id, promotion_id, is_active) VALUES (1, 1, 'p', true)"
+            )
+    finally:
+        await conn.close()
+
+
+async def test_basket_promotion_columns_exist_and_default_to_not_eligible(_database):
+    conn = await asyncpg.connect(_dsn())
+    try:
+        await conn.execute("TRUNCATE chains RESTART IDENTITY CASCADE")
+        await conn.execute("INSERT INTO chains (chain_id, name) VALUES ('1', 'c')")
+        await conn.execute("INSERT INTO stores (chain_id, store_id) VALUES (1, 's')")
+        await conn.execute("INSERT INTO products (barcode, name) VALUES ('a', 'n')")
+        await conn.execute("INSERT INTO promotions (product_id, store_id, promotion_id, is_active) VALUES (1, 1, 'p', true)")
+        row = await conn.fetchrow("SELECT basket_eligible, max_qty FROM promotions")
+        assert (row["basket_eligible"], row["max_qty"]) == (False, None)
+        assert await conn.fetchval("SELECT last_promo_at FROM stores") is None
+        index = await conn.fetchval("SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_promotions_basket'")
+        assert index and "WHERE" in index
+    finally:
+        await conn.close()
+
+
+async def test_price_is_total_defaults_to_false(_database):
+    conn = await asyncpg.connect(_dsn())
+    try:
+        await conn.execute("TRUNCATE chains RESTART IDENTITY CASCADE")
+        await conn.execute("INSERT INTO chains (chain_id, name) VALUES ('1', 'c')")
+        await conn.execute("INSERT INTO stores (chain_id, store_id) VALUES (1, 's')")
+        await conn.execute("INSERT INTO products (barcode, name) VALUES ('a', 'n')")
+        await conn.execute("INSERT INTO promotions (product_id, store_id, promotion_id, is_active) VALUES (1, 1, 'p', true)")
+        assert await conn.fetchval("SELECT price_is_total FROM promotions") is False
+    finally:
+        await conn.close()

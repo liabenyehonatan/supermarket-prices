@@ -273,3 +273,155 @@ async def test_zero_chain_id_in_a_file_name_reuses_the_folders_chain(session):
     chain = await get_or_create_chain(session, chain_id="0000000000000", folder_name="CityMarketShops")
     assert chain.chain_id == "7290000000003"
     assert (await session.execute(select(Chain))).scalars().all().__len__() == 1
+
+
+# ── promotion files ───────────────────────────────────────────────────────────
+
+from tests.xml_samples import promo_name, promo_xml
+
+
+@pytest.fixture
+def promos_on(monkeypatch):
+    monkeypatch.setattr(settings, "SCRAPE_PROMOS", True)
+    monkeypatch.setattr(settings, "PROMO_CHAINS", set())
+
+
+async def stored_promos(session):
+    from app.db.models import Promotion
+    rows = await session.execute(
+        select(Promotion.promotion_id, Product.barcode)
+        .join(Product, Promotion.product_id == Product.id)
+        .order_by(Promotion.promotion_id, Product.barcode)
+    )
+    return rows.all()
+
+
+def good_promos():
+    return promo_xml("777", [
+        {"id": "p1", "desc": "2 ב-18", "items": ["111", "222"]},
+        {"id": "p2", "desc": "מבוטל", "items": ["111"]},                              # cancelled
+        {"id": "p3", "desc": "ישן", "items": ["111"], "end": "2026-05-01"},            # already over
+        {"id": "p4", "desc": "מתנה", "items": ["111"], "reward": "6"},                 # gift
+    ])
+
+
+async def test_promotions_load_after_prices_and_only_shown_ones_are_kept(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [
+        ("111", "5.50", "2026-05-12 01:00"), ("222", "3.30", "2026-05-12 01:00")]))
+    name = promo_name("777", "20260512-030500")
+    write(dumps, name, good_promos())
+
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.status == "ok" and result.files_ok == 2
+    assert await stored_promos(session) == [("p1", "111"), ("p1", "222")]
+    assert (await ledger(session))[name] == ("done", 1)
+
+
+async def test_promo_files_are_ignored_while_promotions_are_off(dumps, session, monkeypatch):
+    monkeypatch.setattr(settings, "SCRAPE_PROMOS", False)
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    path = write(dumps, promo_name("777", "20260512-030500"), good_promos())
+
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.files_ok == 1 and path.exists()
+    assert await stored_promos(session) == []
+
+
+async def test_only_the_newest_promo_file_per_store_is_loaded(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260511-030500"), promo_xml("777", [{"id": "old", "desc": "ישן", "items": ["111"]}]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "new", "desc": "חדש", "items": ["111"]}]))
+
+    await parse_chain("SHUFERSAL")
+
+    assert await stored_promos(session) == [("new", "111")]
+    assert (await ledger(session))[promo_name("777", "20260511-030500")][0] == "superseded"
+
+
+async def test_a_truncated_promo_file_leaves_the_old_promotions_alone(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "keep", "desc": "2 ב-18", "items": ["111"]}]))
+    await parse_chain("SHUFERSAL")
+
+    broken = promo_xml("777", [{"id": "x", "desc": "y", "items": ["111"]}])[:-40]       # cut off
+    write(dumps, promo_name("777", "20260513-030500"), broken)
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.files_failed == 1
+    assert await stored_promos(session) == [("keep", "111")]
+
+
+async def test_a_promo_file_with_nothing_to_show_clears_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "p1", "desc": "2 ב-18", "items": ["111"]}]))
+    await parse_chain("SHUFERSAL")
+    assert await stored_promos(session) == [("p1", "111")]
+
+    write(dumps, promo_name("777", "20260513-030500"), promo_xml("777", [{"id": "p9", "desc": "מבוטל", "items": ["111"]}]))
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.status == "ok"
+    assert await stored_promos(session) == []
+
+
+async def test_a_promo_file_whose_items_cannot_be_read_keeps_the_old_promotions(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "keep", "desc": "2 ב-18", "items": ["111"]}]))
+    await parse_chain("SHUFERSAL")
+    assert await stored_promos(session) == [("keep", "111")]
+
+    # Well-formed, but on one line: the library then returns promotions without their item lists.
+    minified = promo_xml("777", [{"id": "p9", "desc": "3 ב-10", "items": ["111"]}]).replace("\n", "")
+    name = promo_name("777", "20260513-030500")
+    write(dumps, name, minified)
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.status == "ok"
+    assert await stored_promos(session) == [("keep", "111")]          # not wiped
+    assert (await ledger(session))[name] == ("done", 1)               # and not retried forever
+
+
+async def test_a_file_of_only_cancelled_promotions_without_items_still_clears_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "p1", "desc": "2 ב-18", "items": ["111"]}]))
+    await parse_chain("SHUFERSAL")
+    assert await stored_promos(session) == [("p1", "111")]
+
+    write(dumps, promo_name("777", "20260513-030500"), promo_xml("777", [{"id": "p9", "desc": "מבוטל", "items": []}]))
+    await parse_chain("SHUFERSAL")
+
+    assert await stored_promos(session) == []
+
+
+async def promo_stamp(session):
+    return (await session.execute(select(Store.last_promo_at))).scalar_one()
+
+
+async def test_a_loaded_promo_file_stamps_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "p1", "desc": "2 ב-18", "items": ["111"]}]))
+
+    await parse_chain("SHUFERSAL")
+
+    assert await promo_stamp(session) is not None
+
+
+async def test_a_file_with_nothing_to_show_still_stamps_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "p9", "desc": "מבוטל", "items": []}]))
+
+    await parse_chain("SHUFERSAL")
+
+    assert await promo_stamp(session) is not None       # we know this store has no promotions today
+
+
+async def test_an_unreadable_promo_file_does_not_stamp_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    minified = promo_xml("777", [{"id": "p9", "desc": "3 ב-10", "items": ["111"]}]).replace("\n", "")
+    write(dumps, promo_name("777", "20260512-030500"), minified)
+
+    await parse_chain("SHUFERSAL")
+
+    assert await promo_stamp(session) is None            # nothing was understood: not "fresh promotion data"
