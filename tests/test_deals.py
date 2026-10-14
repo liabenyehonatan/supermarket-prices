@@ -14,7 +14,7 @@ NOW_IL = lambda: datetime.now(ZoneInfo("Asia/Jerusalem")).replace(tzinfo=None)
 
 async def make_world(session, *, ends=None, starts=None, eligible=True, promo_age_days=0, price="9.00", min_qty=3,
                      market_min="4.00", chain_name="רשת א", store_names=("סניף א1", "סניף א2"), cities=("חיפה", "עכו"),
-                     wholesale=False):
+                     wholesale=False, price_is_total=True, other_sells=True, barcode="7290000000501"):
     """Chain A (two stores) runs `min_qty for price` on one product. Chain B sells the same product at `market_min`."""
     chain_a, chain_b = Chain(chain_id="1", name=chain_name), Chain(chain_id="2", name="רשת ב")
     session.add_all([chain_a, chain_b])
@@ -22,18 +22,19 @@ async def make_world(session, *, ends=None, starts=None, eligible=True, promo_ag
     stores = [Store(chain_id=chain_a.id, store_id=str(i), name=("סיטונאי " + n) if wholesale else n, city=city)
               for i, (n, city) in enumerate(zip(store_names, cities), 1)]
     store_b = Store(chain_id=chain_b.id, store_id="1", name="סניף ב", city="חיפה")
-    product = Product(barcode="7290000000501", name="מוצר", image_url="https://img.example/x.png")
+    product = Product(barcode=barcode, name="מוצר", image_url="https://img.example/x.png")
     session.add_all([*stores, store_b, product])
     await session.flush()
     now = datetime(2026, 10, 12)
     for st in stores:
         session.add(Price(product_id=product.id, store_id=st.id, price="5.00", price_updated_at=now, is_current=True))
-    session.add(Price(product_id=product.id, store_id=store_b.id, price=market_min, price_updated_at=now, is_current=True))
+    if other_sells:
+        session.add(Price(product_id=product.id, store_id=store_b.id, price=market_min, price_updated_at=now, is_current=True))
     local = NOW_IL()
     for st in stores:
         session.add(Promotion(
             product_id=product.id, store_id=st.id, promotion_id="p1", description=f"{min_qty} ב-{price}",
-            min_qty=min_qty, discounted_price=price, basket_eligible=eligible, price_is_total=True, is_active=True,
+            min_qty=min_qty, discounted_price=price, basket_eligible=eligible, price_is_total=price_is_total, is_active=True,
             start_date=starts or local - timedelta(days=3), end_date=ends or local + timedelta(days=5)))
     await session.commit()
     await session.execute(update(Store).where(Store.id.in_([s.id for s in stores])).values(
@@ -46,7 +47,7 @@ async def make_world(session, *, ends=None, starts=None, eligible=True, promo_ag
 
 async def deals(session):
     rows = await session.execute(text(
-        "select brand, stores, products, min_qty, price, unit_price, ref_price, saving_pct from promo_deals"))
+        "select brand, stores, products, min_qty, price, unit_price, ref_price, saving_pct, vs_market from promo_deals"))
     return rows.all()
 
 
@@ -181,3 +182,86 @@ async def test_the_limits_are_enforced(client):
     assert (await client.get("/api/v1/deals", params={"limit": 61})).status_code == 422
     assert (await client.get("/api/v1/deals", params={"offset": 1001})).status_code == 422
     assert (await client.get("/api/v1/deals", params={"sort": "random"})).status_code == 422
+
+
+
+# ── review fixes ──────────────────────────────────────────────────────────────
+
+async def test_a_price_the_text_does_not_confirm_is_not_a_set_price_unless_it_is_for_one_unit(session):
+    # "MinQty 2, price 4.50" without "2 ב-4.50" in the text may be 4.50 EACH: the card would claim 2.25 a unit.
+    await make_world(session, min_qty=2, price="4.50", price_is_total=False)
+    assert await deals(session) == []
+
+
+async def test_a_one_unit_sale_price_needs_no_confirmation(session):
+    await make_world(session, min_qty=1, price="3.00", price_is_total=False)
+    assert len(await deals(session)) == 1
+
+
+async def test_an_item_with_a_short_internal_code_is_not_a_deal(session):
+    # codes under 7 characters are chain-scoped: one products row mixes unrelated items, its prices mean nothing
+    await make_world(session, barcode="123")
+    assert await deals(session) == []
+
+
+async def test_a_product_only_the_promoting_brand_sells_is_marked_as_not_compared_with_the_market(session):
+    await make_world(session, other_sells=False)
+    [row] = await deals(session)
+    assert row.vs_market is False and float(row.ref_price) == 5.0     # its own shelf, possibly inflated
+    await session.execute(text("truncate chains, products restart identity cascade"))
+    await session.commit()
+    await make_world(session)
+    [row] = await deals(session)
+    assert row.vs_market is True
+
+
+async def test_deals_sold_elsewhere_rank_before_deals_only_one_brand_sells(client, session):
+    await make_world(session, other_sells=False)                       # a 40% deal against its own shelf only
+    local = NOW_IL()
+    chain_b = (await session.execute(text("select id from chains where name = 'רשת ב'"))).scalar_one()
+    store_b = (await session.execute(text("select id from stores where chain_id = :c"), {"c": chain_b})).scalar_one()
+    store_a = (await session.execute(text("select id from stores where name = 'סניף א1'"))).scalar_one()
+    other = Product(barcode="7290000000777", name="נמכר גם ברשת אחרת")
+    session.add(other)
+    await session.flush()
+    for sid, shelf in ((store_a, "5.00"), (store_b, "4.90")):
+        session.add(Price(product_id=other.id, store_id=sid, price=shelf, price_updated_at=datetime(2026, 10, 12), is_current=True))
+    session.add(Promotion(product_id=other.id, store_id=store_a, promotion_id="q1", description="3 ב-12", min_qty=3,
+                          discounted_price="12.00", basket_eligible=True, price_is_total=True, is_active=True,
+                          start_date=local - timedelta(days=1), end_date=local + timedelta(days=4)))   # 18% only
+    await session.commit()
+    await maintenance.refresh_popularity()
+    await maintenance.refresh_deals()
+    deals_json = (await client.get("/api/v1/deals")).json()["deals"]
+    assert [d["vs_market"] for d in deals_json] == [True, False]       # the weaker deal compared with the market goes first
+
+
+async def test_ties_are_ordered_by_deal_id_so_paging_never_repeats_or_skips(client, session):
+    await make_world(session)
+    chain = (await session.execute(text("select id from chains where name = 'רשת א'"))).scalar_one()
+    store_ids = [r[0] for r in (await session.execute(text("select id from stores where chain_id = :c"), {"c": chain})).all()]
+    local = NOW_IL()
+    for n in range(5):                                              # five more deals with exactly the same numbers
+        product = Product(barcode=f"72900000007{n:02d}", name=f"עוד {n}")
+        session.add(product)
+        await session.flush()
+        for sid in store_ids:
+            session.add(Price(product_id=product.id, store_id=sid, price="4.00", price_updated_at=datetime(2026, 10, 12), is_current=True))
+            session.add(Promotion(product_id=product.id, store_id=sid, promotion_id=f"t{n}", description="3 ב-9",
+                                  min_qty=3, discounted_price="9.00", basket_eligible=True, price_is_total=True, is_active=True,
+                                  start_date=local - timedelta(days=1), end_date=local + timedelta(days=4)))
+    await session.commit()
+    await maintenance.refresh_popularity()
+    await maintenance.refresh_deals()
+    tied = [d for d in (await client.get("/api/v1/deals", params={"limit": 20})).json()["deals"] if d["description"] == "3 ב-9"]
+    assert len(tied) == 5 and [d["deal_id"] for d in tied] == sorted(d["deal_id"] for d in tied)
+    pages = []
+    for offset in range(6):
+        pages += (await client.get("/api/v1/deals", params={"limit": 1, "offset": offset})).json()["deals"]
+    assert len({d["deal_id"] for d in pages}) == 6                    # no card repeated or skipped across pages
+
+
+async def test_the_store_count_follows_the_city_filter(client, session):
+    await make_world(session)
+    assert (await client.get("/api/v1/deals")).json()["deals"][0]["stores"] == 2
+    assert (await client.get("/api/v1/deals", params={"city": "עכו"})).json()["deals"][0]["stores"] == 1

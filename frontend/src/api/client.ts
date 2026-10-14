@@ -84,6 +84,7 @@ export interface Deal {
   deal_id: string; brand: string; description: string; kind: 'single' | 'group';
   min_qty: number; price: number | string; unit_price: number | string; ref_price: number | string;
   saving_pct: number | string;            // a fraction: 0.25 is 25%
+  vs_market: boolean;                     // the reference includes another brand's price (else: the brand's own shelf)
   stores: number; products: number; max_qty?: number | null; ends_at?: string | null; sample_products: DealProduct[];
 }
 export interface DealsResponse { total: number; deals: Deal[]; chains: { name: string; count: number }[] }

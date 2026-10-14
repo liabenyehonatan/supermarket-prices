@@ -3,12 +3,13 @@ import { ShoppingBasket } from 'lucide-react';
 import type { Deal } from '../api/client';
 import { ChainLogo } from './ChainLogo';
 import { ProductImage } from './ProductImage';
+import { daysLeft } from '../lib/dealDays';
 
 const money = (p: number | string) => `₪${Number(p).toFixed(2)}`;
 
 function endsText(iso?: string | null): string | null {
   if (!iso) return null;
-  const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+  const days = daysLeft(iso);
   if (days <= 0) return 'נגמר היום';
   if (days === 1) return 'נגמר מחר';
   return days <= 14 ? `נגמר בעוד ${days} ימים` : null;
@@ -43,7 +44,9 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
       </div>
 
       <div className="deal-card-saving">
-        זול ב-<bdi>{pct}%</bdi> מהמחיר הזול שמצאנו ברשתות (<bdi>{money(deal.ref_price)}</bdi> ליחידה)
+        {deal.vs_market
+          ? <>זול ב-<bdi>{pct}%</bdi> מהמחיר הזול שמצאנו ברשתות (<bdi>{money(deal.ref_price)}</bdi> ליחידה)</>
+          : <>זול ב-<bdi>{pct}%</bdi> ממחיר המדף ברשת (<bdi>{money(deal.ref_price)}</bdi> ליחידה)</>}
       </div>
       {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
       {ends && <div className="deal-card-ends">{ends}</div>}

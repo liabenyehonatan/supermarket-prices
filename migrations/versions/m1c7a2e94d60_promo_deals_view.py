@@ -28,8 +28,11 @@ WITH running AS (
     FROM promotions pr
     JOIN stores s ON s.id = pr.store_id
     JOIN chains c ON c.id = s.chain_id
+    JOIN products p ON p.id = pr.product_id
    WHERE pr.basket_eligible AND pr.is_active
      AND pr.min_qty IS NOT NULL AND pr.discounted_price IS NOT NULL
+     AND length(p.barcode) >= 7                       -- shorter codes are chain-internal: their prices mean nothing
+     AND (pr.price_is_total OR pr.min_qty = 1)         -- an unconfirmed N-unit price may be a per-unit price
      AND s.last_promo_at >= now() - interval '7 days'
      AND (s.name IS NULL OR s.name NOT ILIKE '%סיטונ%')
      AND (pr.start_date IS NULL OR pr.start_date <= (now() AT TIME ZONE 'Asia/Jerusalem'))
@@ -43,7 +46,17 @@ WITH running AS (
    GROUP BY brand, promotion_id, description, min_qty, price, max_qty, price_is_total
 ), ref AS (
   SELECT d.brand, d.promotion_id, d.description, d.min_qty, d.price, d.max_qty, d.price_is_total,
-         min(v.min_price) AS ref_price
+         min(v.min_price) AS ref_price,
+         -- every product is also sold by another brand: the reference is a real market price, not only the
+         -- promoting brand's own shelf
+         bool_and(EXISTS (
+           SELECT 1 FROM prices p2
+             JOIN stores s2 ON s2.id = p2.store_id
+             JOIN chains c2 ON c2.id = s2.chain_id
+            WHERE p2.product_id = u.product_id AND p2.is_current AND p2.price >= 0.5
+              AND (CASE WHEN c2.name <> 'יינות ביתן / קרפור' THEN c2.name
+                        WHEN s2.name ILIKE '%ביתן%' THEN 'יינות ביתן'
+                        ELSE 'קרפור' END) <> d.brand)) AS vs_market
     FROM deals d
     CROSS JOIN LATERAL unnest(d.product_ids) AS u(product_id)
     JOIN product_store_counts v ON v.product_id = u.product_id
@@ -56,7 +69,8 @@ SELECT md5(d.brand || '|' || d.promotion_id || '|' || d.min_qty || '|' || d.pric
        d.store_ids, d.product_ids,
        cardinality(d.store_ids) AS stores, cardinality(d.product_ids) AS products,
        d.price / d.min_qty AS unit_price, r.ref_price,
-       1 - (d.price / d.min_qty) / r.ref_price AS saving_pct
+       1 - (d.price / d.min_qty) / r.ref_price AS saving_pct,
+       r.vs_market
   FROM deals d
   JOIN ref r ON r.brand = d.brand AND r.promotion_id = d.promotion_id AND r.description = d.description
             AND r.min_qty = d.min_qty AND r.price = d.price AND r.price_is_total = d.price_is_total

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchDeals, type Deal } from '../api/client';
 import { useBasket } from '../context/BasketContext';
 import { DealCard } from '../components/DealCard';
@@ -19,13 +19,17 @@ export function DealsPage() {
   const [total, setTotal] = useState(0);
   const [chains, setChains] = useState<{ name: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [picking, setPicking] = useState<Deal | null>(null);
+  const generation = useRef(0);          // bumped by every filter change: an answer for an older filter is dropped
 
   useEffect(() => onCityFilterChange(setCity), []);
 
   useEffect(() => {
     let live = true;
+    generation.current += 1;
     setLoading(true);
+    setLoadingMore(false);
     fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE })
       .then(r => { if (live) { setDeals(r.deals); setTotal(r.total); setChains(r.chains); } })
       .catch(() => { if (live) { setDeals([]); setTotal(0); } })
@@ -34,8 +38,22 @@ export function DealsPage() {
   }, [chain, city, sort, kind]);
 
   async function more() {
-    const r = await fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE, offset: deals.length });
-    setDeals(prev => [...prev, ...r.deals]);
+    if (loadingMore) return;
+    const gen = generation.current;
+    setLoadingMore(true);
+    try {
+      const r = await fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE, offset: deals.length });
+      if (gen !== generation.current) return;          // the filter changed meanwhile: this page belongs to the old one
+      setDeals(prev => {
+        const seen = new Set(prev.map(d => d.deal_id));
+        return [...prev, ...r.deals.filter(d => !seen.has(d.deal_id))];
+      });
+      setTotal(r.total);
+    } catch {
+      /* keep what is shown; the button stays so the person can try again */
+    } finally {
+      if (gen === generation.current) setLoadingMore(false);
+    }
   }
 
   const add = (deal: Deal) => deal.sample_products[0] && addItem({
@@ -79,11 +97,11 @@ export function DealsPage() {
           {deals.map(d => <DealCard key={d.deal_id} deal={d} onPick={setPicking} onAdd={add} />)}
         </div>
         {deals.length < total && (
-          <button className="btn btn-secondary btn-full deals-more" onClick={() => void more()}>עוד מבצעים</button>
+          <button className="btn btn-secondary btn-full deals-more" disabled={loadingMore} onClick={() => void more()}>{loadingMore ? 'טוענים…' : 'עוד מבצעים'}</button>
         )}
         <p className="deals-footnote">
           המחיר ליחידה מחושב מהמבצע. ההשוואה היא למחיר המדף הזול ביותר שמצאנו של אותו מוצר בכל הרשתות. מבצעי מועדון וקופונים לא מוצגים,
-          ומוצגים רק מבצעים מרשתות שיש לנו עבורן נתונים עדכניים.
+          ומוצגים רק מבצעים מרשתות שיש לנו עבורן נתונים עדכניים. מוצר שנמכר רק ברשת אחת מושווה למחיר המדף שלה.
         </p>
       </div>
       {picking && <DealProductsSheet deal={picking} onClose={() => setPicking(null)} />}
