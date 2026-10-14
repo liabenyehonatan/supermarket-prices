@@ -224,6 +224,7 @@ class Deal(BaseModel):
     unit_price: Decimal
     ref_price: Decimal             # cheapest shelf price anywhere (of the cheapest product, for a group)
     saving_pct: Decimal            # a fraction: 0.25 is 25%
+    vs_market: bool = False        # the reference includes another brand's price (else: the brand's own shelf only)
     stores: int
     products: int
     max_qty: Optional[int] = None
