@@ -295,3 +295,29 @@ def test_a_labelled_club_id_with_another_number_is_still_a_club_promotion():
 def test_a_labelled_zero_nested_under_additional_restrictions_is_everybody():
     nested = {"additionaliscoupon": "0", "clubs": {"clubid": "0 - כלל הלקוחות"}}
     assert normalize_promotion(row(clubs=None, additionalrestrictions=nested), as_of=AS_OF) is not None
+
+
+# ── the description confirms that the price is the total for N ────────────────
+
+@pytest.mark.parametrize("description, minqty, price, expected", [
+    ("2ב18 ספריי לניקוי חלונות 750 מ\"ל", "2.00", "18.00", True),
+    ("בועות סבון 12 ב 10.90 ש\"ח", "12.00", "10.90", True),
+    ("גרעיני חמניה 150 גרם 3ב-10", "3.00", "10.00", True),
+    ("2ב31.40 פקדון בירה", "2.00", "32.00", False),                 # the number differs (deposit): stay safe
+    ("מבצע 2ב18", "2.00", "17.00", False),
+    ("מבצע 3ב18", "2.00", "18.00", False),                          # N differs
+    ("ספריי לניקוי חלונות", "2.00", "18.00", False),                # no "N ב-X" in the text
+])
+def test_the_description_confirms_the_price_is_the_total_for_n(description, minqty, price, expected):
+    rec = normalize_promotion(single(promotiondescription=description, minqty=minqty, discountedprice=price), as_of=AS_OF)
+    assert rec.price_is_total is expected
+
+
+async def test_price_is_total_is_stored(session, store):
+    session.add(Product(barcode="111", name="a"))
+    await session.commit()
+
+    await replace_store_promotions(session, store, [rec("p1", ["111"], price_is_total=True)])
+    await session.commit()
+
+    assert (await session.execute(select(Promotion.price_is_total))).scalar_one() is True

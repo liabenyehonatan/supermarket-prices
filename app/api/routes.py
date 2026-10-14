@@ -195,7 +195,7 @@ async def _basket_promotions(db: AsyncSession, product_ids: list[int]) -> dict[t
     rows = await db.execute(
         select(
             Promotion.store_id, Promotion.product_id, Promotion.promotion_id, Promotion.description,
-            Promotion.min_qty, Promotion.discounted_price, Promotion.max_qty,
+            Promotion.min_qty, Promotion.discounted_price, Promotion.max_qty, Promotion.price_is_total,
         ).where(
             Promotion.product_id.in_(product_ids),
             Promotion.basket_eligible,
@@ -205,9 +205,9 @@ async def _basket_promotions(db: AsyncSession, product_ids: list[int]) -> dict[t
         )
     )
     by_line: dict[tuple[int, int], list[BasketPromo]] = {}
-    for store_id, product_id, promotion_id, description, min_qty, price, max_qty in rows.all():
+    for store_id, product_id, promotion_id, description, min_qty, price, max_qty, price_is_total in rows.all():
         by_line.setdefault((store_id, product_id), []).append(
-            BasketPromo(promotion_id, description or "", min_qty, price, max_qty))
+            BasketPromo(promotion_id, description or "", min_qty, price, max_qty, price_is_total))
     return by_line
 
 

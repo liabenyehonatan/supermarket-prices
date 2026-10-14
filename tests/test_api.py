@@ -471,7 +471,7 @@ async def test_compare_shows_at_most_three_promotions_per_store(client, session)
 
 
 async def _basket_world(session, *, promo_age_days=0, eligible=True, max_qty=None, ends_yesterday=False,
-                        min_qty=3, promo_price="10.00", shelf_a="4.00", shelf_b="5.00"):
+                        min_qty=3, promo_price="10.00", shelf_a="4.00", shelf_b="5.00", price_is_total=False):
     """Two stores sell one product. A is cheaper on the shelf. B runs '3 for 10' (when eligible)."""
     from datetime import datetime, timedelta
     from sqlalchemy import func, update
@@ -494,7 +494,7 @@ async def _basket_world(session, *, promo_age_days=0, eligible=True, max_qty=Non
     local_now = datetime.now(ZoneInfo("Asia/Jerusalem")).replace(tzinfo=None)
     session.add(Promotion(
         product_id=product.id, store_id=store_b.id, promotion_id="p1", description="3 ב-10",
-        min_qty=min_qty, discounted_price=promo_price, max_qty=max_qty, basket_eligible=eligible, is_active=True,
+        min_qty=min_qty, discounted_price=promo_price, max_qty=max_qty, basket_eligible=eligible, is_active=True, price_is_total=price_is_total,
         start_date=local_now - timedelta(days=5),
         end_date=local_now - timedelta(days=1) if ends_yesterday else local_now + timedelta(days=5),
     ))
@@ -595,3 +595,16 @@ async def test_complete_baskets_still_rank_before_incomplete_ones_with_promotion
     assert [(s["store"]["chain"]["name"], s["items_missing"]) for s in stores_out] == [
         ("רשת ב", 0), ("רשת א", 0), ("רשת ג", 1)]               # B 11.00 (promotion), A 13.00, then the cheap incomplete C
     assert [float(s["total_price"]) for s in stores_out] == [11.0, 13.0, 3.0]
+
+
+async def test_a_total_the_description_confirms_is_applied_even_below_one_unit_price(client, session):
+    # "2 for 8.00" on a 10.00 shelf price: the description confirmed it is the total for 2.
+    await _basket_world(session, min_qty=2, promo_price="8.00", shelf_b="10.00", shelf_a="12.00", price_is_total=True)
+    b = _by_chain(await _basket(client, 2))["רשת ב"]
+    assert float(b["total_price"]) == 8.0 and b["item_prices"][0]["promo"]["sets"] == 1
+
+
+async def test_the_same_promotion_without_confirmation_is_not_applied(client, session):
+    await _basket_world(session, min_qty=2, promo_price="8.00", shelf_b="10.00", shelf_a="12.00", price_is_total=False)
+    b = _by_chain(await _basket(client, 2))["רשת ב"]
+    assert float(b["total_price"]) == 20.0 and b["item_prices"][0]["promo"] is None
