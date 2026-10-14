@@ -862,12 +862,17 @@ async def list_deals(
     db: AsyncSession = Depends(get_db),
 ):
     where, params = _deals_where(chain, city, kind, ending=sort == "ending")
-    order = "ends_at ASC, saving_pct DESC" if sort == "ending" else "saving_pct DESC, stores DESC"
+    # With a city filter the card counts the stores of that city, not all the stores of the promotion.
+    stores_expr = ("cardinality(ARRAY(SELECT unnest(store_ids) INTERSECT SELECT id FROM stores WHERE city ILIKE :city))"
+                   if "city" in params else "stores")
+    # Deals compared with other brands come first; every order ends with deal_id so ties page deterministically.
+    order = ("vs_market DESC, ends_at ASC, saving_pct DESC, deal_id" if sort == "ending"
+             else "vs_market DESC, saving_pct DESC, stores DESC, deal_id")
     fetch = limit * 3 if diverse else limit
     rows = (await db.execute(text(
         f"""
-        SELECT deal_id, brand, description, min_qty, price, unit_price, ref_price, saving_pct, stores, products,
-               max_qty, ends_at, product_ids[1:12] AS sample_ids
+        SELECT deal_id, brand, description, min_qty, price, unit_price, ref_price, saving_pct, vs_market,
+               {stores_expr} AS stores, products, max_qty, ends_at, product_ids[1:12] AS sample_ids
           FROM promo_deals WHERE {where} ORDER BY {order} LIMIT :fetch OFFSET :offset
         """), {**params, "fetch": fetch, "offset": offset})).all()
     if diverse:
@@ -887,7 +892,7 @@ async def list_deals(
     deals = [
         Deal(deal_id=r.deal_id, brand=r.brand, description=r.description, kind="single" if r.products == 1 else "group",
              min_qty=r.min_qty, price=r.price, unit_price=r.unit_price, ref_price=r.ref_price, saving_pct=r.saving_pct,
-             stores=r.stores, products=r.products, max_qty=r.max_qty, ends_at=r.ends_at,
+             vs_market=r.vs_market, stores=r.stores, products=r.products, max_qty=r.max_qty, ends_at=r.ends_at,
              sample_products=samples.get(r.deal_id, []))
         for r in rows
     ]

@@ -235,7 +235,7 @@ select brand, description, min_qty, price, ref_price, round(saving_pct::numeric,
   from promo_deals where saving_pct > 0.5 order by saving_pct desc limit 30;
 ```
 
-The second query lists what is near the 60% cap (and, above it, hidden on purpose): deep "N for 10" promotions are common and mostly real, but a pack price read as a unit price looks the same, so look at the raw promotion before raising `MAX_DEAL_SAVING`. The comparison is against the cheapest shelf price among the chains we hold, so a chain without price data does not weaken it, and a chain without promotion data simply shows no deals.
+The second query lists what is near the 60% cap (and, above it, hidden on purpose): deep "N for 10" promotions are common and mostly real, but a pack price read as a unit price looks the same, so look at the raw promotion before raising `MAX_DEAL_SAVING`. Deals whose products only the promoting brand sells have `vs_market = false` (the card then says "ממחיר המדף ברשת"); the first query can be extended with `count(*) filter (where vs_market)` to see how many deals are compared with the market. The comparison is against the cheapest shelf price among the chains we hold, so a chain without price data does not weaken it, and a chain without promotion data simply shows no deals.
 
 **Group promotions.** A promotion on several products ("any 3 of these 4 for 10") is priced in the basket when its text confirms the price; the basket pools the quantities of its products, takes the cheapest units first (the safe reading: it can only overstate a total) and shows it as a saving row. They become `basket_eligible` as each store's next promotion file loads, so the first cycle after the deploy fills them. Check the biggest ones before switching on more chains:
 
