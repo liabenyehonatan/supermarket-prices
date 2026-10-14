@@ -34,7 +34,13 @@ from app import settings
 from app.db.database import AsyncSessionLocal
 from app.parser import ledger
 from app.parser.price_loader import load_price_rows
-from app.parser.promo_loader import normalize_promotion, replace_store_promotions
+from app.parser.promo_loader import (
+    normalize_promotion,
+    promotion_has_items,
+    promotion_is_cancelled,
+    PromoLoadStats,
+    replace_store_promotions,
+)
 from app.pipeline.shutdown import STOP
 from app.scraper import status_store
 from app.parser.universal_parser import (
@@ -283,16 +289,30 @@ async def _parse_promo_file(dump_file: DumpFile, parser_cls, folder_name: str) -
             store = await get_or_create_store_from_price_file(
                 session, chain, store_id=dump_file.extracted_store_number
             )
-            seen = 0
+            seen = candidates = with_items = 0
             records = []
             async for row in parser.read(dump_file):
                 seen += 1
+                if not promotion_is_cancelled(row):
+                    candidates += 1
+                    with_items += promotion_has_items(row)
                 record = normalize_promotion(row, as_of=dump_file.extracted_date)
                 if record is not None:
                     records.append(record)
             if seen == 0 and path.stat().st_size > _EMPTY_OK_BYTES:
                 raise CorruptFile(f"parsed 0 promotions from {path.stat().st_size} bytes")
-            stats = await replace_store_promotions(session, store, records)
+            if candidates and not with_items:
+                # Promotions that name no products at all: the library did not understand this file's
+                # layout (one-line file, flattened rows). Nothing here is evidence that the store has no
+                # promotions, so keep what we hold instead of wiping it.
+                logger.warning(
+                    "%s: %s has %d promotions but no item lists; keeping the store's current promotions",
+                    folder_name, dump_file.file_name, candidates,
+                )
+                stats = PromoLoadStats(promotions=0)
+                records = []
+            else:
+                stats = await replace_store_promotions(session, store, records)
             await ledger.record_done(
                 session, folder_name, dump_file.file_name, "promo_full",
                 rows_total=seen, rows_applied=stats.rows_inserted, rows_skipped=seen - len(records),

@@ -364,3 +364,32 @@ async def test_a_promo_file_with_nothing_to_show_clears_the_store(dumps, session
 
     assert result.status == "ok"
     assert await stored_promos(session) == []
+
+
+async def test_a_promo_file_whose_items_cannot_be_read_keeps_the_old_promotions(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "keep", "desc": "2 ב-18", "items": ["111"]}]))
+    await parse_chain("SHUFERSAL")
+    assert await stored_promos(session) == [("keep", "111")]
+
+    # Well-formed, but on one line: the library then returns promotions without their item lists.
+    minified = promo_xml("777", [{"id": "p9", "desc": "3 ב-10", "items": ["111"]}]).replace("\n", "")
+    name = promo_name("777", "20260513-030500")
+    write(dumps, name, minified)
+    result = await parse_chain("SHUFERSAL")
+
+    assert result.status == "ok"
+    assert await stored_promos(session) == [("keep", "111")]          # not wiped
+    assert (await ledger(session))[name] == ("done", 1)               # and not retried forever
+
+
+async def test_a_file_of_only_cancelled_promotions_without_items_still_clears_the_store(dumps, session, promos_on):
+    write(dumps, price_name("777", "20260512-030442"), price_xml("777", [("111", "5.50", "2026-05-12 01:00")]))
+    write(dumps, promo_name("777", "20260512-030500"), promo_xml("777", [{"id": "p1", "desc": "2 ב-18", "items": ["111"]}]))
+    await parse_chain("SHUFERSAL")
+    assert await stored_promos(session) == [("p1", "111")]
+
+    write(dumps, promo_name("777", "20260513-030500"), promo_xml("777", [{"id": "p9", "desc": "מבוטל", "items": []}]))
+    await parse_chain("SHUFERSAL")
+
+    assert await stored_promos(session) == []

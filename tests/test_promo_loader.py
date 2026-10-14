@@ -172,3 +172,29 @@ async def test_other_stores_keep_their_promotions(session, store):
     await session.commit()
 
     assert [p for p, _, _ in await stored(session)] == ["keep", "mine"]
+
+
+# ── review fixes ──────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("restrictions", [
+    {"additionaliscoupon": "0", "clubs": {"clubid": "1"}},                    # KingStore / Netiv Hased layout
+    {"additionaliscoupon": "0", "clubs": {"clubid": ["0", "2"]}},
+    {"additionaliscoupon": "0", "clubid": "1"},
+])
+def test_a_club_audience_nested_under_additional_restrictions_is_dropped(restrictions):
+    assert normalize_promotion(row(clubs=None, additionalrestrictions=restrictions), as_of=AS_OF) is None
+
+
+def test_nested_club_zero_is_still_for_everybody():
+    nested = {"additionaliscoupon": "0", "clubs": {"clubid": "0"}}
+    assert normalize_promotion(row(clubs=None, additionalrestrictions=nested), as_of=AS_OF) is not None
+
+
+def test_a_club_wide_promotion_with_tens_of_thousands_of_items_is_rejected_quickly():
+    # Shufersal lists member-wide promotions with ~48,000 items per store file; checking each barcode
+    # against a growing list made the filter quadratic (seconds per file, about 45 minutes per cycle).
+    import time
+    items = {"item": [{"itemcode": str(i)} for i in range(20000)]}
+    started = time.perf_counter()
+    assert normalize_promotion(row(promotionitems=items), as_of=AS_OF) is None
+    assert time.perf_counter() - started < 0.5
