@@ -1,4 +1,4 @@
-import type { Deal, DealRules } from '../api/client';
+import type { Deal } from '../api/client';
 
 // The promotions page keeps what it shows (filters, the cards loaded so far, the scroll position) for a while, so going
 // back from a product page lands on the same card instead of the top of the list. Same idea as the search results.
@@ -14,7 +14,6 @@ export interface DealsSnapshot {
   deals: Deal[];
   total: number;
   chains: { name: string; count: number }[];
-  rules: DealRules | null;
   scrollY: number;
   at: number;
 }
