@@ -1,41 +1,84 @@
-import { useEffect, useRef, useState } from 'react';
-import { fetchDeals, type Deal } from '../api/client';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { fetchDeals, type Deal, type DealRules } from '../api/client';
 import { useBasket } from '../context/BasketContext';
 import { DealCard } from '../components/DealCard';
 import { DealProductsSheet } from '../components/DealProductsSheet';
+import { DealsRulesBox } from '../components/DealsRulesBox';
+import { readDealsSnapshot, writeDealsSnapshot } from '../lib/dealsSnapshot';
 import { onCityFilterChange, readCityFilter } from '../lib/filters';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const PAGE = 24;
 
+const filterKey = (f: { chain: string; city: string; sort: string; kind: string }) => `${f.chain}|${f.city}|${f.sort}|${f.kind}`;
+
 export function DealsPage() {
   useDocumentTitle('מבצעים | סלי');
   const { addItem } = useBasket();
   const [city, setCity] = useState(readCityFilter);
-  const [chain, setChain] = useState('');
-  const [sort, setSort] = useState<'best' | 'ending'>('best');
-  const [kind, setKind] = useState<'' | 'single' | 'group'>('');
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [total, setTotal] = useState(0);
-  const [chains, setChains] = useState<{ name: string; count: number }[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Coming back from a product page: the saved view (filters, cards loaded so far, scroll position) is used as is.
+  const initial = useRef(readDealsSnapshot(readCityFilter()));
+  // The filters the saved cards belong to: while they are unchanged nothing is fetched (it must survive React's dev
+  // double-run of effects, so it is not a one-shot flag); any real fetch clears it.
+  const restoredFor = useRef<string | null>(initial.current && filterKey(initial.current));
+  const [chain, setChain] = useState(initial.current?.chain ?? '');
+  const [sort, setSort] = useState<'best' | 'ending'>(initial.current?.sort ?? 'best');
+  const [kind, setKind] = useState<'' | 'single' | 'group'>(initial.current?.kind ?? '');
+  const [deals, setDeals] = useState<Deal[]>(initial.current?.deals ?? []);
+  const [total, setTotal] = useState(initial.current?.total ?? 0);
+  const [chains, setChains] = useState<{ name: string; count: number }[]>(initial.current?.chains ?? []);
+  const [rules, setRules] = useState<DealRules | null>(initial.current?.rules ?? null);
+  const [loading, setLoading] = useState(initial.current === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [picking, setPicking] = useState<Deal | null>(null);
   const generation = useRef(0);          // bumped by every filter change: an answer for an older filter is dropped
+  const scrollY = useRef(initial.current?.scrollY ?? 0);
+  const latest = useRef({ chain, sort, kind, city, deals, total, chains, rules });
+  latest.current = { chain, sort, kind, city, deals, total, chains, rules };
 
   useEffect(() => onCityFilterChange(setCity), []);
 
+  // Back from a product: put the person where they were (instantly: the site scrolls smoothly otherwise)
+  useLayoutEffect(() => {
+    const y = initial.current?.scrollY ?? 0;
+    if (y > 0) window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
+  }, []);
+
   useEffect(() => {
+    if (restoredFor.current === filterKey({ chain, city, sort, kind })) return;      // the saved view is already on screen
+    restoredFor.current = null;
     let live = true;
     generation.current += 1;
     setLoading(true);
     setLoadingMore(false);
     fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE })
-      .then(r => { if (live) { setDeals(r.deals); setTotal(r.total); setChains(r.chains); } })
+      .then(r => { if (live) { setDeals(r.deals); setTotal(r.total); setChains(r.chains); setRules(r.rules); } })
       .catch(() => { if (live) { setDeals([]); setTotal(0); } })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, [chain, city, sort, kind]);
+
+  // Keep the view for "back": the data whenever it changes, the scroll position from scroll events (read at leave time
+  // it would be mid-animation, or already clamped by the shorter page that replaces this one).
+  useEffect(() => {
+    if (loading) return;
+    writeDealsSnapshot({ ...latest.current, scrollY: scrollY.current });
+  }, [loading, chain, sort, kind, city, deals, total, chains, rules]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const save = () => writeDealsSnapshot({ ...latest.current, scrollY: scrollY.current });
+    const onScroll = () => {
+      scrollY.current = window.scrollY;
+      if (!timer) timer = setTimeout(() => { timer = null; save(); }, 200);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (timer) clearTimeout(timer);
+      save();
+    };
+  }, []);
 
   async function more() {
     if (loadingMore) return;
@@ -72,6 +115,8 @@ export function DealsPage() {
             </div>
           </div>
         </div>
+
+        {rules && <DealsRulesBox rules={rules} />}
 
         <div className="filter-bar deals-filters" role="group" aria-label="סינון מבצעים לפי רשת">
           <button className={`filter-chip${chain === '' ? ' active' : ''}`} onClick={() => setChain('')}>כל הרשתות</button>

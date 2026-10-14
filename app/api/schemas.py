@@ -242,7 +242,15 @@ class DealFacet(BaseModel):
     count: int
 
 
+class DealRules(BaseModel):
+    """The rules a promotion must pass to be listed: the page explains them to shoppers, so they come from here."""
+    min_saving: Decimal            # a fraction: 0.10 is 10%
+    max_saving: Decimal            # above this a "saving" is almost always a data error
+    min_reference_price: Decimal   # a lower cheapest price is a placeholder, never a basis for comparison
+
+
 class DealsResponse(BaseModel):
     total: int
     deals: List[Deal]
     chains: List[DealFacet]
+    rules: DealRules

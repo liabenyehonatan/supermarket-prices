@@ -87,7 +87,8 @@ export interface Deal {
   vs_market: boolean;                     // the reference includes another brand's price (else: the brand's own shelf)
   stores: number; products: number; max_qty?: number | null; ends_at?: string | null; sample_products: DealProduct[];
 }
-export interface DealsResponse { total: number; deals: Deal[]; chains: { name: string; count: number }[] }
+export interface DealRules { min_saving: number | string; max_saving: number | string; min_reference_price: number | string }
+export interface DealsResponse { total: number; deals: Deal[]; chains: { name: string; count: number }[]; rules: DealRules }
 
 export function fetchDeals(p: {
   chain?: string; city?: string; kind?: 'single' | 'group'; sort?: 'best' | 'ending'; diverse?: boolean; limit?: number; offset?: number;
