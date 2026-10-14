@@ -278,3 +278,20 @@ async def test_the_eligibility_and_the_limit_are_stored(session, store):
 
     row = (await session.execute(select(Promotion.basket_eligible, Promotion.max_qty))).one()
     assert (row.basket_eligible, row.max_qty) == (True, 5)
+
+
+# ── club ids written as "<number> - <name>" (Shufersal and Tiv Taam, May 2026 files) ──
+
+def test_a_club_id_with_a_label_still_means_everybody_when_the_number_is_zero():
+    rec = normalize_promotion(row(clubs=None, clubid="0 - כלל הלקוחות"), as_of=AS_OF)
+    assert rec is not None
+
+
+def test_a_labelled_club_id_with_another_number_is_still_a_club_promotion():
+    assert normalize_promotion(row(clubs=None, clubid="3 - מועדון לקוחות & עמותת לשובע-אשראי"), as_of=AS_OF) is None
+    assert normalize_promotion(row(clubs={"clubid": ["0 - כלל הלקוחות", "1 - מועדון"]}), as_of=AS_OF) is None
+
+
+def test_a_labelled_zero_nested_under_additional_restrictions_is_everybody():
+    nested = {"additionaliscoupon": "0", "clubs": {"clubid": "0 - כלל הלקוחות"}}
+    assert normalize_promotion(row(clubs=None, additionalrestrictions=nested), as_of=AS_OF) is not None

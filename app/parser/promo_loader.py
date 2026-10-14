@@ -15,6 +15,7 @@
 # lookup below accepts both shapes.
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -83,6 +84,15 @@ def _items(row: dict) -> list[dict]:
     return found
 
 
+_LEADING_NUMBER = re.compile(r"\s*(\d+)")
+
+
+def _club_number(raw: str) -> str:
+    """'0 - כלל הלקוחות' -> '0' (Shufersal and Tiv Taam write the number with its label); '1', '3 - ...' likewise."""
+    match = _LEADING_NUMBER.match(raw)
+    return match.group(1) if match else raw.strip()
+
+
 def _club_ids(row: dict) -> set[str]:
     """Every club id the promotion names, wherever the chain put it: on the promotion, in a <Clubs>
     element, or inside <AdditionalRestrictions> (KingStore, Netiv Hased and others)."""
@@ -94,10 +104,10 @@ def _club_ids(row: dict) -> set[str]:
     for container in containers:
         single = _text(container, "clubid")
         if single:
-            ids.add(single)
+            ids.add(_club_number(single))
         clubs = container.get("clubs")
         if isinstance(clubs, dict):
-            ids.update(str(c).strip() for c in _as_list(clubs.get("clubid")) if str(c).strip())
+            ids.update(_club_number(str(c)) for c in _as_list(clubs.get("clubid")) if str(c).strip())
     return ids
 
 
