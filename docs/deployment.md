@@ -223,6 +223,20 @@ select p.barcode, pr.description, pr.min_qty, pr.discounted_price, price.price
  limit 50;
 ```
 
+**Promotions section.** The home page strip and the `/promotions` page read the `promo_deals` view, which the worker refreshes after each cycle (a failure is logged as `deals refresh failed` and never fails the cycle). Nothing shows until promotions are on and loaded, and the strip is absent (not empty) meanwhile. A deal appears only if it runs now, its store's promotion data is at most 7 days old and it is 10% to 60% cheaper than the cheapest shelf price we know of its products. Sanity queries:
+
+```sql
+select brand, count(*) as deals, round(avg(saving_pct)::numeric, 2) as avg_saving
+  from promo_deals group by brand order by deals desc;
+```
+
+```sql
+select brand, description, min_qty, price, ref_price, round(saving_pct::numeric, 2) as saving
+  from promo_deals where saving_pct > 0.5 order by saving_pct desc limit 30;
+```
+
+The second query lists what is near the 60% cap (and, above it, hidden on purpose): deep "N for 10" promotions are common and mostly real, but a pack price read as a unit price looks the same, so look at the raw promotion before raising `MAX_DEAL_SAVING`. The comparison is against the cheapest shelf price among the chains we hold, so a chain without price data does not weaken it, and a chain without promotion data simply shows no deals.
+
 **Group promotions.** A promotion on several products ("any 3 of these 4 for 10") is priced in the basket when its text confirms the price; the basket pools the quantities of its products, takes the cheapest units first (the safe reading: it can only overstate a total) and shows it as a saving row. They become `basket_eligible` as each store's next promotion file loads, so the first cycle after the deploy fills them. Check the biggest ones before switching on more chains:
 
 ```sql
