@@ -113,6 +113,9 @@ class Store(Base):
     # When this store's last complete price file (PriceFull) was loaded. Every price the file still lists is
     # confirmed as of then, so we record it once per store instead of rewriting every unchanged price row.
     last_full_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # When this store's last promotion file was loaded. The basket only applies a store's promotions
+    # while this is recent: a store that stopped publishing must not keep a promotion that ended.
+    last_promo_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     # For the "transfer basket" feature — the specific URL for THIS store's
     # online delivery page (if the chain supports per-store URLs).
@@ -331,6 +334,13 @@ class Promotion(Base):
     # Is this promotion still active right now?
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
 
+    # Safe to compute a basket price with (one product, "N for X", not weighted/gift/limited by redemptions).
+    basket_eligible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False)
+    # Most units one purchase can buy at the promotion price (the chain's MaxQty); None = no limit.
+    max_qty: Mapped[Optional[int]] = mapped_column(Integer)
+    # The promotion's own text says "N ב-price" with this N and price: the price is the total for N units.
+    price_is_total: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False)
+
     # RELATIONSHIPS
     product: Mapped["Product"] = relationship("Product", back_populates="promotions")
     store: Mapped["Store"] = relationship("Store", back_populates="promotions")
@@ -338,11 +348,13 @@ class Promotion(Base):
     __table_args__ = (
         Index("ix_promotions_product_store", "product_id", "store_id"),
         Index("ix_promotions_active", "is_active"),
-        # Prevents inserting the same promotion twice for the same store.
+        Index("ix_promotions_basket", "product_id", "store_id", postgresql_where=text("basket_eligible")),
+        # One row per product of a promotion in a store (a promotion lists many products).
         Index(
             "ix_promotions_unique",
             "promotion_id",
             "store_id",
+            "product_id",
             unique=True,
         ),
     )

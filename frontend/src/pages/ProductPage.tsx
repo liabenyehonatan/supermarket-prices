@@ -345,6 +345,7 @@ export function ProductPage() {
                 const diff = Number(row.price) - Number(filteredPrices[0]?.price ?? row.price);
                 const key = `${row.store_id}-${idx}`;
                 const name = row.store_name || row.chain_name;
+                const promos = row.promotions ?? [];
                 const km = myCoords && row.latitude != null && row.longitude != null
                   ? distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude)
                   : null;
@@ -355,6 +356,7 @@ export function ProductPage() {
                     name={row.chain_name}
                     city={storeSubtitle({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city })}
                     warning={isStale(row.scraped_at ?? row.price_updated_at) ? `מחיר ישן · עודכן לפני ${timeAgo(row.scraped_at ?? row.price_updated_at)}` : undefined}
+                    promo={promos[0]?.description}
                     price={row.price}
                     isCheapest={isCheapest}
                     cheapestLabel={nearbyMode ? 'הכי זול לידך' : 'הכי זול'}
@@ -362,6 +364,19 @@ export function ProductPage() {
                     open={expandedRow === key}
                     onToggle={() => setExpandedRow(expandedRow === key ? null : key)}
                   >
+                    {promos.length > 0 && (
+                      <div className="store-row-promos">
+                        <div className="store-row-sub">מבצעים ברשת, כפי שהרשת פרסמה (המחיר למעלה הוא מחיר המדף):</div>
+                        <ul>
+                          {promos.map((p, i) => (
+                            <li key={i}>
+                              {p.description}
+                              {p.ends_at && <span className="store-row-promo-end"> · עד {new Date(p.ends_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     {km != null && <div className="store-row-sub">{km.toFixed(1)} ק״מ ממך</div>}
                     {(() => {
                       const addr = storeAddress({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city });

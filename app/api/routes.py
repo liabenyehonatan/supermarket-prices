@@ -16,15 +16,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
+from app.basket_promos import StorePromo, price_store
 from app.chains import display_chain_name, display_chain_name_sql
 from app.images import ImageLookupError, is_allowed_image_url
 from app.images import lookup_image_url as _lookup_image_url
-from app.db.models import Product, Price, Store, Chain
+from app.db.models import Product, Price, Promotion, Store, Chain
 from app.api.schemas import (
     ChainListItem,
     ProductSearchResult,
     ProductCompareResponse,
     PriceAtStore,
+    PromoInfo,
     CheapestPriceRequest,
     BasketItem,
     BasketCompareResponse,
@@ -153,6 +155,83 @@ async def search_products(
     return products
 
 
+MAX_PROMOS_PER_STORE = 3
+
+
+PROMO_FRESH_DAYS = 7      # a store's promotions count in the basket only if its promotion file was loaded this recently
+
+
+def _running_now():
+    """The promotion is inside its dates now (chains publish Israel local time without a zone)."""
+    now_il = func.timezone("Asia/Jerusalem", func.now())
+    return and_(
+        Promotion.is_active,
+        or_(Promotion.start_date.is_(None), Promotion.start_date <= now_il),
+        or_(Promotion.end_date.is_(None), Promotion.end_date >= now_il),
+    )
+
+
+async def _running_promotions(db: AsyncSession, product_id: int, store_ids: list[int]) -> dict[int, list[PromoInfo]]:
+    """Promotions running now per store, soonest end first."""
+    rows = await db.execute(
+        select(Promotion.store_id, Promotion.description, Promotion.min_qty, Promotion.end_date)
+        .where(
+            Promotion.product_id == product_id,
+            Promotion.store_id.in_(store_ids),
+            _running_now(),
+        )
+        .order_by(Promotion.store_id, Promotion.end_date.asc().nulls_last(), Promotion.promotion_id)
+    )
+    by_store: dict[int, list[PromoInfo]] = {}
+    for store_id, description, min_qty, end_date in rows.all():
+        bucket = by_store.setdefault(store_id, [])
+        if len(bucket) < MAX_PROMOS_PER_STORE:
+            bucket.append(PromoInfo(description=description or "", min_qty=min_qty, ends_at=end_date))
+    return by_store
+
+
+async def _basket_promotions(db: AsyncSession, product_ids: list[int], store_ids: list[int]) -> dict[int, list[StorePromo]]:
+    """Promotions safe to price a basket with, running now, per store: each with the basket products it covers there."""
+    if not product_ids or not store_ids:
+        return {}
+    rows = await db.execute(
+        select(
+            Promotion.store_id, Promotion.product_id, Promotion.promotion_id, Promotion.description,
+            Promotion.min_qty, Promotion.discounted_price, Promotion.max_qty, Promotion.price_is_total,
+        ).where(
+            Promotion.product_id.in_(product_ids),
+            Promotion.store_id.in_(store_ids),
+            Promotion.basket_eligible,
+            Promotion.min_qty.is_not(None),
+            Promotion.discounted_price.is_not(None),
+            _running_now(),
+        )
+    )
+    # A promotion's rows are pooled into one group promotion, so they must describe ONE promotion: the same
+    # terms on every row, and (when it covers several products) a price the promotion's text confirmed. Chains
+    # that write one record per product skipped those group checks in the loader; here they are applied again.
+    terms: dict[tuple[int, str], set[tuple]] = {}
+    descriptions: dict[tuple[int, str], str] = {}
+    members: dict[tuple[int, str], set[int]] = {}
+    for store_id, product_id, promotion_id, description, min_qty, price, max_qty, price_is_total in rows.all():
+        key = (store_id, promotion_id)
+        terms.setdefault(key, set()).add((min_qty, price, max_qty, price_is_total))
+        descriptions[key] = min(description or "", descriptions.get(key, description or ""))
+        members.setdefault(key, set()).add(product_id)
+    by_store: dict[int, list[StorePromo]] = {}
+    for key, key_terms in terms.items():
+        if len(key_terms) != 1:
+            continue                      # the rows disagree: not one promotion we can price
+        (min_qty, price, max_qty, price_is_total) = next(iter(key_terms))
+        if len(members[key]) > 1 and not price_is_total:
+            continue                      # several products pooled without a confirmed price
+        store_id, promotion_id = key
+        by_store.setdefault(store_id, []).append(
+            StorePromo(promotion_id, descriptions[key], min_qty, price, max_qty, price_is_total,
+                       frozenset(members[key])))
+    return by_store
+
+
 # ─── Endpoint 2: Compare Product Prices ──────────────────────────────────────
 
 @router.get(
@@ -208,6 +287,8 @@ async def compare_product_prices(
             detail=f"No prices found for barcode {barcode}"
         )
 
+    promos = await _running_promotions(db, product.id, [store.id for _, store, _ in rows])
+
     # Step 3: Build the response
     price_list = []
     for price, store, chain in rows:
@@ -225,6 +306,7 @@ async def compare_product_prices(
             latitude=store.latitude,
             longitude=store.longitude,
             delivery_url=store.delivery_url,
+            promotions=promos.get(store.id, []),
         ))
 
     cheapest = price_list[0].price
@@ -599,6 +681,7 @@ async def compare_basket(
             Price.price, Price.product_id,
             Store.id.label("store_pk"), Store.store_id, Store.name.label("store_name"), Store.city,
             Store.address, Store.latitude, Store.longitude,
+            func.coalesce(Store.last_promo_at >= func.now() - timedelta(days=PROMO_FRESH_DAYS), False).label("promo_known"),
             Chain.id.label("chain_pk"), Chain.name.label("chain_name"), Chain.chain_id.label("chain_code"),
         )
         .join(Store, Price.store_id == Store.id)
@@ -632,23 +715,53 @@ async def compare_basket(
             "unit_price": r.price,
             "quantity": qty,
             "line_total": r.price * qty,
+            "regular_line_total": r.price * qty,
+            "promo": None,
         }
+
+    # Step 4b: Promotions, only for stores whose promotion data is fresh. A promotion on one basket product
+    # goes on its line (as in B1); one that covers several basket products is a store-level adjustment.
+    fresh_stores = [store_pk for store_pk, (r, _) in grouped.items() if r.promo_known]
+    promos_by_store = await _basket_promotions(db, list(by_id), fresh_stores)
+    id_of = {p.barcode: p.id for p in by_id.values()}
+    barcode_of = {pid: barcode for barcode, pid in id_of.items()}
+    adjustments_by_store: dict[int, list[dict]] = {}
+    for store_pk, promos in promos_by_store.items():
+        items_by_barcode = grouped[store_pk][1]
+        lines = {id_of[b]: (info["unit_price"], info["quantity"]) for b, info in items_by_barcode.items()}
+        for applied in price_store(lines, promos):
+            promo = applied.promo
+            if len(applied.units) == 1:
+                (pid,) = applied.units
+                info = items_by_barcode[barcode_of[pid]]
+                info["line_total"] = info["regular_line_total"] - applied.saving
+                info["promo"] = {"description": promo.description, "min_qty": promo.min_qty,
+                                 "price": promo.price, "sets": applied.sets}
+            else:
+                adjustments_by_store.setdefault(store_pk, []).append({
+                    "description": promo.description, "min_qty": promo.min_qty, "price": promo.price,
+                    "sets": applied.sets, "saving": applied.saving,
+                    "barcodes": [barcode_of[pid] for pid in applied.units],
+                })
 
     # Step 5: Total per store (of the items it has), then sort: complete baskets first, cheapest first
     ranked = []
-    for r, items_by_barcode in grouped.values():
-        total = sum((info["line_total"] for info in items_by_barcode.values()), Decimal("0"))
-        ranked.append((len(barcodes) - len(items_by_barcode), total, r, items_by_barcode))
+    for store_pk, (r, items_by_barcode) in grouped.items():
+        adjustments = adjustments_by_store.get(store_pk, [])
+        adjusted = sum((a["saving"] for a in adjustments), Decimal("0"))
+        total = sum((info["line_total"] for info in items_by_barcode.values()), Decimal("0")) - adjusted
+        savings = sum((info["regular_line_total"] - info["line_total"] for info in items_by_barcode.values()), Decimal("0")) + adjusted
+        ranked.append((len(barcodes) - len(items_by_barcode), total, savings, adjustments, r, items_by_barcode))
     ranked.sort(key=lambda x: (x[0], x[1]))
 
-    complete_totals = [t for missing, t, _, _ in ranked if missing == 0]
+    complete_totals = [t for missing, t, _, _, _, _ in ranked if missing == 0]
     if len(complete_totals) >= 2:
         max_savings = complete_totals[-1] - complete_totals[0]
         max_total = complete_totals[-1]
     else:
         max_savings = Decimal("0")
-        max_total = max((t for _, t, _, _ in ranked), default=Decimal("0"))
-    cheapest_store = ranked[0][2].store_name if ranked else None
+        max_total = max((t for _, t, _, _, _, _ in ranked), default=Decimal("0"))
+    cheapest_store = ranked[0][4].store_name if ranked else None
 
     # Step 6: Build the answer. The constructed models skip validation (the values come from the database)
     # and the JSON is written straight from them: a basket answer is ~1.3 MB, so this mattered.
@@ -666,10 +779,13 @@ async def compare_basket(
             total_price=total,
             items_found=len(items_by_barcode),
             items_missing=missing,
+            savings=savings,
+            promotions_known=bool(r.promo_known),
+            promo_adjustments=adjustments,
             # In the order the items were listed in the basket (the database returns them in no fixed order).
             item_prices=sorted(items_by_barcode.values(), key=lambda i: basket_order[i["barcode"]]),
         )
-        for missing, total, r, items_by_barcode in shown
+        for missing, total, savings, adjustments, r, items_by_barcode in shown
     ]
 
     response = BasketCompareResponse.model_construct(

@@ -201,6 +201,44 @@ sudo apt-get install -y iptables-persistent && sudo netfilter-persistent save   
 
 Do not touch the rule for port 22 (SSH), or you lock yourself out.
 
+## Promotions
+
+The product page can show the promotions a store runs on a product (the chain's own wording; the price shown is still the shelf price). They are off by default because the files take disk and database space.
+
+```bash
+bash deploy/set-env.sh SCRAPE_PROMOS=true PROMO_CHAINS=SHUFERSAL,RAMI_LEVY
+docker compose up -d
+```
+
+Start with one or two chains and watch, after the next cycle: the table size (`select pg_size_pretty(pg_total_relation_size('promotions'));`), free disk, the cycle duration in `ingest_runs`, and any `failed` rows in `ingested_files` with `file_type = 'promo_full'`. Add chains in small groups; the chains with the biggest files per store (Tiv Taam, Hazi Hinam, Fresh Market) go last. Leave `PROMO_CHAINS` empty to turn promotions on for every chain.
+
+**Basket prices.** The basket page prices a line with a store's single-product "N for X" promotion when the store's promotion data is at most 7 days old (a store that has none, or older, is priced at shelf price and the page says so). `promotions.basket_eligible` fills only as each store's next promotion file loads, so the effect appears after the first cycle following the deploy. Check it with `select count(*) filter (where basket_eligible), count(*) from promotions;`, and look for promotions that were read wrongly before more chains are switched on:
+
+```sql
+select p.barcode, pr.description, pr.min_qty, pr.discounted_price, price.price
+  from promotions pr
+  join products p on p.id = pr.product_id
+  join prices price on price.product_id = pr.product_id and price.store_id = pr.store_id and price.is_current
+ where pr.basket_eligible and pr.discounted_price / pr.min_qty < 0.4 * price.price
+ limit 50;
+```
+
+**Group promotions.** A promotion on several products ("any 3 of these 4 for 10") is priced in the basket when its text confirms the price; the basket pools the quantities of its products, takes the cheapest units first (the safe reading: it can only overstate a total) and shows it as a saving row. They become `basket_eligible` as each store's next promotion file loads, so the first cycle after the deploy fills them. Check the biggest ones before switching on more chains:
+
+```sql
+select pr.store_id, pr.promotion_id, pr.description, pr.min_qty, pr.discounted_price, count(*) as products
+  from promotions pr
+ where pr.basket_eligible
+ group by 1, 2, 3, 4, 5
+having count(*) > 1
+ order by products desc
+ limit 30;
+```
+
+Basket totals drop once promotions are on, so the basket page's "last time" comparison shows the first promotion-priced comparison as a price drop.
+
+To turn them off set `SCRAPE_PROMOS=false`. Rows already loaded stay and keep being filtered by their dates; `TRUNCATE promotions;` clears them.
+
 ## Settings reference
 
 See `.env.example` and `app/settings.py` for every variable and its default.
