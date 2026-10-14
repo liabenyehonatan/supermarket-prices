@@ -179,6 +179,9 @@ class BasketStoreTotal(BaseModel):
     # fresh promotion data for it (a store without it is priced at shelf price, which may be too high).
     savings: Decimal = Decimal("0")
     promotions_known: bool = False
+    # Promotions that cover several products at once: each is subtracted from the total as a whole
+    # ({description, min_qty, price, sets, saving, barcodes}); single-product promotions are on their lines.
+    promo_adjustments: List[dict] = []
 
 
 class BasketCompareResponse(BaseModel):
