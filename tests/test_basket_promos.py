@@ -67,3 +67,12 @@ def test_nonsense_promotions_are_ignored():
 def test_a_tie_between_promotions_is_decided_by_promotion_id():
     twins = [promo("b", desc="second"), promo("a", desc="first")]
     assert price_line(D("4.00"), 3, twins).promo.description == "first"
+
+
+def test_n_units_for_less_than_one_unit_is_read_as_a_per_unit_price_and_ignored():
+    # "MinQty 2, DiscountedPrice 7.90" with a shelf price of 9.90 could mean 7.90 EACH when buying 2:
+    # charging 7.90 for both would understate the basket. A real "N for X" never costs less than one unit.
+    line = price_line(D("9.90"), 2, [promo(n=2, price="7.90")])
+    assert line.promo is None and line.total == D("19.80")
+    assert price_line(D("9.90"), 2, [promo(n=2, price="9.90")]).promo is None     # "2 for the price of 1" is skipped too (safe side)
+    assert price_line(D("9.90"), 2, [promo(n=2, price="15.80")]).total == D("15.80")   # a real 2-for-15.80 still applies
