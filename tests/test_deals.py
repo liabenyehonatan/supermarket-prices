@@ -1,6 +1,7 @@
 # The deals view and endpoint: one row per (brand, promotion), measured against the cheapest shelf price.
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -265,3 +266,33 @@ async def test_the_store_count_follows_the_city_filter(client, session):
     await make_world(session)
     assert (await client.get("/api/v1/deals")).json()["deals"][0]["stores"] == 2
     assert (await client.get("/api/v1/deals", params={"city": "עכו"})).json()["deals"][0]["stores"] == 1
+
+
+# ── the rules the customer is told about ──────────────────────────────────────
+
+async def test_the_response_states_the_rules_the_page_explains(client, session):
+    from app.api.routes import MAX_DEAL_SAVING, MIN_DEAL_SAVING, MIN_REFERENCE_PRICE
+    await make_world(session)
+    rules = (await client.get("/api/v1/deals")).json()["rules"]
+    assert float(rules["min_saving"]) == float(MIN_DEAL_SAVING) == 0.10
+    assert float(rules["max_saving"]) == float(MAX_DEAL_SAVING) == 0.60
+    assert float(rules["min_reference_price"]) == float(MIN_REFERENCE_PRICE) == 0.50
+
+
+async def test_the_rules_are_stated_even_when_there_are_no_deals(client):
+    await maintenance.refresh_popularity()                          # the view survives between tests: rebuild it empty
+    await maintenance.refresh_deals()
+    body = (await client.get("/api/v1/deals")).json()
+    assert body["deals"] == [] and "rules" in body
+
+
+async def test_the_stated_minimum_reference_price_is_what_the_view_really_uses(session):
+    # the page tells shoppers "no comparison against prices under 0.50": the view must agree to the agora
+    from app.api.routes import MIN_REFERENCE_PRICE
+    await make_world(session, market_min=str(MIN_REFERENCE_PRICE - Decimal("0.01")), price="1.20", min_qty=3)
+    assert await deals(session) == []                               # a reference of 0.49 is a placeholder
+    await session.execute(text("truncate chains, products restart identity cascade"))
+    await session.commit()
+    await make_world(session, market_min=str(MIN_REFERENCE_PRICE), price="1.20", min_qty=3)   # 0.40 a unit against 0.50
+    [row] = await deals(session)
+    assert round(float(row.saving_pct), 2) == 0.20
