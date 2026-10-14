@@ -198,3 +198,72 @@ def test_a_club_wide_promotion_with_tens_of_thousands_of_items_is_rejected_quick
     started = time.perf_counter()
     assert normalize_promotion(row(promotionitems=items), as_of=AS_OF) is None
     assert time.perf_counter() - started < 0.5
+
+
+# ── basket eligibility (Phase B1) ─────────────────────────────────────────────
+
+def single(**over):
+    """A Rami-Levy-shaped '3 for 10' on one product."""
+    base = dict(promotionitems={"item": [{"itemcode": "111"}]}, minqty="3.00", discountedprice="10.00")
+    base.update(over)
+    return row(**base)
+
+
+def test_a_single_product_n_for_x_is_basket_eligible():
+    rec = normalize_promotion(single(), as_of=AS_OF)
+    assert rec.basket_eligible is True and rec.max_qty is None
+
+
+def test_reward_ten_on_one_product_is_eligible_too():
+    assert normalize_promotion(single(rewardtype="10"), as_of=AS_OF).basket_eligible is True
+
+
+def test_item_level_layout_is_eligible():
+    victory = {
+        "promotionid": "9", "promotiondescription": "2ב15 ביסקוויט",
+        "promotionstartdatetime": "2026-05-04T00:00:00.000", "promotionenddatetime": "2026-12-30T00:00:00.000",
+        "clubid": "0", "additionaliscoupon": "0", "redemptionlimit": "",
+        "groups": {"group": {"groupid": "1", "promotionitems": {"promotionitem": {
+            "itemcode": "7290001", "rewardtype": "10", "minqty": "2", "maxqty": "NO_BODY",
+            "discountedprice": "15", "bisweighted": "0"}}}},
+    }
+    rec = normalize_promotion(victory, as_of=AS_OF)
+    assert rec.basket_eligible is True and rec.min_qty == 2 and rec.max_qty is None
+
+
+@pytest.mark.parametrize("over", [
+    {"rewardtype": "3"},                                   # meaning not verified
+    {"rewardtype": "2"},                                   # percent: no total price
+    {"isweightedpromo": "1"},
+    {"isgiftitem": "1"},
+    {"redemptionlimit": "2"},
+    {"discountedprice": ""},
+    {"minqty": "0.50"},                                    # fractional: no whole set
+])
+def test_what_is_not_a_plain_n_for_x_is_not_eligible(over):
+    rec = normalize_promotion(single(**over), as_of=AS_OF)
+    assert rec is None or rec.basket_eligible is False
+
+
+def test_two_products_are_never_eligible():
+    rec = normalize_promotion(row(), as_of=AS_OF)              # the default row lists two items
+    assert rec is not None and rec.basket_eligible is False
+
+
+def test_a_weighted_item_is_not_eligible():
+    items = {"item": [{"itemcode": "111", "bisweighted": "1"}]}
+    assert normalize_promotion(single(promotionitems=items), as_of=AS_OF).basket_eligible is False
+
+
+@pytest.mark.parametrize("raw, expected", [("5", 5), ("5.00", 5), ("0", None), ("NO_BODY", None), ("", None)])
+def test_the_purchase_limit_is_read_as_a_positive_integer(raw, expected):
+    assert normalize_promotion(single(maxqty=raw), as_of=AS_OF).max_qty == expected
+
+
+def test_the_item_level_purchase_limit_is_used_when_the_promotion_has_none():
+    items = {"item": [{"itemcode": "111", "maxqty": "10"}]}
+    assert normalize_promotion(single(promotionitems=items), as_of=AS_OF).max_qty == 10
+
+
+def test_a_limit_below_the_set_size_makes_it_not_eligible():
+    assert normalize_promotion(single(maxqty="2"), as_of=AS_OF).basket_eligible is False
