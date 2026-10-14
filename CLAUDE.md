@@ -67,7 +67,7 @@ Requires the `pg_trgm` PostgreSQL extension (enabled in the initial migration) f
 Three endpoints under `/api/v1`:
 - `GET /products/search?q=` — barcode (exact) or Hebrew name (`ILIKE %q%`)
 - `GET /products/{barcode}/compare` — prices across all stores, sorted cheapest first; each row carries `promotions` (up to 3 running now, soonest end first, the chain's wording only)
-- `POST /basket/compare` — total cost of a list of `{barcode, quantity}` items per store, sorted cheapest first
+- `POST /basket/compare` — total cost of a list of `{barcode, quantity}` items per store, sorted cheapest first. A line is priced with the best single-product "N for X" promotion (`promotions.basket_eligible`, reward codes 1/10) only for stores whose `last_promo_at` is within 7 days; `unit_price` is the shelf price, `line_total` is promotion-adjusted, each store reports `savings` and `promotions_known`
 
 All DB access is async (`AsyncSession` via `asyncpg`). FastAPI dependency `get_db` provides a session per request.
 
@@ -95,6 +95,8 @@ Two cycles a day (`RUN_AT`, default 06:00 and 18:00 Israel time; a failed or par
 **Files are deduplicated by name, in two places.** The scraper skips names its status database has verified (`dumps/status`), and the parser skips names whose `ingested_files` row is `done`. Don't change either: re-downloading wastes bandwidth and re-parsing wastes DB writes. Never decide "already loaded" from the presence of a file on disk.
 
 **API responses sort cheapest first.** `/products/{barcode}/compare` and `/basket/compare` both return results ordered by price ascending. Maintain this contract when modifying these endpoints.
+
+**A promotion changes a basket total only when it is `basket_eligible`.** One product, reward 1 or 10, not weighted/gift/redemption-limited, running now, and the store's promotion data is fresh (`stores.last_promo_at`, 7 days). Promotions are never mixed on one line and one that is not below the shelf price per unit is ignored (`app/basket_promos.py`). Club, coupon, multi-product and reward-3 promotions stay display-only.
 
 **Never mark a file loaded without its data.** The ledger row is written in the same transaction as the prices, and the XML is deleted only after commit. Don't move either step outside the transaction.
 
