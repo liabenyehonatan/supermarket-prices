@@ -82,13 +82,20 @@ def _items(row: dict) -> list[dict]:
 
 
 def _club_ids(row: dict) -> set[str]:
+    """Every club id the promotion names, wherever the chain put it: on the promotion, in a <Clubs>
+    element, or inside <AdditionalRestrictions> (KingStore, Netiv Hased and others)."""
     ids: set[str] = set()
-    single = _text(row, "clubid")
-    if single:
-        ids.add(single)
-    clubs = row.get("clubs")
-    if isinstance(clubs, dict):
-        ids.update(str(c).strip() for c in _as_list(clubs.get("clubid")) if str(c).strip())
+    containers = [row]
+    restrictions = row.get("additionalrestrictions")
+    if isinstance(restrictions, dict):
+        containers.append(restrictions)
+    for container in containers:
+        single = _text(container, "clubid")
+        if single:
+            ids.add(single)
+        clubs = container.get("clubs")
+        if isinstance(clubs, dict):
+            ids.update(str(c).strip() for c in _as_list(clubs.get("clubid")) if str(c).strip())
     return ids
 
 
@@ -128,6 +135,14 @@ def _min_qty(raw: Optional[str]) -> Optional[int]:
     return int(qty)
 
 
+def promotion_is_cancelled(row: dict) -> bool:
+    return _CANCELLED in (_text(row, "promotiondescription") or "")
+
+
+def promotion_has_items(row: dict) -> bool:
+    return bool(_items(row))
+
+
 def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
     """One parsed promotion → PromoRecord, or None when Phase A does not show it."""
     promotion_id = _clean_text(_text(row, "promotionid"), 50)
@@ -145,12 +160,14 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
     if not rewards or not rewards <= ALLOWED_REWARD_TYPES:
         return None
 
-    barcodes: list[str] = []
+    barcodes: dict[str, None] = {}      # an ordered set: club-wide promotions list tens of thousands of items
     for item in items:
         code = _clean_text(_text(item, "itemcode"), 20)
         if code and code not in barcodes:
-            barcodes.append(code)
-    if not barcodes or len(barcodes) > MAX_ITEMS_PER_PROMOTION:
+            barcodes[code] = None
+            if len(barcodes) > MAX_ITEMS_PER_PROMOTION:
+                return None             # not a product promotion; stop reading the rest of the list
+    if not barcodes:
         return None
 
     end = _when(row, "promotionenddatetime", "promotionenddate", "promotionendhour", end=True)
@@ -166,7 +183,7 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
         min_qty=_min_qty(_text(row, "minqty") or _text(first, "minqty")),
         start_date=_when(row, "promotionstartdatetime", "promotionstartdate", "promotionstarthour", end=False),
         end_date=end,
-        barcodes=barcodes,
+        barcodes=list(barcodes),
     )
 
 
