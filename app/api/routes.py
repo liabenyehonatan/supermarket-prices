@@ -19,12 +19,13 @@ from app.db.database import get_db
 from app.chains import display_chain_name, display_chain_name_sql
 from app.images import ImageLookupError, is_allowed_image_url
 from app.images import lookup_image_url as _lookup_image_url
-from app.db.models import Product, Price, Store, Chain
+from app.db.models import Product, Price, Promotion, Store, Chain
 from app.api.schemas import (
     ChainListItem,
     ProductSearchResult,
     ProductCompareResponse,
     PriceAtStore,
+    PromoInfo,
     CheapestPriceRequest,
     BasketItem,
     BasketCompareResponse,
@@ -153,6 +154,31 @@ async def search_products(
     return products
 
 
+MAX_PROMOS_PER_STORE = 3
+
+
+async def _running_promotions(db: AsyncSession, product_id: int, store_ids: list[int]) -> dict[int, list[PromoInfo]]:
+    """Promotions running now (chains publish Israel local time without a zone) per store, soonest end first."""
+    now_il = func.timezone("Asia/Jerusalem", func.now())
+    rows = await db.execute(
+        select(Promotion.store_id, Promotion.description, Promotion.min_qty, Promotion.end_date)
+        .where(
+            Promotion.product_id == product_id,
+            Promotion.store_id.in_(store_ids),
+            Promotion.is_active,
+            or_(Promotion.start_date.is_(None), Promotion.start_date <= now_il),
+            or_(Promotion.end_date.is_(None), Promotion.end_date >= now_il),
+        )
+        .order_by(Promotion.store_id, Promotion.end_date.asc().nulls_last(), Promotion.promotion_id)
+    )
+    by_store: dict[int, list[PromoInfo]] = {}
+    for store_id, description, min_qty, end_date in rows.all():
+        bucket = by_store.setdefault(store_id, [])
+        if len(bucket) < MAX_PROMOS_PER_STORE:
+            bucket.append(PromoInfo(description=description or "", min_qty=min_qty, ends_at=end_date))
+    return by_store
+
+
 # ─── Endpoint 2: Compare Product Prices ──────────────────────────────────────
 
 @router.get(
@@ -208,6 +234,8 @@ async def compare_product_prices(
             detail=f"No prices found for barcode {barcode}"
         )
 
+    promos = await _running_promotions(db, product.id, [store.id for _, store, _ in rows])
+
     # Step 3: Build the response
     price_list = []
     for price, store, chain in rows:
@@ -225,6 +253,7 @@ async def compare_product_prices(
             latitude=store.latitude,
             longitude=store.longitude,
             delivery_url=store.delivery_url,
+            promotions=promos.get(store.id, []),
         ))
 
     cheapest = price_list[0].price
