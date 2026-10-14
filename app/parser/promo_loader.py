@@ -49,6 +49,7 @@ class PromoRecord:
     barcodes: list[str] = field(default_factory=list)
     basket_eligible: bool = False        # safe to compute a basket price with (Phase B1)
     max_qty: Optional[int] = None        # most units one purchase gets at the promotion price
+    price_is_total: bool = False         # the description itself says "N ב-price" with this N and price
 
 
 def _as_list(value: Any) -> list:
@@ -148,6 +149,15 @@ def _min_qty(raw: Optional[str]) -> Optional[int]:
 
 
 BASKET_REWARD_TYPES = {"1", "10"}
+_N_FOR_X = re.compile(r"(\d+)\s*ב\s*-?\s*(\d+(?:\.\d+)?)")
+
+
+def _price_is_total(description: str, min_qty: Optional[int], price: Optional[Decimal]) -> bool:
+    """The text says "2ב18" and the file says MinQty 2, price 18: two independent fields agree that the
+    price is the total for N units (not a per-unit price)."""
+    if min_qty is None or price is None:
+        return False
+    return any(int(n) == min_qty and Decimal(x) == price for n, x in _N_FOR_X.findall(description))
 
 
 def _positive_int(raw: Optional[str]) -> Optional[int]:
@@ -230,6 +240,7 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
         barcodes=list(barcodes),
         basket_eligible=_basket_eligible(row, items, rewards, barcodes, min_qty, price, max_qty),
         max_qty=max_qty,
+        price_is_total=_price_is_total(description, min_qty, price),
     )
 
 
@@ -267,6 +278,7 @@ async def replace_store_promotions(
                 "min_qty": record.min_qty, "start_date": record.start_date, "end_date": record.end_date,
                 "is_active": True,
                 "basket_eligible": record.basket_eligible, "max_qty": record.max_qty,
+                "price_is_total": record.price_is_total,
             })
 
     await session.execute(delete(Promotion).where(Promotion.store_id == store.id))

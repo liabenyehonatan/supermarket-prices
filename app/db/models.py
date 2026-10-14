@@ -338,6 +338,8 @@ class Promotion(Base):
     basket_eligible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False)
     # Most units one purchase can buy at the promotion price (the chain's MaxQty); None = no limit.
     max_qty: Mapped[Optional[int]] = mapped_column(Integer)
+    # The promotion's own text says "N ב-price" with this N and price: the price is the total for N units.
+    price_is_total: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False)
 
     # RELATIONSHIPS
     product: Mapped["Product"] = relationship("Product", back_populates="promotions")

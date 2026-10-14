@@ -7,8 +7,9 @@ from app.basket_promos import BasketPromo, price_line
 D = Decimal
 
 
-def promo(pid="p", n=3, price="10.00", max_qty=None, desc="3 ב-10"):
-    return BasketPromo(promotion_id=pid, description=desc, min_qty=n, price=D(price), max_qty=max_qty)
+def promo(pid="p", n=3, price="10.00", max_qty=None, desc="3 ב-10", price_is_total=False):
+    return BasketPromo(promotion_id=pid, description=desc, min_qty=n, price=D(price), max_qty=max_qty,
+                       price_is_total=price_is_total)
 
 
 def test_no_promotions_is_the_shelf_price():
@@ -76,3 +77,16 @@ def test_n_units_for_less_than_one_unit_is_read_as_a_per_unit_price_and_ignored(
     assert line.promo is None and line.total == D("19.80")
     assert price_line(D("9.90"), 2, [promo(n=2, price="9.90")]).promo is None     # "2 for the price of 1" is skipped too (safe side)
     assert price_line(D("9.90"), 2, [promo(n=2, price="15.80")]).total == D("15.80")   # a real 2-for-15.80 still applies
+
+
+def test_a_price_the_description_confirms_as_a_total_is_used_even_when_not_above_one_unit():
+    # Real Shufersal case: "2ב18" on a product whose shelf price is 20.90. The description states the
+    # total for N, so the per-unit reading is ruled out and the promotion applies.
+    confirmed = promo(n=2, price="18.00", desc="2ב18 ספריי", price_is_total=True)
+    line = price_line(D("20.90"), 3, [confirmed])
+    assert line.promo is not None and line.total == D("38.90") and line.sets == 1     # 18.00 + 20.90
+    assert price_line(D("20.90"), 3, [promo(n=2, price="18.00")]).promo is None         # unconfirmed: still skipped
+
+
+def test_confirmation_does_not_override_a_price_that_is_dearer_than_the_shelf():
+    assert price_line(D("3.00"), 3, [promo(price="12.00", price_is_total=True)]).total == D("9.00")
