@@ -136,12 +136,12 @@ async def record_failure(
 
 
 async def record_superseded(
-    session: AsyncSession, source_folder: str, file_names: list[str]
+    session: AsyncSession, source_folder: str, file_names: list[str], file_type: str = "price_full"
 ) -> None:
     """Mark full files as skipped because a newer one for their store is (or was) loaded."""
     for start in range(0, len(file_names), 500):
         stmt = pg_insert(IngestedFile).values([
-            {"source_folder": source_folder, "file_name": name, "file_type": "price_full",
+            {"source_folder": source_folder, "file_name": name, "file_type": file_type,
              "status": SUPERSEDED, "attempts": 0}
             for name in file_names[start:start + 500]
         ])
