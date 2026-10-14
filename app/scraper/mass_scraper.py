@@ -85,11 +85,12 @@ def _run_runner(
     )
 
 
-def _file_types() -> list[str]:
-    """Store lists and full price files. Delta (Price) files are deliberately not used:
-    a daily full file is self-correcting, a delta stream can miss changes."""
+def _file_types(chain: Optional[str] = None) -> list[str]:
+    """Store lists and full price files, plus full promotion files for the chains that have them on.
+    Delta (Price) files are deliberately not used: a daily full file is self-correcting,
+    a delta stream can miss changes."""
     types = [FileTypesFilters.STORE_FILE.name, FileTypesFilters.PRICE_FULL_FILE.name]
-    if settings.SCRAPE_PROMOS:
+    if chain is not None and settings.promos_enabled_for(chain):
         types.append(FileTypesFilters.PROMO_FULL_FILE.name)
     return types
 
@@ -116,7 +117,7 @@ def scrape_chain(chain: str, *, limit: Optional[int] = None) -> dict:
     """
     _prune_status(chain)
     logger.info("Scraping %s", chain)
-    _run_runner([chain], 1, limit, _file_types())
+    _run_runner([chain], 1, limit, _file_types(chain))
     return {"chain": chain}
 
 
