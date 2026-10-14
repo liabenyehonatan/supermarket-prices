@@ -107,3 +107,20 @@ async def test_one_promotion_can_cover_many_products_in_a_store(_database):
             )
     finally:
         await conn.close()
+
+
+async def test_basket_promotion_columns_exist_and_default_to_not_eligible(_database):
+    conn = await asyncpg.connect(_dsn())
+    try:
+        await conn.execute("TRUNCATE chains RESTART IDENTITY CASCADE")
+        await conn.execute("INSERT INTO chains (chain_id, name) VALUES ('1', 'c')")
+        await conn.execute("INSERT INTO stores (chain_id, store_id) VALUES (1, 's')")
+        await conn.execute("INSERT INTO products (barcode, name) VALUES ('a', 'n')")
+        await conn.execute("INSERT INTO promotions (product_id, store_id, promotion_id, is_active) VALUES (1, 1, 'p', true)")
+        row = await conn.fetchrow("SELECT basket_eligible, max_qty FROM promotions")
+        assert (row["basket_eligible"], row["max_qty"]) == (False, None)
+        assert await conn.fetchval("SELECT last_promo_at FROM stores") is None
+        index = await conn.fetchval("SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_promotions_basket'")
+        assert index and "WHERE" in index
+    finally:
+        await conn.close()
