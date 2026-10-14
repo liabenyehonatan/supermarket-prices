@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { fetchDeals, type Deal, type DealRules } from '../api/client';
+import { fetchDeals, type Deal } from '../api/client';
 import { useBasket } from '../context/BasketContext';
 import { DealCard } from '../components/DealCard';
 import { DealProductsSheet } from '../components/DealProductsSheet';
@@ -29,17 +29,16 @@ export function DealsPage() {
   const [deals, setDeals] = useState<Deal[]>(initial.current?.deals ?? []);
   const [total, setTotal] = useState(initial.current?.total ?? 0);
   const [chains, setChains] = useState<{ name: string; count: number }[]>(initial.current?.chains ?? []);
-  const [rules, setRules] = useState<DealRules | null>(initial.current?.rules ?? null);
   const [loading, setLoading] = useState(initial.current === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [picking, setPicking] = useState<Deal | null>(null);
-  // The explanation is for the first visit only; it counts as seen once it was really on screen (not before the rules load).
+  // The explanation is for the first visit only: it is on screen with the page, so the visit marks it as seen.
   const [introOpen] = useState(() => !hasSeen(INTRO_KEY));
-  useEffect(() => { if (introOpen && rules) markSeen(INTRO_KEY); }, [introOpen, rules]);
+  useEffect(() => { if (introOpen) markSeen(INTRO_KEY); }, [introOpen]);
   const generation = useRef(0);          // bumped by every filter change: an answer for an older filter is dropped
   const scrollY = useRef(initial.current?.scrollY ?? 0);
-  const latest = useRef({ chain, sort, kind, city, deals, total, chains, rules });
-  latest.current = { chain, sort, kind, city, deals, total, chains, rules };
+  const latest = useRef({ chain, sort, kind, city, deals, total, chains });
+  latest.current = { chain, sort, kind, city, deals, total, chains };
 
   useEffect(() => onCityFilterChange(setCity), []);
 
@@ -57,7 +56,7 @@ export function DealsPage() {
     setLoading(true);
     setLoadingMore(false);
     fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE })
-      .then(r => { if (live) { setDeals(r.deals); setTotal(r.total); setChains(r.chains); setRules(r.rules); } })
+      .then(r => { if (live) { setDeals(r.deals); setTotal(r.total); setChains(r.chains); } })
       .catch(() => { if (live) { setDeals([]); setTotal(0); } })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
@@ -68,7 +67,7 @@ export function DealsPage() {
   useEffect(() => {
     if (loading) return;
     writeDealsSnapshot({ ...latest.current, scrollY: scrollY.current });
-  }, [loading, chain, sort, kind, city, deals, total, chains, rules]);
+  }, [loading, chain, sort, kind, city, deals, total, chains]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -121,7 +120,7 @@ export function DealsPage() {
           </div>
         </div>
 
-        {introOpen && rules && <DealsRulesBox rules={rules} />}
+        {introOpen && <DealsRulesBox />}
 
         <div className="filter-bar deals-filters" role="group" aria-label="סינון מבצעים לפי רשת">
           <button className={`filter-chip${chain === '' ? ' active' : ''}`} onClick={() => setChain('')}>כל הרשתות</button>
