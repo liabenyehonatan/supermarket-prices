@@ -9,13 +9,15 @@ function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
  * left with the "cheapest" badge or the gap to the cheapest under it, tap to expand.
  */
 export function StoreRow({
-  chain, name, city, warning, price, isCheapest, cheapestLabel = 'הכי זול', diff,
+  chain, name, city, warning, promo, price, isCheapest, cheapestLabel = 'הכי זול', diff,
   open, onToggle, banner, children,
 }: {
   chain: string;
   name: string;
   city?: string;
   warning?: string;
+  /** One-line promotion teaser under the store name */
+  promo?: string;
   price: number | string;
   isCheapest: boolean;
   cheapestLabel?: string;
@@ -37,6 +39,7 @@ export function StoreRow({
           <div className="store-row-name">{name}</div>
           {city && <div className="store-row-sub">{city}</div>}
           {warning && <div className="store-row-sub store-row-warning">{warning}</div>}
+          {promo && <div className="store-row-promo" title={promo}>מבצע: {promo}</div>}
         </div>
 
         <div className="store-row-right">

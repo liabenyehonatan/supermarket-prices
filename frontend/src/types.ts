@@ -9,6 +9,12 @@ export interface Product {
   image_url?: string;
 }
 
+export interface PromoInfo {
+  description: string;
+  min_qty?: number;
+  ends_at?: string;
+}
+
 export interface PriceAtStore {
   store_id: number;
   store_name: string;
@@ -22,6 +28,7 @@ export interface PriceAtStore {
   latitude?: number;
   longitude?: number;
   delivery_url?: string;
+  promotions?: PromoInfo[];
 }
 
 export interface ProductCompareResponse {

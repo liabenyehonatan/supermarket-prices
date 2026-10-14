@@ -2717,3 +2717,12 @@ img { max-width: 100%; display: block; }
 .about-page p, .about-page li { font-size: 15px; color: var(--ink-700, #3d4a43); }
 .about-page ul { padding-inline-start: 20px; }
 .about-page a { color: var(--green-700, #126E45); text-decoration: underline; }
+
+/* Promotions in a store row: one muted line under the name, the full list when the row is open */
+.store-row-promo {
+  margin-top: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-12); font-weight: var(--fw-medium); color: var(--orange-700);
+}
+.store-row-promos { margin-bottom: var(--sp-2); }
+.store-row-promos ul { margin: var(--sp-1) 0 0; padding-inline-start: var(--sp-5); font-size: var(--fs-13); color: var(--ink-700); }
+.store-row-promo-end { color: var(--ink-400); }
