@@ -207,17 +207,28 @@ async def _basket_promotions(db: AsyncSession, product_ids: list[int], store_ids
             _running_now(),
         )
     )
-    heads: dict[tuple[int, str], tuple] = {}
+    # A promotion's rows are pooled into one group promotion, so they must describe ONE promotion: the same
+    # terms on every row, and (when it covers several products) a price the promotion's text confirmed. Chains
+    # that write one record per product skipped those group checks in the loader; here they are applied again.
+    terms: dict[tuple[int, str], set[tuple]] = {}
+    descriptions: dict[tuple[int, str], str] = {}
     members: dict[tuple[int, str], set[int]] = {}
     for store_id, product_id, promotion_id, description, min_qty, price, max_qty, price_is_total in rows.all():
         key = (store_id, promotion_id)
-        heads.setdefault(key, (description or "", min_qty, price, max_qty, price_is_total))
+        terms.setdefault(key, set()).add((min_qty, price, max_qty, price_is_total))
+        descriptions[key] = min(description or "", descriptions.get(key, description or ""))
         members.setdefault(key, set()).add(product_id)
     by_store: dict[int, list[StorePromo]] = {}
-    for (store_id, promotion_id), (description, min_qty, price, max_qty, price_is_total) in heads.items():
+    for key, key_terms in terms.items():
+        if len(key_terms) != 1:
+            continue                      # the rows disagree: not one promotion we can price
+        (min_qty, price, max_qty, price_is_total) = next(iter(key_terms))
+        if len(members[key]) > 1 and not price_is_total:
+            continue                      # several products pooled without a confirmed price
+        store_id, promotion_id = key
         by_store.setdefault(store_id, []).append(
-            StorePromo(promotion_id, description, min_qty, price, max_qty, price_is_total,
-                       frozenset(members[(store_id, promotion_id)])))
+            StorePromo(promotion_id, descriptions[key], min_qty, price, max_qty, price_is_total,
+                       frozenset(members[key])))
     return by_store
 
 

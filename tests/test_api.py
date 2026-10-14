@@ -683,3 +683,60 @@ async def test_stores_without_any_promotion_report_an_empty_adjustment_list(clie
     await _group_world(session, with_group=False)
     for store in (await _group_basket(client, (1, 1, 1)))["stores"]:
         assert store["promo_adjustments"] == []
+
+
+async def _split_world(session, rows):
+    """One store, two products at 6.00. `rows`: per-product promotion rows with the SAME promotion_id,
+    as chains that write one record per product do. Each row: dict(min_qty, price, price_is_total)."""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, update
+    from zoneinfo import ZoneInfo
+    from app.db.models import Chain, Price, Product, Promotion, Store
+
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף")
+    products = [Product(barcode=f"729000000040{i}", name=f"מוצר {i}") for i in (1, 2)]
+    session.add_all([store, *products])
+    await session.flush()
+    local_now = datetime.now(ZoneInfo("Asia/Jerusalem")).replace(tzinfo=None)
+    for product, spec in zip(products, rows):
+        session.add(Price(product_id=product.id, store_id=store.id, price="6.00",
+                          price_updated_at=datetime(2026, 10, 12), is_current=True))
+        session.add(Promotion(
+            product_id=product.id, store_id=store.id, promotion_id="s1", description="2 ב-10 מוצרים",
+            min_qty=spec["min_qty"], discounted_price=spec["price"], basket_eligible=True,
+            price_is_total=spec["price_is_total"], is_active=True,
+            start_date=local_now - timedelta(days=5), end_date=local_now + timedelta(days=5)))
+    await session.commit()
+    await session.execute(update(Store).where(Store.id == store.id).values(last_promo_at=func.now()))
+    await session.commit()
+
+
+async def _split_basket(client):
+    r = await client.post("/api/v1/basket/compare", json=[
+        {"barcode": "7290000000401", "quantity": 1}, {"barcode": "7290000000402", "quantity": 1}])
+    assert r.status_code == 200
+    return r.json()["stores"][0]
+
+
+async def test_records_split_per_product_are_not_pooled_unless_the_price_is_confirmed(client, session):
+    # Each record alone was judged as a single product (no text check). Pooled they would be a group
+    # promotion that skipped the group rules, so the pooled promotion is ignored.
+    await _split_world(session, [dict(min_qty=2, price="10.00", price_is_total=False)] * 2)
+    store = await _split_basket(client)
+    assert float(store["total_price"]) == 12.0 and store["promo_adjustments"] == []
+
+
+async def test_records_split_per_product_that_disagree_are_ignored(client, session):
+    await _split_world(session, [
+        dict(min_qty=2, price="10.00", price_is_total=True), dict(min_qty=2, price="11.00", price_is_total=True)])
+    store = await _split_basket(client)
+    assert float(store["total_price"]) == 12.0 and store["promo_adjustments"] == []
+
+
+async def test_records_split_per_product_that_agree_and_are_confirmed_are_pooled(client, session):
+    await _split_world(session, [dict(min_qty=2, price="10.00", price_is_total=True)] * 2)
+    store = await _split_basket(client)
+    assert float(store["total_price"]) == 10.0 and len(store["promo_adjustments"]) == 1
