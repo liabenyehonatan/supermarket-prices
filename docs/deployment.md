@@ -212,6 +212,19 @@ docker compose up -d
 
 Start with one or two chains and watch, after the next cycle: the table size (`select pg_size_pretty(pg_total_relation_size('promotions'));`), free disk, the cycle duration in `ingest_runs`, and any `failed` rows in `ingested_files` with `file_type = 'promo_full'`. Add chains in small groups; the chains with the biggest files per store (Tiv Taam, Hazi Hinam, Fresh Market) go last. Leave `PROMO_CHAINS` empty to turn promotions on for every chain.
 
+**Basket prices.** The basket page prices a line with a store's single-product "N for X" promotion when the store's promotion data is at most 7 days old (a store that has none, or older, is priced at shelf price and the page says so). `promotions.basket_eligible` fills only as each store's next promotion file loads, so the effect appears after the first cycle following the deploy. Check it with `select count(*) filter (where basket_eligible), count(*) from promotions;`, and look for promotions that were read wrongly before more chains are switched on:
+
+```sql
+select p.barcode, pr.description, pr.min_qty, pr.discounted_price, price.price
+  from promotions pr
+  join products p on p.id = pr.product_id
+  join prices price on price.product_id = pr.product_id and price.store_id = pr.store_id and price.is_current
+ where pr.basket_eligible and pr.discounted_price / pr.min_qty < 0.4 * price.price
+ limit 50;
+```
+
+Basket totals drop once promotions are on, so the basket page's "last time" comparison shows the first promotion-priced comparison as a price drop.
+
 To turn them off set `SCRAPE_PROMOS=false`. Rows already loaded stay and keep being filtered by their dates; `TRUNCATE promotions;` clears them.
 
 ## Settings reference
