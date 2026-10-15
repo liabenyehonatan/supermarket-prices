@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.db.database import get_db
 from app.basket_promos import StorePromo, price_store
 from app.chains import display_chain_name, display_chain_name_sql
+from app.api.schemas import _israel_to_utc
 from app.images import ImageLookupError, is_allowed_image_url
 from app.images import lookup_image_url as _lookup_image_url
 from app.db.models import Product, Price, Promotion, Store, Chain
@@ -195,6 +196,12 @@ async def _running_promotions(db: AsyncSession, product_id: int, store_ids: list
     return by_store
 
 
+def _ends_utc(local_end: Optional[datetime]) -> Optional[str]:
+    """A promotion's end (Israel local time, no zone) as a UTC ISO string, like the deals' `ends_at`."""
+    converted = _israel_to_utc(local_end)
+    return converted.isoformat() if converted else None
+
+
 async def _basket_promotions(db: AsyncSession, product_ids: list[int], store_ids: list[int]) -> dict[int, list[StorePromo]]:
     """Promotions safe to price a basket with, running now, per store: each with the basket products it covers there."""
     if not product_ids or not store_ids:
@@ -203,6 +210,7 @@ async def _basket_promotions(db: AsyncSession, product_ids: list[int], store_ids
         select(
             Promotion.store_id, Promotion.product_id, Promotion.promotion_id, Promotion.description,
             Promotion.min_qty, Promotion.discounted_price, Promotion.max_qty, Promotion.price_is_total,
+            Promotion.end_date,
         ).where(
             Promotion.product_id.in_(product_ids),
             Promotion.store_id.in_(store_ids),
@@ -218,8 +226,11 @@ async def _basket_promotions(db: AsyncSession, product_ids: list[int], store_ids
     terms: dict[tuple[int, str], set[tuple]] = {}
     descriptions: dict[tuple[int, str], str] = {}
     members: dict[tuple[int, str], set[int]] = {}
-    for store_id, product_id, promotion_id, description, min_qty, price, max_qty, price_is_total in rows.all():
+    ends: dict[tuple[int, str], datetime] = {}
+    for store_id, product_id, promotion_id, description, min_qty, price, max_qty, price_is_total, end_date in rows.all():
         key = (store_id, promotion_id)
+        if end_date is not None:
+            ends[key] = min(end_date, ends.get(key, end_date))
         terms.setdefault(key, set()).add((min_qty, price, max_qty, price_is_total))
         descriptions[key] = min(description or "", descriptions.get(key, description or ""))
         members.setdefault(key, set()).add(product_id)
@@ -233,7 +244,7 @@ async def _basket_promotions(db: AsyncSession, product_ids: list[int], store_ids
         store_id, promotion_id = key
         by_store.setdefault(store_id, []).append(
             StorePromo(promotion_id, descriptions[key], min_qty, price, max_qty, price_is_total,
-                       frozenset(members[key])))
+                       frozenset(members[key]), ends.get(key)))
     return by_store
 
 
@@ -741,11 +752,11 @@ async def compare_basket(
                 info = items_by_barcode[barcode_of[pid]]
                 info["line_total"] = info["regular_line_total"] - applied.saving
                 info["promo"] = {"description": promo.description, "min_qty": promo.min_qty,
-                                 "price": promo.price, "sets": applied.sets}
+                                 "price": promo.price, "sets": applied.sets, "ends_at": _ends_utc(promo.ends_at)}
             else:
                 adjustments_by_store.setdefault(store_pk, []).append({
                     "description": promo.description, "min_qty": promo.min_qty, "price": promo.price,
-                    "sets": applied.sets, "saving": applied.saving,
+                    "sets": applied.sets, "saving": applied.saving, "ends_at": _ends_utc(promo.ends_at),
                     "barcodes": [barcode_of[pid] for pid in applied.units],
                 })
 
