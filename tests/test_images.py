@@ -1,5 +1,7 @@
 # Product pictures: bulk pre-fill by the worker and the lazy endpoint's memory of misses.
 
+from datetime import datetime
+
 import httpx
 import pytest
 from httpx import ASGITransport
@@ -134,8 +136,11 @@ def test_open_food_facts_answer_is_read_safely(payload, expected):
 
 
 async def test_fill_images_off_asks_about_products_without_a_picture_and_marks_misses_once(session, monkeypatch):
-    session.add_all([Product(barcode="7290000000001", name="חלב"), Product(barcode="7290000000002", name="נדיר"),
-                     Product(barcode="7290000000003", name="יש", image_url="https://cdn.example/3.png")])
+    asked_before = datetime(2026, 10, 1)                                           # Shufersal was asked and had nothing
+    session.add_all([Product(barcode="7290000000001", name="חלב", image_checked_at=asked_before),
+                     Product(barcode="7290000000002", name="נדיר", image_checked_at=asked_before),
+                     Product(barcode="7290000000003", name="יש", image_url="https://cdn.example/3.png"),
+                     Product(barcode="7290000000004", name="שופרסל עוד לא נשאל")])
     await session.commit()
     monkeypatch.setattr(images, "OFF_PAUSE", 0)
     asked = []
@@ -146,7 +151,7 @@ async def test_fill_images_off_asks_about_products_without_a_picture_and_marks_m
 
     monkeypatch.setattr(images, "lookup_off_image_url", fake)
     assert await images.fill_images_off(minutes=1) == (1, 1)
-    assert sorted(asked) == ["7290000000001", "7290000000002"]                                            # the product that has a picture is left alone
+    assert sorted(asked) == ["7290000000001", "7290000000002"]                    # not the one Shufersal has yet to be asked about
     rows = {p.barcode: p for p in (await session.execute(select(Product))).scalars()}
     for p in rows.values():
         await session.refresh(p)
@@ -165,8 +170,9 @@ async def test_fill_images_off_asks_about_products_in_deals_first(session, monke
 
     product, stores = await make_world(session)                                    # a product in a running deal
     product.image_url = None
+    product.image_checked_at = datetime(2026, 10, 1)
     await session.commit()
-    plain = Product(barcode="7290000000777", name="בלי מבצע")                      # carried by more stores, in no deal
+    plain = Product(barcode="7290000000777", name="בלי מבצע", image_checked_at=datetime(2026, 10, 1))                      # carried by more stores, in no deal
     session.add(plain)
     await session.flush()
     existing = (await session.execute(select(Store))).scalars().all()
@@ -192,7 +198,8 @@ async def test_fill_images_off_asks_about_products_in_deals_first(session, monke
 
 
 async def test_failed_open_food_facts_lookups_are_not_recorded_as_missing_pictures(session, monkeypatch):
-    session.add_all([Product(barcode="7290000000001", name="חלב"), Product(barcode="7290000000002", name="נדיר")])
+    session.add_all([Product(barcode="7290000000001", name="חלב", image_checked_at=datetime(2026, 10, 1)),
+                     Product(barcode="7290000000002", name="נדיר", image_checked_at=datetime(2026, 10, 1))])
     await session.commit()
     monkeypatch.setattr(images, "OFF_PAUSE", 0)
 
@@ -205,3 +212,46 @@ async def test_failed_open_food_facts_lookups_are_not_recorded_as_missing_pictur
     for p in rows:
         await session.refresh(p)
     assert all(p.image_url is None and p.off_checked_at is None for p in rows)
+
+
+@pytest.mark.parametrize("barcode,ok", [
+    ("7290000000001", False),          # 13 digits but a wrong check digit
+    ("7290000000008", True),
+    ("96385074", True),                # EAN-8
+    ("1234567", False),                # 7 digits: a chain's own code
+    ("729000000000X", False),
+    ("../../x", False),
+    ("", False),
+])
+def test_only_real_gtins_are_sent_to_open_food_facts(barcode, ok):
+    from app.images import is_gtin
+
+    assert is_gtin(barcode) is ok
+
+
+async def test_a_picture_found_meanwhile_is_not_overwritten(session, monkeypatch):
+    from sqlalchemy import update as upd
+
+    session.add(Product(barcode="7290000000008", name="חלב", image_checked_at=datetime(2026, 10, 1)))
+    await session.commit()
+    monkeypatch.setattr(images, "OFF_PAUSE", 0)
+
+    async def fake(barcode):
+        async with images.AsyncSessionLocal() as other:                              # the lazy endpoint stored Shufersal's meanwhile
+            await other.execute(upd(Product).where(Product.barcode == barcode).values(image_url="https://res.cloudinary.com/x.png"))
+            await other.commit()
+        return "https://images.openfoodfacts.org/1.jpg"
+
+    monkeypatch.setattr(images, "lookup_off_image_url", fake)
+    await images.fill_images_off(minutes=1)
+    p = (await session.execute(select(Product))).scalar_one()
+    await session.refresh(p)
+    assert p.image_url == "https://res.cloudinary.com/x.png"
+
+
+async def test_the_answer_must_be_for_the_barcode_asked(session):
+    from app.images import off_front_image
+
+    payload = {"status": 1, "code": "7290000000099", "product": {"image_front_url": "https://images.openfoodfacts.org/a.jpg"}}
+    assert off_front_image(payload, barcode="7290000000008") is None
+    assert off_front_image(payload, barcode="7290000000099") == "https://images.openfoodfacts.org/a.jpg"

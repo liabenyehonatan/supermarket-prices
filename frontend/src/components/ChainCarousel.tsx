@@ -60,7 +60,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
       track.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [update, query]);
+  }, [update, query, allChains.length]);   // measure again when the list arrives (the deals page loads it late)
 
   // dir 1 = forward (toward the end of the list)
   function step(dir: 1 | -1) {
@@ -97,7 +97,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
             key={name}
             onClick={() => onSelect(name)}
             className={`chain-carousel-item${selected === name ? ' selected' : ''}${selected && selected !== name ? ' dimmed' : ''}`}
-            aria-label={counts?.[name] != null ? `סנן לפי ${name}, ${counts[name]} מבצעים` : `סנן לפי ${name}`}
+            aria-label={counts?.[name] != null ? `סנן לפי ${name}, ${counts[name] === 1 ? 'מבצע אחד' : `${counts[name]} מבצעים`}` : `סנן לפי ${name}`}
             aria-pressed={selected === name}
           >
             <ChainLogo name={name} size={52} showLabel />
