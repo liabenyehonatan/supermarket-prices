@@ -24,8 +24,9 @@ _NUMBER_WITH_UNIT = re.compile(r"^\d+(\.\d+)?([^\d.%]+)$")      # 500מל
 _PACK = re.compile(r"^(\d+[x×]|[x×]\d+)$")                       # 6x, x6
 
 
-def _meaningful_words(name: str) -> set[str]:
-    words = set()
+def _meaningful_tokens(name: str) -> list[str]:
+    """The words of a product name that say WHAT it is, in order and without repeats."""
+    words: dict[str, None] = {}
     for token in re.split(r"[\s/\-–()]+", (name or "").lower()):
         token = token.strip(",;:*+&!?.\"'״׳")
         core = token.replace('"', "").replace("״", "").replace("'", "").replace("׳", "")
@@ -34,15 +35,26 @@ def _meaningful_words(name: str) -> set[str]:
         glued = _NUMBER_WITH_UNIT.match(core)
         if glued and glued.group(2) in _UNITS:
             continue
-        words.add(core)
-    return words
+        words[core] = None
+    return list(words)
+
+
+def _meaningful_words(name: str) -> set[str]:
+    return set(_meaningful_tokens(name))
 
 
 def names_match(our_name: str, their_name: str) -> bool:
-    """True only when their name contains every meaningful word of ours, and ours has at least three.
-    Looser matching paired a corn with a mayonnaise ("light, reduced calories") and put the wrong picture on it."""
-    ours = _meaningful_words(our_name)
-    return len(ours) >= 3 and ours <= _meaningful_words(their_name)
+    """True when their name names the same thing as ours. The first meaningful word of ours (the category: corn,
+    shampoo, ice lolly) must be in theirs, and so must the rest, except that a long name (5+ words) may miss one.
+    Matching only by overlap paired a corn with a mayonnaise ("light, reduced calories"); names are often cut short,
+    so demanding more would throw away the many pictures that are right (dill, tomatoes, canola oil)."""
+    ours = _meaningful_tokens(our_name)
+    if not ours:
+        return False
+    theirs = _meaningful_words(their_name)
+    if ours[0] not in theirs:
+        return False
+    return len([w for w in ours if w not in theirs]) <= (1 if len(ours) >= 5 else 0)
 
 
 def code_matches_barcode(code: str, barcode: str) -> bool:
@@ -106,7 +118,7 @@ async def lookup_image_url(barcode: str, name: Optional[str], client: Optional[h
                 if code_matches_barcode(str(result.get("code", "")).removeprefix("P_"), barcode) and picture(result):
                     return picture(result)
             ours = _meaningful_words(name or "")
-            if len(ours) >= 3:                                   # fewer words can never match: do not ask
+            if ours:                                             # nothing that names the product: do not ask
                 best, fewest_extra = None, None
                 for result in await search(name):
                     if picture(result) and names_match(name, result.get("name", "")):
