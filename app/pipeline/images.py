@@ -13,7 +13,7 @@ from datetime import datetime
 from sqlalchemy import text
 
 from app.db.database import AsyncSessionLocal
-from app.images import ImageLookupError, lookup_image_url, lookup_off_image_url
+from app.images import ImageLookupError, lookup_image_url, lookup_off_image_url, picture_matches_barcode
 from app.pipeline.shutdown import STOP
 
 logger = logging.getLogger(__name__)
@@ -156,8 +156,72 @@ async def fill_images_off(minutes: float) -> tuple[int, int]:
     return found, missed
 
 
+# ── Checking the pictures we already hold ─────────────────────────────────────────────────────────────────────────
+# Until names were matched strictly, a picture could belong to another product (a corn wearing a mayonnaise).
+# A Shufersal picture whose item code is not the product's barcode was chosen by name: look it up again with the
+# strict rules, replace it when the right one exists, clear it when none does, and leave it when Shufersal cannot be asked.
+
+_AUDIT_PAGE = text(
+    _DEAL_PRODUCTS + """
+    SELECT p.id, p.barcode, p.name, p.image_url
+      FROM products p
+      LEFT JOIN dp ON dp.pid = p.id
+     WHERE p.id > :after AND p.image_url LIKE '%shufersal%'
+       AND ((dp.pid IS NOT NULL) = :deals)
+     ORDER BY p.id
+     LIMIT :page
+    """
+)
+
+
+async def audit_images(concurrency: int = 4, page: int = 400) -> tuple[int, int, int, int]:
+    """Returns (kept, replaced, cleared, failed). Products of the promotions section first, then the rest."""
+    kept = replaced = cleared = failed = 0
+    gate = asyncio.Semaphore(concurrency)
+
+    async def one(row):
+        async with gate:
+            return await lookup_image_url(row.barcode, row.name)
+
+    for deals in (True, False):
+        after = 0
+        while not STOP.is_set():
+            async with AsyncSessionLocal() as session:
+                rows = (await session.execute(_AUDIT_PAGE, {"after": after, "page": page, "deals": deals})).all()
+            if not rows:
+                break
+            after = rows[-1].id
+            suspects = [r for r in rows if not picture_matches_barcode(r.image_url, r.barcode)]
+            results = await asyncio.gather(*(one(r) for r in suspects), return_exceptions=True)
+            now = datetime.utcnow()
+            async with AsyncSessionLocal() as session:
+                async with session.begin():
+                    for row, result in zip(suspects, results):
+                        if isinstance(result, ImageLookupError):
+                            failed += 1
+                        elif isinstance(result, BaseException):
+                            raise result
+                        elif result == row.image_url:
+                            kept += 1
+                        elif result:
+                            await session.execute(text("UPDATE products SET image_url = :u WHERE id = :i"), {"u": result, "i": row.id})
+                            replaced += 1
+                        else:
+                            await session.execute(
+                                text("UPDATE products SET image_url = NULL, image_checked_at = :t WHERE id = :i"),
+                                {"t": now, "i": row.id})
+                            cleared += 1
+            logger.info("Picture audit (%s): up to product %d: %d kept, %d replaced, %d cleared, %d failed",
+                        "deals" if deals else "rest", after, kept, replaced, cleared, failed)
+            await asyncio.sleep(PAUSE_BETWEEN_BATCHES)
+    return kept, replaced, cleared, failed
+
+
 if __name__ == "__main__":
     import sys
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    asyncio.run(fill_images(float(sys.argv[1]) if len(sys.argv) > 1 else 30))
+    if len(sys.argv) > 1 and sys.argv[1] == "audit":
+        print(asyncio.run(audit_images()))      # (kept, replaced, cleared, failed)
+    else:
+        asyncio.run(fill_images(float(sys.argv[1]) if len(sys.argv) > 1 else 30))
