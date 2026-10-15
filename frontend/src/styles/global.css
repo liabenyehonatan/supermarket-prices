@@ -2782,7 +2782,8 @@ img { max-width: 100%; display: block; }
 .deal-card-saving { font-size: var(--fs-12); color: var(--ink-500); }
 .deal-card-note, .deal-card-ends { font-size: var(--fs-12); color: var(--ink-500); }
 .deal-card-ends { color: var(--ink-700); font-weight: var(--fw-medium); }
-.deal-card-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-1); }
+/* margin-top:auto pins the buttons to the bottom edge: cards in a row are the same height, so every button sits on one line */
+.deal-card-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: auto; padding-top: var(--sp-1); }
 .deal-sheet-hint { padding: 0 var(--sp-4) var(--sp-3); font-size: var(--fs-13); color: var(--ink-400); }
 .deal-sheet-list { overflow-y: auto; padding: 0 var(--sp-4) var(--sp-4); }
 .deal-sheet-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
