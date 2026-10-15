@@ -255,3 +255,207 @@ async def test_the_answer_must_be_for_the_barcode_asked(session):
     payload = {"status": 1, "code": "7290000000099", "product": {"image_front_url": "https://images.openfoodfacts.org/a.jpg"}}
     assert off_front_image(payload, barcode="7290000000008") is None
     assert off_front_image(payload, barcode="7290000000099") == "https://images.openfoodfacts.org/a.jpg"
+
+
+# ── A picture must be of THIS product: the barcode decides, a name only counts when it names everything ──────────
+
+@pytest.mark.parametrize("ours,theirs,ok", [
+    ("תירס לייט מופחת קלוריות", "ממרח מיונז לייט מופחת קלוריות 424 גרם", False),     # the real mistake: a corn read as a mayonnaise
+    ("חלב תנובה 3% 1 ליטר", "חלב תנובה 3% בקבוק 1 ליטר", True),                       # their name only adds words
+    ("שמן קוקוס אורגני", "שמן קוקוס אורגני 500 מל", True),                            # sizes are not part of the match
+    ("שום", "שום מגורד", False),                                                       # a single generic word proves nothing
+    ("קרם פנים", "קרם פנים לחות יומי", False),                                         # two generic words: still any face cream
+    ("גבינה לבנה 5% 250 גרם", "גבינה לבנה תנובה 5% 250 גרם", True),
+    ("תה שחור רויאל ציילון", "תה ירוק רויאל ציילון", False),
+])
+def test_a_name_matches_only_when_all_its_meaningful_words_are_theirs(ours, theirs, ok):
+    from app.images import names_match
+
+    assert names_match(ours, theirs) is ok
+
+
+def _shufersal(results_by_query):
+    """A fake Shufersal search endpoint: {query: [results]}."""
+    def handler(request):
+        return httpx.Response(200, json={"results": results_by_query.get(request.url.params["q"], [])})
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def _hit(code, name, tag="a"):
+    return {"code": f"P_{code}", "name": name,
+            "baseProductImageMedium": f"https://res.cloudinary.com/shufersal/image/upload/v1/prod/product_images/products_medium/{tag}_M_P_{code}_1.png"}
+
+
+async def test_the_barcode_picks_the_picture_even_when_it_is_not_the_first_result():
+    from app.images import lookup_image_url
+
+    client = _shufersal({"7290000000008": [_hit("1111111", "משהו אחר", "x"), _hit("7290000000008", "חלב", "y")]})
+    assert (await lookup_image_url("7290000000008", "חלב", client=client)).endswith("y_M_P_7290000000008_1.png")
+
+
+async def test_a_barcode_search_that_finds_only_other_products_is_not_a_match():
+    from app.images import lookup_image_url
+
+    client = _shufersal({"7290020431097": [_hit("120874", "ממרח מיונז לייט מופחת קלוריות 424 גרם")],
+                         "תירס לייט מופחת קלוריות": [_hit("120874", "ממרח מיונז לייט מופחת קלוריות 424 גרם")]})
+    assert await lookup_image_url("7290020431097", "תירס לייט מופחת קלוריות", client=client) is None
+
+
+async def test_a_private_label_short_code_matches_its_barcode():
+    from app.images import lookup_image_url
+
+    client = _shufersal({"7290000120874": [_hit("120874", "ממרח מיונז לייט 424 גרם")]})
+    # Shufersal's own code is the tail of the barcode: 7290000 + 120874; no name search is involved here
+    assert await lookup_image_url("7290000120874", "ממרח", client=client) is not None
+
+
+async def test_the_name_fallback_still_works_when_the_name_names_everything():
+    from app.images import lookup_image_url
+
+    client = _shufersal({"7290000000999": [], "חלב תנובה 3% 1 ליטר": [_hit("5555555", "חלב תנובה 3% בקבוק 1 ליטר")]})
+    assert await lookup_image_url("7290000000999", "חלב תנובה 3% 1 ליטר", client=client) is not None
+
+
+# ── Checking the pictures we already hold ────────────────────────────────────────────────────────────────────────
+
+async def test_audit_keeps_replaces_and_clears_pictures_and_leaves_failures_alone(session, monkeypatch):
+    base = "https://res.cloudinary.com/shufersal/image/upload/v1/prod/product_images/products_medium/"
+    session.add_all([
+        Product(barcode="7290000000008", name="נכון", image_url=base + "a_M_P_7290000000008_1.png"),      # code = barcode: not even asked
+        Product(barcode="7290000000015", name="תמונה של אחר", image_url=base + "a_M_P_9999999_1.png"),    # wrong; the right one exists
+        Product(barcode="7290000000022", name="תירס", image_url=base + "a_M_P_120874_1.png"),              # wrong; nothing right exists
+        Product(barcode="7290000000039", name="לא נבדק", image_url=base + "a_M_P_8888888_1.png"),          # the lookup fails
+    ])
+    await session.commit()
+    right = base + "b_M_P_7290000000015_1.png"
+    asked = []
+
+    async def fake(barcode, name, client=None):
+        asked.append(barcode)
+        if barcode == "7290000000008":
+            return base + "a_M_P_7290000000008_1.png"                     # the canary: Shufersal answers normally
+        if barcode == "7290000000015":
+            return right
+        if barcode == "7290000000039":
+            raise ImageLookupError("429")
+        return None
+
+    monkeypatch.setattr(images, "lookup_image_url", fake)
+    monkeypatch.setattr(images, "PAUSE_BETWEEN_BATCHES", 0)
+    kept, replaced, cleared, failed = await images.audit_images()
+    assert (replaced, cleared, failed) == (1, 1, 1)
+    rows = {p.barcode: p for p in (await session.execute(select(Product))).scalars()}
+    for p in rows.values():
+        await session.refresh(p)
+    assert rows["7290000000008"].image_url.endswith("P_7290000000008_1.png")
+    assert rows["7290000000015"].image_url == right
+    assert rows["7290000000022"].image_url is None and rows["7290000000022"].image_checked_at is not None
+    assert rows["7290000000039"].image_url.endswith("P_8888888_1.png")
+
+
+@pytest.mark.parametrize("ours,theirs,ok", [
+    ('שמן זית כתית 2 ק"ג', "שמן זית כתית 2 קילו", True),                                         # ק"ג is a unit, not the words ק and ג
+    ("שמן זית כתית 500מל", "שמן זית כתית 500 מל", True),                               # a size glued to its unit
+    ("חלב תנובה 1.5% בקבוק", "חלב תנובה 5% בקבוק", False),                             # 1.5% is not 5%
+    ("חלב תנובה 1.5% בקבוק", "חלב תנובה 1.5% בקבוק 1 ליטר", True),
+    ("COCA COLA ZERO", "Coca Cola Zero 1.5 ליטר", True),                              # case does not matter
+    ("קפה נמס & עלית", "קפה נמס עלית", True),                                          # stray punctuation is not a word
+])
+def test_names_are_compared_the_way_a_shopper_reads_them(ours, theirs, ok):
+    from app.images import names_match
+
+    assert names_match(ours, theirs) is ok
+
+
+async def test_the_exact_name_beats_a_longer_one_that_comes_first():
+    from app.images import lookup_image_url
+
+    client = _shufersal({"7290000000999": [],
+                         "קפה נמס עלית": [_hit("1111111", "קפה נמס עלית דקף", "wrong"), _hit("2222222", "קפה נמס עלית", "right")]})
+    assert (await lookup_image_url("7290000000999", "קפה נמס עלית", client=client)).startswith(
+        "https://res.cloudinary.com/shufersal/image/upload/v1/prod/product_images/products_medium/right_")
+
+
+async def test_a_name_that_cannot_match_does_not_cost_a_second_request():
+    from app.images import lookup_image_url
+
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.params["q"])
+        return httpx.Response(200, json={"results": []})
+
+    await lookup_image_url("7290000000999", "שום", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert calls == ["7290000000999"]                                                  # one word can never match: not asked
+
+
+@pytest.mark.parametrize("barcode,code,ok", [
+    ("7290000120874", "120874", True),          # Shufersal's private label: 7290000 + its own code
+    ("7290000120874", "7290000120874", True),
+    ("1120874", "120874", False),               # a chain's own 7-digit code is not a private-label tail
+    ("5060152827097", "152827097", False),      # a tail of a foreign barcode proves nothing
+    ("012345678905", "0012345678905", True),    # UPC-A against EAN-13
+    ("1009", "1009", False),                    # a chain-internal code never matches
+])
+def test_a_shufersal_code_matches_a_barcode_only_in_the_known_ways(barcode, code, ok):
+    from app.images import code_matches_barcode
+
+    assert code_matches_barcode(code, barcode) is ok
+
+
+async def test_audit_dry_run_changes_nothing(session, monkeypatch):
+    base = "https://res.cloudinary.com/shufersal/image/upload/v1/prod/product_images/products_medium/"
+    session.add_all([Product(barcode="7290000000008", name="נכון", image_url=base + "a_M_P_7290000000008_1.png"),
+                     Product(barcode="7290000000022", name="תירס", image_url=base + "a_M_P_120874_1.png")])
+    await session.commit()
+
+    async def fake(barcode, name, client=None):
+        return base + "a_M_P_7290000000008_1.png" if barcode == "7290000000008" else None
+
+    monkeypatch.setattr(images, "lookup_image_url", fake)
+    monkeypatch.setattr(images, "PAUSE_BETWEEN_BATCHES", 0)
+    assert await images.audit_images(dry_run=True) == (0, 0, 1, 0)                    # it would clear one
+    p = (await session.execute(select(Product).where(Product.barcode == "7290000000022"))).scalar_one()
+    await session.refresh(p)
+    assert p.image_url is not None and p.image_checked_at is None
+
+
+async def test_audit_stops_and_clears_nothing_when_shufersal_stops_answering_properly(session, monkeypatch):
+    base = "https://res.cloudinary.com/shufersal/image/upload/v1/prod/product_images/products_medium/"
+    session.add_all([Product(barcode="7290000000008", name="נכון", image_url=base + "a_M_P_7290000000008_1.png"),
+                     Product(barcode="7290000000022", name="תירס", image_url=base + "a_M_P_120874_1.png")])
+    await session.commit()
+
+    async def empty(barcode, name, client=None):
+        return None                                                                     # 200 with no results for everything
+
+    monkeypatch.setattr(images, "lookup_image_url", empty)
+    monkeypatch.setattr(images, "PAUSE_BETWEEN_BATCHES", 0)
+    assert await images.audit_images() == (0, 0, 0, 0)
+    p = (await session.execute(select(Product).where(Product.barcode == "7290000000022"))).scalar_one()
+    await session.refresh(p)
+    assert p.image_url is not None                                                      # the known-good canary failed: nothing was cleared
+
+
+async def test_audit_never_overwrites_a_picture_that_changed_meanwhile(session, monkeypatch):
+    base = "https://res.cloudinary.com/shufersal/image/upload/v1/prod/product_images/products_medium/"
+    session.add_all([Product(barcode="7290000000008", name="נכון", image_url=base + "a_M_P_7290000000008_1.png"),
+                     Product(barcode="7290000000022", name="תירס", image_url=base + "a_M_P_120874_1.png")])
+    await session.commit()
+    newer = "https://images.openfoodfacts.org/new.jpg"
+
+    async def fake(barcode, name, client=None):
+        if barcode == "7290000000008":
+            return base + "a_M_P_7290000000008_1.png"
+        from sqlalchemy import update as upd
+        async with images.AsyncSessionLocal() as other:                                 # something stored a picture meanwhile
+            await other.execute(upd(Product).where(Product.barcode == barcode).values(image_url=newer))
+            await other.commit()
+        return None
+
+    monkeypatch.setattr(images, "lookup_image_url", fake)
+    monkeypatch.setattr(images, "PAUSE_BETWEEN_BATCHES", 0)
+    await images.audit_images()
+    p = (await session.execute(select(Product).where(Product.barcode == "7290000000022"))).scalar_one()
+    await session.refresh(p)
+    assert p.image_url == newer
