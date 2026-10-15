@@ -369,6 +369,11 @@ async def serve() -> None:
                         await images.fill_images(settings.IMAGE_FILL_MINUTES)
                     except Exception as exc:
                         logger.warning("picture lookup failed: %s", exc)
+                if settings.OFF_IMAGE_FILL_MINUTES > 0 and not STOP.is_set():
+                    try:
+                        await images.fill_images_off(settings.OFF_IMAGE_FILL_MINUTES)
+                    except Exception as exc:
+                        logger.warning("Open Food Facts picture lookup failed: %s", exc)
                 # Silent-failure check first (fast), before the long optional jobs below.
                 try:
                     await watchdog.check_and_alert()

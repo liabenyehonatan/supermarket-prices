@@ -6,8 +6,9 @@ import { ChainLogo } from './ChainLogo';
  * Horizontal chain picker shown as a 3D carousel: items tilt and shrink as they
  * move away from the center, with arrows that appear while there is more to see.
  */
-export function ChainCarousel({ chains: allChains, selected, onSelect, style }: {
+export function ChainCarousel({ chains: allChains, selected, onSelect, style, counts }: {
   chains: string[];
+  counts?: Record<string, number>;     // an optional number under each logo (e.g. how many deals the chain has)
   selected: string;
   onSelect: (name: string) => void;
   style?: CSSProperties;
@@ -96,10 +97,11 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style }: 
             key={name}
             onClick={() => onSelect(name)}
             className={`chain-carousel-item${selected === name ? ' selected' : ''}${selected && selected !== name ? ' dimmed' : ''}`}
-            aria-label={`סנן לפי ${name}`}
+            aria-label={counts?.[name] != null ? `סנן לפי ${name}, ${counts[name]} מבצעים` : `סנן לפי ${name}`}
             aria-pressed={selected === name}
           >
             <ChainLogo name={name} size={52} showLabel />
+            {counts?.[name] != null && <span className="chain-carousel-count tabular">{counts[name]}</span>}
           </button>
         ))}
       </div>
