@@ -39,7 +39,7 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
           </div>
         )}
         <div className="deal-card-main">
-          <div className="deal-card-title" title={first?.name ?? deal.description}>
+          <div className="deal-card-title">
             {first?.name ?? deal.description}
           </div>
           {deal.kind === 'group' && (
@@ -50,7 +50,7 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
             <span className="deal-card-offer tabular">
               {deal.min_qty === 1 ? <bdi>{money(deal.price)}</bdi> : <><bdi>{deal.min_qty}</bdi> ב-<bdi>{money(deal.price)}</bdi></>}
             </span>
-            <span className="deal-saving-pill tabular" title="כמה זול מהמחיר שמצאנו"><bdi dir="ltr">-{pct}%</bdi></span>
+            <span className="deal-saving-pill tabular" aria-label={`זול ב-${pct}%`}><bdi dir="ltr">-{pct}%</bdi></span>
           </div>
           {deal.min_qty > 1 && <div className="deal-card-unit tabular"><bdi>{money(deal.unit_price)}</bdi> ליחידה</div>}
         </div>
