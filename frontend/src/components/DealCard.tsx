@@ -33,8 +33,9 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
           {/* The whole card opens the product (or, for a group, the picker): the title carries the link and stretches over the card */}
           <div className="deal-card-title">
             {deal.kind === 'single' && first
-              ? <Link className="deal-card-link" to={`/product/${first.barcode}`}>{first.name}</Link>
-              : <button type="button" className="deal-card-link" onClick={() => onPick(deal)}>{first?.name ?? deal.description}</button>}
+              ? <Link className="deal-card-link" to={`/product/${first.barcode}`} title={first.name}>{first.name}</Link>
+              : <button type="button" className="deal-card-link" onClick={() => onPick(deal)} title={first?.name ?? deal.description}
+                  tabIndex={-1} aria-hidden="true">{first?.name ?? deal.description}</button>   /* keyboard and screen readers use the "בחרי מוצרים" button */}
           </div>
           {deal.kind === 'group' && (
             <div className="deal-card-more">{deal.products === 2 ? 'ועוד מוצר אחד לבחירה במבצע' : `ועוד ${deal.products - 1} מוצרים לבחירה במבצע`}</div>
