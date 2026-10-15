@@ -93,9 +93,9 @@ async def fill_images(minutes: float, concurrency: int = 4, batch: int = 100) ->
 # Asked only about products that still have no picture AFTER Shufersal was asked (it did not carry them), the
 # products of the promotions section first. Open Food Facts allows about 100 product reads a minute, so one at a time.
 
-OFF_PAUSE = 0.7        # seconds between requests: ~85 a minute
+OFF_PAUSE = 1.5        # seconds each worker waits after a request
 OFF_BATCH = 50
-OFF_CONCURRENCY = 4    # ~4 s per request: about 50 a minute at most, under OFF's ~100
+OFF_CONCURRENCY = 2    # about 20 a minute. One at a time (14 a minute) was never limited; four at a time (~60) got 429 on 7 of 10 requests
 OFF_RECHECK_DAYS = 30
 
 _NEXT_OFF_BATCH = text(
