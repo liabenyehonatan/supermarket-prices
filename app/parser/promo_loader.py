@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 ALLOWED_REWARD_TYPES = {"1", "2", "3", "10"}
 MAX_ITEMS_PER_PROMOTION = 100
 _CANCELLED = "מבוטל"
-_COUPON_PREFIX = "קופון"
+# a coupon or a chain's test promotion, wherever the word stands ("ניסיון- קופון אחוד ...")
+_NOT_FOR_SHOPPERS = ("קופון", "ניסיון")
 _MAX_DESCRIPTION = 300
 
 
@@ -216,7 +217,7 @@ def normalize_promotion(row: dict, *, as_of: datetime) -> Optional[PromoRecord]:
     description = _clean_text(_text(row, "promotiondescription"), _MAX_DESCRIPTION)
     if not promotion_id or not description:
         return None
-    if _CANCELLED in description or description.startswith(_COUPON_PREFIX):
+    if _CANCELLED in description or any(word in description for word in _NOT_FOR_SHOPPERS):
         return None
     if _is_coupon(row) or not _club_ids(row) <= {"0"}:
         return None
