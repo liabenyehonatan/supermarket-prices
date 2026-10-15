@@ -68,6 +68,8 @@ def test_fractional_min_qty_is_kept_without_a_quantity():
 @pytest.mark.parametrize("over", [
     {"promotiondescription": "מבוטל"},
     {"promotiondescription": "קופון חטיפים ב 25 שח"},
+    {"promotiondescription": "ניסיון- קופון אחוד /חצי ליטר מים ב1"},      # a coupon whose word is not first
+    {"promotiondescription": "ניסיון מבצע מים ב1"},                        # a chain's test promotion
     {"promotiondescription": ""},
     {"promotionid": ""},
     {"clubs": {"clubid": ["1", "2"]}},

@@ -65,6 +65,44 @@ async def test_the_saving_is_measured_against_the_cheapest_shelf_price_anywhere(
     assert float(row.ref_price) == 5.0                            # the cheapest of all current prices, chain A's own 5.00
 
 
+async def add_copy(session, product, stores, *, promotion_id, description, price="9.00", min_qty=3, extra_product=None):
+    """The same promotion filed again under another promotion_id (chains do this)."""
+    local = NOW_IL()
+    for st in stores:
+        for prod in [product] + ([extra_product] if extra_product else []):
+            session.add(Promotion(
+                product_id=prod.id, store_id=st.id, promotion_id=promotion_id, description=description, min_qty=min_qty,
+                discounted_price=price, basket_eligible=True, price_is_total=True, is_active=True,
+                start_date=local - timedelta(days=3), end_date=local + timedelta(days=5)))
+    await session.commit()
+    await maintenance.refresh_deals()
+
+
+async def test_the_same_promotion_under_two_promotion_ids_is_one_deal(session):
+    product, stores = await make_world(session)
+    await add_copy(session, product, stores[:1], promotion_id="p2", description="3 במחיר 9")
+    [row] = await deals(session)
+    assert (row.stores, row.products) == (2, 1)                    # one card; the stores of both copies, counted once
+
+
+async def test_a_promotion_with_other_terms_or_other_products_stays_a_separate_deal(session):
+    product, stores = await make_world(session)
+    other = Product(barcode="7290000000999", name="אחר")
+    session.add(other)
+    await session.flush()
+    await add_copy(session, product, stores, promotion_id="p2", description="3 ב-8", price="8.00")
+    await add_copy(session, product, stores, promotion_id="p3", description="3 ב-9 עם עוד", extra_product=other)
+    assert len(await deals(session)) == 3
+
+
+async def test_a_deal_keeps_one_stable_id_whichever_copy_is_filed_first(session):
+    product, stores = await make_world(session)
+    before = (await session.execute(text("select deal_id from promo_deals"))).scalar_one()
+    await add_copy(session, product, stores[:1], promotion_id="p0", description="3 ב-9 ")
+    after = (await session.execute(text("select deal_id from promo_deals"))).scalar_one()
+    assert before == after
+
+
 @pytest.mark.parametrize("kwargs", [
     {"eligible": False},
     {"promo_age_days": 8},                                        # the store's promotion data is stale
