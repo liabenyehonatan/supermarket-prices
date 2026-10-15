@@ -37,6 +37,10 @@ export function AboutPage() {
             אפשר גם לבחור עיר ידנית.
           </li>
           <li>המצלמה משמשת לסריקת ברקוד בלבד. התמונה נשארת במכשיר.</li>
+          <li>
+            תמונות המוצרים נטענות ישירות משרתי התמונות של שופרסל ושל Open Food Facts, ולכן הם רואים את כתובת ה-IP שלך,
+            כמו בכל תמונה שנטענת מאתר אחר.
+          </li>
         </ul>
 
         <h2>קרדיטים</h2>
@@ -47,7 +51,11 @@ export function AboutPage() {
           מאת Sefi Erlich (OpenIsraeliSupermarkets), ברישיון לשימוש לא מסחרי. נעשו בהם התאמות לצורכי האתר.
         </p>
         <p>
-          תמונות המוצרים מגיעות מהקטלוג הציבורי של שופרסל אונליין, והלוגואים שייכים לרשתות. כולם שייכים לבעליהם.
+          תמונות המוצרים מגיעות מהקטלוג הציבורי של שופרסל אונליין, ולמוצרים ששם אין להם תמונה, ממאגר{' '}
+          <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer" dir="ltr">Open Food Facts</a>{' '}
+          (משתתפי הקהילה, ברישיון{' '}
+          <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer" dir="ltr">CC BY-SA</a>
+          ). הלוגואים שייכים לרשתות. כולם שייכים לבעליהם.
         </p>
 
         <h2>פניות ודיווח על שגיאה</h2>

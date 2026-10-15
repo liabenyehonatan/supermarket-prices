@@ -362,6 +362,11 @@ async def serve() -> None:
                                    settings.RETRY_MAX, wake.isoformat(timespec="minutes"))
                 else:
                     retries = 0
+                # Silent-failure check first (fast), before the long optional jobs below.
+                try:
+                    await watchdog.check_and_alert()
+                except Exception as exc:
+                    logger.warning("watchdog failed: %s", exc)
                 # After the cycle has been reported and its lock released: a nicety that never
                 # decides or delays the ingest (it only pushes the next wake-up check back).
                 if settings.IMAGE_FILL_MINUTES > 0 and not STOP.is_set():
@@ -369,11 +374,11 @@ async def serve() -> None:
                         await images.fill_images(settings.IMAGE_FILL_MINUTES)
                     except Exception as exc:
                         logger.warning("picture lookup failed: %s", exc)
-                # Silent-failure check first (fast), before the long optional jobs below.
-                try:
-                    await watchdog.check_and_alert()
-                except Exception as exc:
-                    logger.warning("watchdog failed: %s", exc)
+                if settings.OFF_IMAGE_FILL_MINUTES > 0 and not STOP.is_set():
+                    try:
+                        await images.fill_images_off(settings.OFF_IMAGE_FILL_MINUTES)
+                    except Exception as exc:
+                        logger.warning("Open Food Facts picture lookup failed: %s", exc)
                 # New stores get a position (a few minutes: only stores not yet located are asked about).
                 if settings.GEOCODE_MINUTES > 0 and not STOP.is_set():
                     try:
