@@ -123,7 +123,7 @@ HISTORY_RETENTION_DAYS = _int("HISTORY_RETENTION_DAYS", 0) or None
 # for up to this many minutes (0 turns it off). Lookups go to Shufersal's site, a few at a time.
 IMAGE_FILL_MINUTES = _float("IMAGE_FILL_MINUTES", 30)
 
-# Then, for what Shufersal does not carry, Open Food Facts is asked (four at a time, about 50 a minute),
+# Then, for what Shufersal does not carry, Open Food Facts is asked (two at a time, about 20 a minute),
 # the promotions section's products first. 0 turns it off.
 OFF_IMAGE_FILL_MINUTES = _float("OFF_IMAGE_FILL_MINUTES", 20)
 
