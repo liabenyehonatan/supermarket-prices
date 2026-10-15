@@ -53,6 +53,9 @@ Environment: requires a `.env` file with `DATABASE_URL` (async PostgreSQL URL, e
 
 **Legacy, not used by the worker:** `app/scraper/scraper_service.py` (Playwright, Shufersal), `app/scraper/victory_scraper.py` and `app/parser/parser_service.py` (GZ files, own per-row upserts). They predate the multi-chain pipeline and do not use the ledger or the bulk loader; don't run them against a production database.
 
+### Product pictures (`app/images.py`, `app/pipeline/images.py`)
+Two sources, asked in the worker after each cycle: Shufersal's catalogue (`fill_images`, `image_checked_at`), then Open Food Facts for what Shufersal does not carry (`fill_images_off`, `off_checked_at`, `OFF_IMAGE_FILL_MINUTES`). OFF is asked one request at a time (~85 a minute, their limit is about 100), products of the promotions section first. A failed lookup is never recorded as "no picture". Pictures are served only from allowed hosts (`is_allowed_image_url`, and the CSP in `nginx/nginx.conf`); OFF's are CC BY-SA, credited on the About page.
+
 ### Database (`app/db/`)
 Tables: `chains` → `stores` → `prices` ← `products`, and `promotions`; plus the operational `ingested_files` (file ledger) and `ingest_runs` (cycle/chain/phase log).
 - `Chain`: one row per supermarket company. Shufersal=`7290027600007`, Victory=`7290696200003`.
