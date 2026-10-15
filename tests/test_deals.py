@@ -5,7 +5,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import func, text, update
+from sqlalchemy import func, select, text, update
 
 from app.db.models import Chain, Price, Product, Promotion, Store
 from app.pipeline import maintenance
@@ -63,6 +63,85 @@ async def test_the_saving_is_measured_against_the_cheapest_shelf_price_anywhere(
     await make_world(session, market_min="6.00")                 # nobody sells it below 5.00 (chain A's own shelf) or 6.00
     [row] = await deals(session)
     assert float(row.ref_price) == 5.0                            # the cheapest of all current prices, chain A's own 5.00
+
+
+async def add_copy(session, product, stores, *, promotion_id, description, price="9.00", min_qty=3, extra_product=None):
+    """The same promotion filed again under another promotion_id (chains do this)."""
+    local = NOW_IL()
+    for st in stores:
+        for prod in [product] + ([extra_product] if extra_product else []):
+            session.add(Promotion(
+                product_id=prod.id, store_id=st.id, promotion_id=promotion_id, description=description, min_qty=min_qty,
+                discounted_price=price, basket_eligible=True, price_is_total=True, is_active=True,
+                start_date=local - timedelta(days=3), end_date=local + timedelta(days=5)))
+    await session.commit()
+    await maintenance.refresh_deals()
+
+
+async def test_the_same_promotion_under_two_promotion_ids_is_one_deal(session):
+    product, stores = await make_world(session)
+    await add_copy(session, product, stores[:1], promotion_id="p2", description="3 במחיר 9")
+    [row] = await deals(session)
+    assert (row.stores, row.products) == (2, 1)                    # one card; the stores of both copies, counted once
+
+
+async def test_a_promotion_with_other_terms_or_other_products_stays_a_separate_deal(session):
+    product, stores = await make_world(session)
+    other = Product(barcode="7290000000999", name="אחר")
+    session.add(other)
+    await session.flush()
+    for st in stores:
+        session.add(Price(product_id=other.id, store_id=st.id, price="5.00", price_updated_at=datetime(2026, 10, 12), is_current=True))
+    await session.commit()
+    await add_copy(session, product, stores, promotion_id="p2", description="3 ב-8", price="8.00")
+    await add_copy(session, product, stores, promotion_id="p3", description="3 ב-9 עם עוד", extra_product=other)
+    assert len(await deals(session)) == 3
+
+
+async def test_a_store_that_has_no_shelf_price_for_the_product_is_not_part_of_the_deal(session):
+    product, stores = await make_world(session)
+    chain = (await session.execute(select(Chain).where(Chain.chain_id == "1"))).scalar_one()
+    ghost = Store(chain_id=chain.id, store_id="9", name="סניף בלי מחיר", city="חיפה")
+    session.add(ghost)
+    await session.flush()
+    await add_copy(session, product, [ghost], promotion_id="p1", description="3 ב-9")
+    [row] = await deals(session)
+    assert row.stores == 2                                          # the third store never listed the product
+
+
+async def test_a_promotion_only_in_stores_without_a_shelf_price_is_not_a_deal(session):
+    product, stores = await make_world(session)
+    await session.execute(update(Price).where(Price.store_id.in_([s.id for s in stores])).values(is_current=False))
+    await session.commit()
+    await maintenance.refresh_deals()
+    assert await deals(session) == []
+
+
+async def test_copies_with_and_without_a_quantity_limit_are_different_deals(session):
+    product, stores = await make_world(session)
+    await add_copy(session, product, stores, promotion_id="p2", description="3 ב-9")
+    await session.execute(update(Promotion).where(Promotion.promotion_id == "p2").values(max_qty=6))
+    await session.commit()
+    await maintenance.refresh_deals()
+    assert len(await deals(session)) == 2
+
+
+async def test_the_shortest_description_and_the_earliest_end_are_shown_for_merged_copies(session):
+    product, stores = await make_world(session)
+    await add_copy(session, product, stores, promotion_id="p2", description="3 ב-9 מבצע ארוך מאוד")
+    await session.execute(update(Promotion).where(Promotion.promotion_id == "p2").values(end_date=NOW_IL() + timedelta(days=2)))
+    await session.commit()
+    await maintenance.refresh_deals()
+    row = (await session.execute(text("select description, ends_at from promo_deals"))).one()
+    assert row.description == "3 ב-9.00" and row.ends_at < NOW_IL() + timedelta(days=3)
+
+
+async def test_a_deal_keeps_one_stable_id_whichever_copy_is_filed_first(session):
+    product, stores = await make_world(session)
+    before = (await session.execute(text("select deal_id from promo_deals"))).scalar_one()
+    await add_copy(session, product, stores[:1], promotion_id="p0", description="3 ב-9 ")
+    after = (await session.execute(text("select deal_id from promo_deals"))).scalar_one()
+    assert before == after
 
 
 @pytest.mark.parametrize("kwargs", [

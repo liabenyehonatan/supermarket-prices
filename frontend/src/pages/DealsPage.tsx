@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useNavigationType } from 'react-router-dom';
 import { fetchDeals, type Deal } from '../api/client';
 import { useBasket } from '../context/BasketContext';
 import { DealCard } from '../components/DealCard';
@@ -18,8 +19,10 @@ export function DealsPage() {
   useDocumentTitle('מבצעים | סלי');
   const { addItem } = useBasket();
   const [city, setCity] = useState(readCityFilter);
-  // Coming back from a product page: the saved view (filters, cards loaded so far, scroll position) is used as is.
-  const initial = useRef(readDealsSnapshot(readCityFilter()));
+  // Coming back (browser back or the page's back button, a POP) from a product page: the saved view (filters, cards
+  // loaded so far, scroll position) is used as is. Arriving by a link or the menu starts from a fresh list.
+  const navigationType = useNavigationType();
+  const initial = useRef(navigationType === 'POP' ? readDealsSnapshot(readCityFilter()) : null);
   // The filters the saved cards belong to: while they are unchanged nothing is fetched (it must survive React's dev
   // double-run of effects, so it is not a one-shot flag); any real fetch clears it.
   const restoredFor = useRef<string | null>(initial.current && filterKey(initial.current));
@@ -44,8 +47,8 @@ export function DealsPage() {
 
   // Back from a product: put the person where they were (instantly: the site scrolls smoothly otherwise)
   useLayoutEffect(() => {
-    const y = initial.current?.scrollY ?? 0;
-    if (y > 0) window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
+    // a fresh arrival starts at the top (the page you came from may have been scrolled)
+    window.scrollTo({ top: initial.current?.scrollY ?? 0, behavior: 'instant' as ScrollBehavior });
   }, []);
 
   useEffect(() => {
