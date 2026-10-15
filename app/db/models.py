@@ -174,6 +174,8 @@ class Product(Base):
     image_url: Mapped[Optional[str]] = mapped_column(Text)
     # When we last looked for a picture and found none; stops the lookup being repeated on every view.
     image_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # The same for the second source (Open Food Facts), which is asked only about what Shufersal did not have.
+    off_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     # The manufacturer's name (often same as brand but sometimes different).
     manufacturer: Mapped[Optional[str]] = mapped_column(String(200))

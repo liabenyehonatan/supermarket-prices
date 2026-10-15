@@ -123,6 +123,10 @@ HISTORY_RETENTION_DAYS = _int("HISTORY_RETENTION_DAYS", 0) or None
 # for up to this many minutes (0 turns it off). Lookups go to Shufersal's site, a few at a time.
 IMAGE_FILL_MINUTES = _float("IMAGE_FILL_MINUTES", 30)
 
+# Then, for what Shufersal does not carry, Open Food Facts is asked (one request at a time, about 85 a minute),
+# the promotions section's products first. 0 turns it off.
+OFF_IMAGE_FILL_MINUTES = _float("OFF_IMAGE_FILL_MINUTES", 20)
+
 # After each cycle the worker finds positions for stores that have none yet, for up to this many
 # minutes (0 turns it off). Uses OpenStreetMap's Nominatim, one request per second.
 GEOCODE_MINUTES = _float("GEOCODE_MINUTES", 10)

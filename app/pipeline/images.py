@@ -13,7 +13,7 @@ from datetime import datetime
 from sqlalchemy import text
 
 from app.db.database import AsyncSessionLocal
-from app.images import ImageLookupError, lookup_image_url
+from app.images import ImageLookupError, lookup_image_url, lookup_off_image_url
 from app.pipeline.shutdown import STOP
 
 logger = logging.getLogger(__name__)
@@ -81,6 +81,70 @@ async def fill_images(minutes: float, concurrency: int = 4, batch: int = 100) ->
         await asyncio.sleep(PAUSE_BETWEEN_BATCHES)
     if found or missed:
         logger.info("Product pictures: %d found, %d not found", found, missed)
+    return found, missed
+
+
+# ── Second source: Open Food Facts ────────────────────────────────────────────────────────────────
+# Asked only about products that still have no picture (Shufersal did not carry them), the products of the
+# promotions section first. Open Food Facts allows about 100 product reads a minute, so one at a time.
+
+OFF_PAUSE = 0.7        # seconds between requests: ~85 a minute
+OFF_BATCH = 50
+OFF_RECHECK_DAYS = 30
+
+_NEXT_OFF_BATCH = text(
+    """
+    SELECT p.id, p.barcode
+      FROM products p
+      LEFT JOIN product_store_counts c ON c.product_id = p.id
+     WHERE p.image_url IS NULL
+       AND length(p.barcode) >= 7
+       AND (p.off_checked_at IS NULL OR p.off_checked_at < now() - make_interval(days => :days))
+     ORDER BY EXISTS (SELECT 1 FROM promo_deals d WHERE p.id = ANY(d.product_ids)) DESC,
+              coalesce(c.store_count, 0) DESC, p.id
+     LIMIT :batch
+    """
+)
+
+
+async def fill_images_off(minutes: float) -> tuple[int, int]:
+    """Look up pictures at Open Food Facts for up to `minutes`; returns (found, not_found)."""
+    deadline = time.monotonic() + minutes * 60
+    found = missed = failures = 0
+    while time.monotonic() < deadline and not STOP.is_set():
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(_NEXT_OFF_BATCH, {"days": OFF_RECHECK_DAYS, "batch": OFF_BATCH})).all()
+        if not rows:
+            break
+        batch_errors = 0
+        for row in rows:
+            if time.monotonic() >= deadline or STOP.is_set():
+                break
+            try:
+                url = await lookup_off_image_url(row.barcode)
+            except ImageLookupError:
+                batch_errors += 1          # could not ask: leave the product untouched, try again later
+                await asyncio.sleep(OFF_PAUSE)
+                continue
+            async with AsyncSessionLocal() as session:
+                async with session.begin():
+                    if url:
+                        await session.execute(text("UPDATE products SET image_url = :u WHERE id = :i"), {"u": url, "i": row.id})
+                        found += 1
+                    else:
+                        await session.execute(text("UPDATE products SET off_checked_at = :t WHERE id = :i"),
+                                              {"t": datetime.utcnow(), "i": row.id})
+                        missed += 1
+            await asyncio.sleep(OFF_PAUSE)
+        if batch_errors * 2 > len(rows):
+            failures += 1
+            if failures >= MAX_FAILED_BATCHES:
+                logger.warning("Open Food Facts pictures: lookups keep failing; stopping")
+                break
+        else:
+            failures = 0
+    if found or missed:
+        logger.info("Open Food Facts pictures: %d found, %d not found", found, missed)
     return found, missed
 
 
