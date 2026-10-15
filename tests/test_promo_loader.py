@@ -69,6 +69,7 @@ def test_fractional_min_qty_is_kept_without_a_quantity():
     {"promotiondescription": "מבוטל"},
     {"promotiondescription": "קופון חטיפים ב 25 שח"},
     {"promotiondescription": "ניסיון- קופון אחוד /חצי ליטר מים ב1"},      # a coupon whose word is not first
+    {"promotiondescription": "נסיון מבצע מים ב1"},                          # the same word spelled without the yod
     {"promotiondescription": "ניסיון מבצע מים ב1"},                        # a chain's test promotion
     {"promotiondescription": ""},
     {"promotionid": ""},
