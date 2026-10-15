@@ -62,6 +62,7 @@ export interface ItemPromo {
   min_qty: number;
   price: number | string;
   sets: number;
+  ends_at?: string | null;
 }
 
 export interface ItemPrice {
@@ -82,6 +83,7 @@ export interface PromoAdjustment {
   sets: number;
   saving: number | string;
   barcodes: string[];
+  ends_at?: string | null;
 }
 
 export interface BasketStoreTotal {

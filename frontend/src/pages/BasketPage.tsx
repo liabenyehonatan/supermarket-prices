@@ -12,6 +12,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
+import { endsText } from '../lib/dealDays';
 import { LocationPrompt } from '../components/LocationPrompt';
 import { useCurrentCity } from '../lib/location';
 import { useBasket } from '../context/BasketContext';
@@ -122,7 +123,10 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
                 <span style={{ color: 'var(--ink-400)', marginInlineStart: 4 }}>×{item.quantity}</span>
               )}
               {item.promo && (
-                <div className="basket-breakdown-promo">מבצע: {item.promo.description}{item.promo.sets > 1 ? ` (×${item.promo.sets})` : ''}</div>
+                <div className="basket-breakdown-promo">
+                  מבצע: {item.promo.description}{item.promo.sets > 1 ? ` (×${item.promo.sets})` : ''}
+                  {endsText(item.promo.ends_at, 7) && <span className="basket-breakdown-ends"> · {endsText(item.promo.ends_at, 7)}</span>}
+                </div>
               )}
               {!item.promo && (store.promo_adjustments ?? []).some(a => a.barcodes.includes(item.barcode)) && (
                 <div className="basket-breakdown-promo">במבצע משותף</div>
@@ -143,7 +147,10 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
         {(store.promo_adjustments ?? []).map((a, i) => (
           <div key={`adj-${i}`} className="basket-breakdown-row basket-breakdown-adjustment">
             <div className="basket-breakdown-name" title={a.description}>
-              <div className="basket-breakdown-promo">מבצע: {a.description}{a.sets > 1 ? ` (×${a.sets})` : ''}</div>
+              <div className="basket-breakdown-promo">
+                מבצע: {a.description}{a.sets > 1 ? ` (×${a.sets})` : ''}
+                {endsText(a.ends_at, 7) && <span className="basket-breakdown-ends"> · {endsText(a.ends_at, 7)}</span>}
+              </div>
             </div>
             <span className="basket-breakdown-line tabular">−{fmt(a.saving)}</span>
           </div>

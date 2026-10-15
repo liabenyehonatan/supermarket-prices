@@ -3,17 +3,9 @@ import { ShoppingBasket } from 'lucide-react';
 import type { Deal } from '../api/client';
 import { ChainLogo } from './ChainLogo';
 import { ProductImage } from './ProductImage';
-import { daysLeft } from '../lib/dealDays';
+import { endsText } from '../lib/dealDays';
 
 const money = (p: number | string) => `₪${Number(p).toFixed(2)}`;
-
-function endsText(iso?: string | null): string | null {
-  if (!iso) return null;
-  const days = daysLeft(iso);
-  if (days <= 0) return 'נגמר היום';
-  if (days === 1) return 'נגמר מחר';
-  return days <= 14 ? `נגמר בעוד ${days} ימים` : null;
-}
 
 /** One promotion at one brand: the set price, what a unit costs, and how far under the cheapest shelf price it is. */
 export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: Deal) => void; onPick: (deal: Deal) => void }) {
@@ -27,7 +19,6 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
       <div className="deal-card-head">
         <ChainLogo name={deal.brand} size={28} />
         <span className="deal-card-brand">{deal.brand}</span>
-        <span className="deal-card-stores">{deal.stores === 1 ? 'בסניף אחד' : `ב-${deal.stores} סניפים`}</span>
       </div>
 
       <div className="deal-card-body">
@@ -39,8 +30,11 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
           </div>
         )}
         <div className="deal-card-main">
+          {/* The whole card opens the product (or, for a group, the picker): the title carries the link and stretches over the card */}
           <div className="deal-card-title">
-            {first?.name ?? deal.description}
+            {deal.kind === 'single' && first
+              ? <Link className="deal-card-link" to={`/product/${first.barcode}`}>{first.name}</Link>
+              : <button type="button" className="deal-card-link" onClick={() => onPick(deal)}>{first?.name ?? deal.description}</button>}
           </div>
           {deal.kind === 'group' && (
             <div className="deal-card-more">{deal.products === 2 ? 'ועוד מוצר אחד לבחירה במבצע' : `ועוד ${deal.products - 1} מוצרים לבחירה במבצע`}</div>
@@ -58,20 +52,17 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
 
       <div className="deal-card-saving">
         {deal.vs_market
-          ? <>לעומת <bdi>{money(deal.ref_price)}</bdi> ליחידה, המחיר הזול ביותר שמצאנו ברשתות</>
-          : <>לעומת <bdi>{money(deal.ref_price)}</bdi> ליחידה על המדף ברשת</>}
+          ? <>הזול ביותר שמצאנו: <bdi>{money(deal.ref_price)}</bdi> ליחידה</>
+          : <>על המדף ברשת: <bdi>{money(deal.ref_price)}</bdi> ליחידה</>}
       </div>
       {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
       {ends && <div className="deal-card-ends">{ends}</div>}
 
       <div className="deal-card-actions">
         {deal.kind === 'single' && first ? (
-          <>
-            <button className="btn btn-primary btn-sm" onClick={() => onAdd(deal)}>
-              <ShoppingBasket size={14} strokeWidth={2} /> הוסיפי לסל (×{deal.min_qty})
-            </button>
-            <Link className="btn btn-secondary btn-sm" to={`/product/${first.barcode}`}>איפה הכי זול</Link>
-          </>
+          <button className="btn btn-primary btn-sm" onClick={() => onAdd(deal)}>
+            <ShoppingBasket size={14} strokeWidth={2} /> הוסיפי לסל (×{deal.min_qty})
+          </button>
         ) : (
           <button className="btn btn-primary btn-sm" onClick={() => onPick(deal)}>בחרי מוצרים</button>
         )}
