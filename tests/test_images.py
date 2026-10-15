@@ -109,3 +109,99 @@ async def test_image_endpoint_does_not_remember_a_failed_lookup(client, session,
     product = (await session.execute(select(Product).where(Product.barcode == "2"))).scalar_one()
     await session.refresh(product)
     assert product.image_checked_at is None
+
+
+# ── Second source: Open Food Facts (CC BY-SA pictures, found by barcode) ─────────────────────────
+
+def test_open_food_facts_pictures_are_allowed_but_lookalike_hosts_are_not():
+    from app.images import is_allowed_image_url
+
+    assert is_allowed_image_url("https://images.openfoodfacts.org/images/products/729/000/233/1018/front_he.4.400.jpg")
+    assert not is_allowed_image_url("https://images.openfoodfacts.org.evil.example/x.jpg")
+    assert not is_allowed_image_url("http://images.openfoodfacts.org/x.jpg")
+
+
+@pytest.mark.parametrize("payload,expected", [
+    ({"status": 1, "product": {"image_front_url": "https://images.openfoodfacts.org/a/front.400.jpg"}}, "https://images.openfoodfacts.org/a/front.400.jpg"),
+    ({"status": 0}, None),                                                         # unknown barcode
+    ({"status": 1, "product": {}}, None),                                          # known, but nobody photographed it
+    ({"status": 1, "product": {"image_front_url": "https://tracker.example/a.jpg"}}, None),   # only our allowed hosts
+])
+def test_open_food_facts_answer_is_read_safely(payload, expected):
+    from app.images import off_front_image
+
+    assert off_front_image(payload) == expected
+
+
+async def test_fill_images_off_asks_about_products_without_a_picture_and_marks_misses_once(session, monkeypatch):
+    session.add_all([Product(barcode="7290000000001", name="חלב"), Product(barcode="7290000000002", name="נדיר"),
+                     Product(barcode="7290000000003", name="יש", image_url="https://cdn.example/3.png")])
+    await session.commit()
+    monkeypatch.setattr(images, "OFF_PAUSE", 0)
+    asked = []
+
+    async def fake(barcode):
+        asked.append(barcode)
+        return "https://images.openfoodfacts.org/1.jpg" if barcode == "7290000000001" else None
+
+    monkeypatch.setattr(images, "lookup_off_image_url", fake)
+    assert await images.fill_images_off(minutes=1) == (1, 1)
+    assert sorted(asked) == ["7290000000001", "7290000000002"]                                            # the product that has a picture is left alone
+    rows = {p.barcode: p for p in (await session.execute(select(Product))).scalars()}
+    for p in rows.values():
+        await session.refresh(p)
+    assert rows["7290000000001"].image_url == "https://images.openfoodfacts.org/1.jpg"
+    assert rows["7290000000002"].image_url is None and rows["7290000000002"].off_checked_at is not None
+    asked.clear()
+    assert await images.fill_images_off(minutes=1) == (0, 0) and asked == []      # a miss is not asked again soon
+
+
+async def test_fill_images_off_asks_about_products_in_deals_first(session, monkeypatch):
+    from datetime import datetime as dt
+    from sqlalchemy import update as upd
+    from app.db.models import Price, Store
+    from app.pipeline import maintenance
+    from tests.test_deals import make_world
+
+    product, stores = await make_world(session)                                    # a product in a running deal
+    product.image_url = None
+    await session.commit()
+    plain = Product(barcode="7290000000777", name="בלי מבצע")                      # carried by more stores, in no deal
+    session.add(plain)
+    await session.flush()
+    existing = (await session.execute(select(Store))).scalars().all()
+    more = Store(chain_id=existing[0].chain_id, store_id="77", name="עוד סניף", city="חיפה")
+    session.add(more)
+    await session.flush()
+    for st in [*existing, more]:                                                     # 4 stores against the deal product's 3
+        session.add(Price(product_id=plain.id, store_id=st.id, price="5.00", price_updated_at=dt(2026, 10, 12), is_current=True))
+    await session.commit()
+    await maintenance.refresh_popularity()
+    await maintenance.refresh_deals()
+    monkeypatch.setattr(images, "OFF_PAUSE", 0)
+    asked = []
+
+    async def fake(barcode):
+        asked.append(barcode)
+        return None
+
+    monkeypatch.setattr(images, "lookup_off_image_url", fake)
+    monkeypatch.setattr(images, "OFF_BATCH", 1)
+    await images.fill_images_off(minutes=1)
+    assert asked[0] == product.barcode                                              # the deal's product, not the more widely carried one
+
+
+async def test_failed_open_food_facts_lookups_are_not_recorded_as_missing_pictures(session, monkeypatch):
+    session.add_all([Product(barcode="7290000000001", name="חלב"), Product(barcode="7290000000002", name="נדיר")])
+    await session.commit()
+    monkeypatch.setattr(images, "OFF_PAUSE", 0)
+
+    async def down(barcode):
+        raise ImageLookupError("429")
+
+    monkeypatch.setattr(images, "lookup_off_image_url", down)
+    assert await images.fill_images_off(minutes=1) == (0, 0)
+    rows = (await session.execute(select(Product))).scalars().all()
+    for p in rows:
+        await session.refresh(p)
+    assert all(p.image_url is None and p.off_checked_at is None for p in rows)
