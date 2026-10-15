@@ -260,15 +260,18 @@ async def test_the_answer_must_be_for_the_barcode_asked(session):
 # ── A picture must be of THIS product: the barcode decides, a name only counts when it names everything ──────────
 
 @pytest.mark.parametrize("ours,theirs,ok", [
-    ("תירס לייט מופחת קלוריות", "ממרח מיונז לייט מופחת קלוריות 424 גרם", False),     # the real mistake: a corn read as a mayonnaise
+    ("תירס לייט מופחת קלוריות", "ממרח מיונז לייט מופחת קלוריות 424 גרם", False),     # the real mistake: the category word (תירס) is missing
+    ("קרטיב תותי פרוטי", "ביסקוטי מיקס פירות יבשים", False),
     ("חלב תנובה 3% 1 ליטר", "חלב תנובה 3% בקבוק 1 ליטר", True),                       # their name only adds words
     ("שמן קוקוס אורגני", "שמן קוקוס אורגני 500 מל", True),                            # sizes are not part of the match
-    ("שום", "שום מגורד", False),                                                       # a single generic word proves nothing
-    ("קרם פנים", "קרם פנים לחות יומי", False),                                         # two generic words: still any face cream
+    ("שמיר", "שמיר", True),                                                            # generic one-word names are fine when it IS that word
+    ("עגבניות", "עגבניות אדומות", True),
+    ("תה שחור רויאל ציילון", "תה ירוק רויאל ציילון", False),                           # a short name allows no missing word
     ("גבינה לבנה 5% 250 גרם", "גבינה לבנה תנובה 5% 250 גרם", True),
-    ("תה שחור רויאל ציילון", "תה ירוק רויאל ציילון", False),
+    ("שמפו לשיער מתולתל או גלי", "שמפו קרטין", False),                                 # a long name may miss one word, not three
+    ("עוגיות שוקולד צ'יפס עם אגוזי לוז", "עוגיות שוקולד צ'יפס אגוזי לוז", True),      # five words: one may be missing
 ])
-def test_a_name_matches_only_when_all_its_meaningful_words_are_theirs(ours, theirs, ok):
+def test_a_name_matches_when_it_names_the_same_thing(ours, theirs, ok):
     from app.images import names_match
 
     assert names_match(ours, theirs) is ok
@@ -376,7 +379,7 @@ async def test_the_exact_name_beats_a_longer_one_that_comes_first():
         "https://res.cloudinary.com/shufersal/image/upload/v1/prod/product_images/products_medium/right_")
 
 
-async def test_a_name_that_cannot_match_does_not_cost_a_second_request():
+async def test_a_name_with_no_meaningful_word_does_not_cost_a_second_request():
     from app.images import lookup_image_url
 
     calls = []
@@ -385,8 +388,8 @@ async def test_a_name_that_cannot_match_does_not_cost_a_second_request():
         calls.append(request.url.params["q"])
         return httpx.Response(200, json={"results": []})
 
-    await lookup_image_url("7290000000999", "שום", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-    assert calls == ["7290000000999"]                                                  # one word can never match: not asked
+    await lookup_image_url("7290000000999", "500 גרם", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert calls == ["7290000000999"]                                                  # no word that names anything: not asked
 
 
 @pytest.mark.parametrize("barcode,code,ok", [
