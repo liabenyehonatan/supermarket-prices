@@ -18,13 +18,14 @@ export interface DealsSnapshot {
   at: number;
 }
 
-/** The saved view, if it is recent and was made for the same city; otherwise null (load fresh). */
+/** The saved view, if it is recent, has cards and was made for the same city; otherwise null (load fresh). An empty list
+ *  is never restored: it is what a failed load leaves behind. */
 export function readDealsSnapshot(city: string): DealsSnapshot | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
     const snap = JSON.parse(raw) as DealsSnapshot;
-    return snap.city === city && Date.now() - snap.at < MAX_AGE_MS ? snap : null;
+    return snap.city === city && snap.deals.length > 0 && Date.now() - snap.at < MAX_AGE_MS ? snap : null;
   } catch {
     return null;
   }

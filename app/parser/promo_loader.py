@@ -35,7 +35,7 @@ ALLOWED_REWARD_TYPES = {"1", "2", "3", "10"}
 MAX_ITEMS_PER_PROMOTION = 100
 _CANCELLED = "מבוטל"
 # a coupon or a chain's test promotion, wherever the word stands ("ניסיון- קופון אחוד ...")
-_NOT_FOR_SHOPPERS = ("קופון", "ניסיון")
+_NOT_FOR_SHOPPERS = ("קופון", "ניסיון", "נסיון")
 _MAX_DESCRIPTION = 300
 
 
