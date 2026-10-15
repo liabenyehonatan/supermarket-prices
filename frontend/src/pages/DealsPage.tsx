@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigationType } from 'react-router-dom';
 import { fetchDeals, type Deal } from '../api/client';
 import { useBasket } from '../context/BasketContext';
+import { X } from 'lucide-react';
+import { ChainCarousel } from '../components/ChainCarousel';
 import { DealCard } from '../components/DealCard';
 import { DealProductsSheet } from '../components/DealProductsSheet';
 import { DealsRulesBox } from '../components/DealsRulesBox';
@@ -87,6 +89,10 @@ export function DealsPage() {
     };
   }, []);
 
+  // The carousel lists the brands that have deals now; a chosen brand stays in it even if a city filter empties it
+  const chainNames = chains.some(c => c.name === chain) || !chain ? chains.map(c => c.name) : [chain, ...chains.map(c => c.name)];
+  const chainCounts = Object.fromEntries(chains.map(c => [c.name, c.count]));
+
   async function more() {
     if (loadingMore) return;
     const gen = generation.current;
@@ -125,14 +131,19 @@ export function DealsPage() {
 
         {introOpen && <DealsRulesBox />}
 
-        <div className="filter-bar deals-filters" role="group" aria-label="סינון מבצעים לפי רשת">
-          <button className={`filter-chip${chain === '' ? ' active' : ''}`} onClick={() => setChain('')}>כל הרשתות</button>
-          {chains.map(c => (
-            <button key={c.name} className={`filter-chip${chain === c.name ? ' active' : ''}`} onClick={() => setChain(c.name)}>
-              {c.name} · {c.count}
-            </button>
-          ))}
-        </div>
+        <ChainCarousel
+          chains={chainNames}
+          counts={chainCounts}
+          selected={chain}
+          onSelect={name => setChain(chain === name ? '' : name)}
+          style={{ marginBottom: 12 }}
+        />
+        {chain && (
+          <div className="chain-active-note" role="status">
+            <span>מבצעים רק מ<strong>{chain}</strong></span>
+            <button onClick={() => setChain('')}><X size={13} strokeWidth={2.5} />הצג את כל הרשתות</button>
+          </div>
+        )}
         <div className="filter-bar deals-filters" role="group" aria-label="מיון וסוג">
           <button className={`filter-chip${sort === 'best' ? ' active' : ''}`} onClick={() => setSort('best')}>הכי משתלמים</button>
           <button className={`filter-chip${sort === 'ending' ? ' active' : ''}`} onClick={() => setSort('ending')}>נגמרים בקרוב</button>

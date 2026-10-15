@@ -20,6 +20,8 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
   const pct = Math.round(Number(deal.saving_pct) * 100);
   const ends = endsText(deal.ends_at);
   const first = deal.sample_products[0];
+  // Only real pictures: a row of identical placeholder baskets says nothing and crowds the card
+  const pictured = deal.sample_products.filter(p => p.image_url).slice(0, deal.kind === 'group' ? 3 : 1);
   return (
     <article className="deal-card">
       <div className="deal-card-head">
@@ -29,24 +31,35 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
       </div>
 
       <div className="deal-card-body">
-        <div className="deal-card-pics">
-          {deal.sample_products.slice(0, deal.kind === 'group' ? 3 : 1).map(p => (
-            <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={deal.kind === 'group' ? 48 : 72} />
-          ))}
-        </div>
-        <div className="deal-card-main">
-          <div className="deal-card-title" title={deal.description}>
-            {deal.kind === 'group' ? `${deal.products} מוצרים לבחירה` : first?.name ?? deal.description}
+        {pictured.length > 0 && (
+          <div className="deal-card-pics">
+            {pictured.map(p => (
+              <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={deal.kind === 'group' ? 48 : 72} />
+            ))}
           </div>
-          <div className="deal-card-offer tabular"><bdi>{deal.min_qty}</bdi> ב-<bdi>{money(deal.price)}</bdi></div>
-          <div className="deal-card-unit tabular"><bdi>{money(deal.unit_price)}</bdi> ליחידה</div>
+        )}
+        <div className="deal-card-main">
+          <div className="deal-card-title">
+            {first?.name ?? deal.description}
+          </div>
+          {deal.kind === 'group' && (
+            <div className="deal-card-more">{deal.products === 2 ? 'ועוד מוצר אחד לבחירה במבצע' : `ועוד ${deal.products - 1} מוצרים לבחירה במבצע`}</div>
+          )}
+          <div className="deal-card-offer-row">
+            {/* "1 for ₪9" reads oddly: a one-unit promotion is just the price */}
+            <span className="deal-card-offer tabular">
+              {deal.min_qty === 1 ? <bdi>{money(deal.price)}</bdi> : <><bdi>{deal.min_qty}</bdi> ב-<bdi>{money(deal.price)}</bdi></>}
+            </span>
+            <span className="deal-saving-pill tabular" aria-label={`זול ב-${pct}%`}><bdi dir="ltr">-{pct}%</bdi></span>
+          </div>
+          {deal.min_qty > 1 && <div className="deal-card-unit tabular"><bdi>{money(deal.unit_price)}</bdi> ליחידה</div>}
         </div>
       </div>
 
       <div className="deal-card-saving">
         {deal.vs_market
-          ? <>זול ב-<bdi>{pct}%</bdi> מהמחיר הזול שמצאנו ברשתות (<bdi>{money(deal.ref_price)}</bdi> ליחידה)</>
-          : <>זול ב-<bdi>{pct}%</bdi> ממחיר המדף ברשת (<bdi>{money(deal.ref_price)}</bdi> ליחידה)</>}
+          ? <>לעומת <bdi>{money(deal.ref_price)}</bdi> ליחידה, המחיר הזול ביותר שמצאנו ברשתות</>
+          : <>לעומת <bdi>{money(deal.ref_price)}</bdi> ליחידה על המדף ברשת</>}
       </div>
       {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
       {ends && <div className="deal-card-ends">{ends}</div>}
