@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import asyncio
+
 import httpx
 import pytest
 from httpx import ASGITransport
@@ -462,3 +464,22 @@ async def test_audit_never_overwrites_a_picture_that_changed_meanwhile(session, 
     p = (await session.execute(select(Product).where(Product.barcode == "7290000000022"))).scalar_one()
     await session.refresh(p)
     assert p.image_url == newer
+
+
+async def test_open_food_facts_is_asked_a_few_at_a_time_not_one_by_one(session, monkeypatch):
+    session.add_all([Product(barcode=f"72900000000{i:02d}", name=f"מוצר {i}", image_checked_at=datetime(2026, 10, 1)) for i in range(12)])
+    await session.commit()
+    monkeypatch.setattr(images, "OFF_PAUSE", 0)
+    in_flight = peak = 0
+
+    async def fake(barcode):
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.02)
+        in_flight -= 1
+        return None
+
+    monkeypatch.setattr(images, "lookup_off_image_url", fake)
+    await images.fill_images_off(minutes=1)
+    assert 1 < peak <= images.OFF_CONCURRENCY
