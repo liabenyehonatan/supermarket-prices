@@ -6,6 +6,8 @@ Create Date: 2026-10-15 10:00:00
 
 m1c7a2e94d60 is already in production, so the view is rebuilt here, not edited there. The deal identity is now
 (brand, min_qty, price, max_qty, price_is_total, products): 19% of the visible deals were copies of another deal.
+A store counts for a deal only if it has a current shelf price for the product (chains list promotions on products
+their price file does not carry, which showed a store the product page could not).
 """
 from typing import Sequence, Union
 
@@ -28,6 +30,7 @@ WITH running AS (
     JOIN stores s ON s.id = pr.store_id
     JOIN chains c ON c.id = s.chain_id
     JOIN products p ON p.id = pr.product_id
+    JOIN prices sp ON sp.store_id = pr.store_id AND sp.product_id = pr.product_id AND sp.is_current
    WHERE pr.basket_eligible AND pr.is_active
      AND pr.min_qty IS NOT NULL AND pr.discounted_price IS NOT NULL
      AND length(p.barcode) >= 7                       -- shorter codes are chain-internal: their prices mean nothing
@@ -50,12 +53,9 @@ WITH running AS (
          brand, min(promotion_id) AS promotion_id,
          (array_agg(description ORDER BY length(description), description))[1] AS description,
          min_qty, price, max_qty, price_is_total, min(ends_at) AS ends_at,
-         ARRAY(SELECT DISTINCT sid FROM per_promotion p2 CROSS JOIN LATERAL unnest(p2.store_ids) AS sid
-                WHERE p2.brand = pp.brand AND p2.min_qty = pp.min_qty AND p2.price = pp.price
-                  AND p2.max_qty IS NOT DISTINCT FROM pp.max_qty AND p2.price_is_total = pp.price_is_total
-                  AND p2.product_ids = pp.product_ids ORDER BY sid) AS store_ids,
+         array_agg(DISTINCT sid ORDER BY sid) AS store_ids,
          product_ids
-    FROM per_promotion pp
+    FROM per_promotion pp CROSS JOIN LATERAL unnest(pp.store_ids) AS sid
    GROUP BY brand, min_qty, price, max_qty, price_is_total, product_ids
 ), ref AS (
   SELECT d.deal_id,
