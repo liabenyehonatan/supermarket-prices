@@ -95,6 +95,7 @@ async def fill_images(minutes: float, concurrency: int = 4, batch: int = 100) ->
 
 OFF_PAUSE = 0.7        # seconds between requests: ~85 a minute
 OFF_BATCH = 50
+OFF_CONCURRENCY = 4    # ~4 s per request: about 50 a minute at most, under OFF's ~100
 OFF_RECHECK_DAYS = 30
 
 _NEXT_OFF_BATCH = text(
@@ -114,37 +115,44 @@ _NEXT_OFF_BATCH = text(
 
 
 async def fill_images_off(minutes: float) -> tuple[int, int]:
-    """Look up pictures at Open Food Facts for up to `minutes`; returns (found, not_found)."""
+    """Look up pictures at Open Food Facts for up to `minutes`; returns (found, not_found).
+    A few requests at a time (a request takes seconds, so one by one managed ~14 a minute); each worker pauses
+    OFF_PAUSE after its request, which keeps the total well under their ~100 a minute."""
     deadline = time.monotonic() + minutes * 60
     found = missed = failures = 0
-    while time.monotonic() < deadline and not STOP.is_set():
-        async with AsyncSessionLocal() as session:
-            rows = (await session.execute(_NEXT_OFF_BATCH, {"days": OFF_RECHECK_DAYS, "batch": OFF_BATCH})).all()
-        if not rows:
-            break
-        batch_errors = 0
-        for row in rows:
+    gate = asyncio.Semaphore(OFF_CONCURRENCY)
+
+    async def one(row) -> str:
+        """'found', 'missed' or 'error'."""
+        async with gate:
             if time.monotonic() >= deadline or STOP.is_set():
-                break
+                return "skipped"
             try:
                 url = await lookup_off_image_url(row.barcode)
             except ImageLookupError:
-                batch_errors += 1          # could not ask: leave the product untouched, try again later
-                backoff = min(60.0, OFF_PAUSE * 2 ** batch_errors)         # a rate limit or block: slow down, do not hammer
-                await asyncio.sleep(backoff)
-                continue
+                await asyncio.sleep(min(60.0, OFF_PAUSE * 8))       # a rate limit or block: slow down, do not hammer
+                return "error"
             async with AsyncSessionLocal() as session:
                 async with session.begin():
                     if url:
                         await session.execute(text("UPDATE products SET image_url = :u WHERE id = :i AND image_url IS NULL"),
                                               {"u": url, "i": row.id})   # never over a picture found meanwhile
-                        found += 1
                     else:
                         await session.execute(text("UPDATE products SET off_checked_at = :t WHERE id = :i"),
                                               {"t": datetime.utcnow(), "i": row.id})
-                        missed += 1
             await asyncio.sleep(OFF_PAUSE)
-        if batch_errors * 2 > len(rows):
+            return "found" if url else "missed"
+
+    while time.monotonic() < deadline and not STOP.is_set():
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(_NEXT_OFF_BATCH, {"days": OFF_RECHECK_DAYS, "batch": OFF_BATCH})).all()
+        if not rows:
+            break
+        outcomes = await asyncio.gather(*(one(r) for r in rows))
+        found += outcomes.count("found")
+        missed += outcomes.count("missed")
+        errors = outcomes.count("error")
+        if errors * 2 > len(rows):
             failures += 1
             if failures >= MAX_FAILED_BATCHES:
                 logger.warning("Open Food Facts pictures: lookups keep failing; stopping")
