@@ -13,7 +13,7 @@ from datetime import datetime
 from sqlalchemy import text
 
 from app.db.database import AsyncSessionLocal
-from app.images import ImageLookupError, lookup_image_url, lookup_off_image_url
+from app.images import ImageLookupError, lookup_image_url, lookup_off_image_url, picture_matches_barcode
 from app.pipeline.shutdown import STOP
 
 logger = logging.getLogger(__name__)
@@ -156,8 +156,115 @@ async def fill_images_off(minutes: float) -> tuple[int, int]:
     return found, missed
 
 
+# ── Checking the pictures we already hold ─────────────────────────────────────────────────────────────────────────
+# Until names were matched strictly, a picture could belong to another product (a corn wearing a mayonnaise).
+# A Shufersal picture whose item code is not the product's barcode was chosen by name: look it up again with the
+# strict rules, replace it when the right one exists, clear it when none does, and leave it when Shufersal cannot be asked.
+
+_AUDIT_PAGE = text(
+    _DEAL_PRODUCTS + """
+    SELECT p.id, p.barcode, p.name, p.image_url
+      FROM products p
+      LEFT JOIN dp ON dp.pid = p.id
+     WHERE p.id > :after AND p.image_url LIKE '%shufersal%'
+       AND ((dp.pid IS NOT NULL) = :deals)
+     ORDER BY p.id
+     LIMIT :page
+    """
+)
+
+
+_AUDIT_CANARIES = text(
+    """
+    SELECT barcode, name FROM products
+     WHERE image_url LIKE '%shufersal%' AND length(barcode) = 13
+       AND substring(image_url from 'P_([0-9]+)_') = barcode
+     ORDER BY id LIMIT 5
+    """
+)
+
+
+async def audit_images(concurrency: int = 4, page: int = 400, dry_run: bool = False) -> tuple[int, int, int, int]:
+    """Returns (kept, replaced, cleared, failed). Products of the promotions section first, then the rest.
+    `dry_run` only counts what it would do. Before every page a product Shufersal certainly carries (its picture's
+    code IS its barcode) is looked up: if Shufersal does not answer it properly (a block that still returns an empty
+    200, an outage) the audit stops, so an empty answer is never taken for "no picture"."""
+    import httpx
+
+    kept = replaced = cleared = failed = 0
+    async with AsyncSessionLocal() as session:
+        canaries = (await session.execute(_AUDIT_CANARIES)).all()
+    if not canaries:
+        logger.warning("Picture audit: no known-good product to check Shufersal with; not running")
+        return kept, replaced, cleared, failed
+    gate = asyncio.Semaphore(concurrency)
+    pages = 0
+
+    async with httpx.AsyncClient(timeout=8) as client:
+        async def one(row):
+            async with gate:
+                return await lookup_image_url(row.barcode, row.name, client=client)
+
+        async def shufersal_is_answering() -> bool:
+            canary = canaries[pages % len(canaries)]
+            try:
+                return bool(await lookup_image_url(canary.barcode, canary.name, client=client))
+            except ImageLookupError:
+                return False
+
+        for deals in (True, False):
+            after = 0
+            while not STOP.is_set():
+                async with AsyncSessionLocal() as session:
+                    rows = (await session.execute(_AUDIT_PAGE, {"after": after, "page": page, "deals": deals})).all()
+                if not rows:
+                    break
+                after = rows[-1].id
+                suspects = [r for r in rows if not picture_matches_barcode(r.image_url, r.barcode)]
+                if suspects:
+                    if not await shufersal_is_answering():
+                        logger.error("Picture audit: Shufersal did not answer the known-good check; stopping before product %d", after)
+                        return kept, replaced, cleared, failed
+                    pages += 1
+                    results = await asyncio.gather(*(one(r) for r in suspects), return_exceptions=True)
+                    errors = sum(1 for r in results if isinstance(r, ImageLookupError))
+                    now = datetime.utcnow()
+                    async with AsyncSessionLocal() as session:
+                        async with session.begin():
+                            for row, result in zip(suspects, results):
+                                if isinstance(result, ImageLookupError):
+                                    failed += 1
+                                elif isinstance(result, BaseException):
+                                    raise result
+                                elif result == row.image_url:
+                                    kept += 1
+                                elif result:
+                                    replaced += 1
+                                    if not dry_run:       # never over a picture that changed since it was read
+                                        await session.execute(
+                                            text("UPDATE products SET image_url = :u WHERE id = :i AND image_url = :old"),
+                                            {"u": result, "i": row.id, "old": row.image_url})
+                                else:
+                                    cleared += 1
+                                    if not dry_run:
+                                        await session.execute(
+                                            text("UPDATE products SET image_url = NULL, image_checked_at = :t "
+                                                 "WHERE id = :i AND image_url = :old"),
+                                            {"t": now, "i": row.id, "old": row.image_url})
+                    logger.info("Picture audit%s (%s): up to product %d: %d kept, %d replaced, %d cleared, %d failed",
+                                " [dry run]" if dry_run else "", "deals" if deals else "rest", after, kept, replaced, cleared, failed)
+                    if errors * 2 > len(suspects):
+                        logger.error("Picture audit: most lookups on this page failed; stopping")
+                        return kept, replaced, cleared, failed
+                await asyncio.sleep(PAUSE_BETWEEN_BATCHES)
+    return kept, replaced, cleared, failed
+
+
 if __name__ == "__main__":
     import sys
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    asyncio.run(fill_images(float(sys.argv[1]) if len(sys.argv) > 1 else 30))
+    if len(sys.argv) > 1 and sys.argv[1] == "audit":
+        print(asyncio.run(audit_images(dry_run="--dry-run" in sys.argv)))      # (kept, replaced, cleared, failed)
+    else:
+        asyncio.run(fill_images(float(sys.argv[1]) if len(sys.argv) > 1 else 30))

@@ -5,21 +5,66 @@
 # CC BY-SA, credited on the About page). Used lazily by the API (Shufersal only) and in bulk by the worker
 # (app/pipeline/images.py).
 
+import re
+from contextlib import nullcontext
 from typing import Optional
 
 from urllib.parse import urlparse
 
 import httpx
 
+MIN_BARCODE_LEN = 7        # shorter codes are chain-internal: no one else's picture can be tied to them
 SHUFERSAL_SEARCH = "https://www.shufersal.co.il/online/he/search/results"
 SHUFERSAL_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
-def _names_similar(our_name: str, their_name: str) -> bool:
-    our_words = set(our_name.split())
-    their_words = set(their_name.split())
-    if not our_words:
+# Sizes and units say nothing about WHAT a product is (a percentage like 3% does count).
+_UNITS = {"גרם", "גר", "ג", "קג", "קילו", "מל", "ליטר", "ל", "יח", "יחידות", "יחידה", "מ", "סמ", "סמק", "ml", "g", "kg", "l", "cm"}
+_NUMBER = re.compile(r"^\d+(\.\d+)?$")
+_NUMBER_WITH_UNIT = re.compile(r"^\d+(\.\d+)?([^\d.%]+)$")      # 500מל
+_PACK = re.compile(r"^(\d+[x×]|[x×]\d+)$")                       # 6x, x6
+
+
+def _meaningful_words(name: str) -> set[str]:
+    words = set()
+    for token in re.split(r"[\s/\-–()]+", (name or "").lower()):
+        token = token.strip(",;:*+&!?.\"'״׳")
+        core = token.replace('"', "").replace("״", "").replace("'", "").replace("׳", "")
+        if not any(ch.isalnum() for ch in core) or _NUMBER.match(core) or _PACK.match(core) or core in _UNITS:
+            continue
+        glued = _NUMBER_WITH_UNIT.match(core)
+        if glued and glued.group(2) in _UNITS:
+            continue
+        words.add(core)
+    return words
+
+
+def names_match(our_name: str, their_name: str) -> bool:
+    """True only when their name contains every meaningful word of ours, and ours has at least three.
+    Looser matching paired a corn with a mayonnaise ("light, reduced calories") and put the wrong picture on it."""
+    ours = _meaningful_words(our_name)
+    return len(ours) >= 3 and ours <= _meaningful_words(their_name)
+
+
+def code_matches_barcode(code: str, barcode: str) -> bool:
+    """Shufersal's own item code (digits) is this barcode, its private-label tail (7290000 + 120874), or the same
+    code with a leading zero (UPC-A against EAN-13). A short chain-internal code never matches anything."""
+    if not code or not barcode or len(barcode) < MIN_BARCODE_LEN:
         return False
-    return len(our_words & their_words) / len(our_words) >= 0.6
+    if code == barcode:
+        return True
+    if len(code) >= 6 and barcode.startswith("7290") and barcode.endswith(code):
+        return True
+    return code.endswith(barcode) and len(code) - len(barcode) <= 1 and len(barcode) >= 8
+
+
+def picture_code(url: Optional[str]) -> Optional[str]:
+    """The Shufersal item code inside a picture URL (…/XYZ_M_P_120874_1.png -> 120874)."""
+    found = re.search(r"P_(\d+)_", url or "")
+    return found.group(1) if found else None
+
+
+def picture_matches_barcode(url: Optional[str], barcode: str) -> bool:
+    return code_matches_barcode(picture_code(url) or "", barcode)
 
 
 # Pictures are only ever served from the two sources' own image hosts (the API redirects the browser to them).
@@ -39,22 +84,37 @@ class ImageLookupError(Exception):
     """Shufersal could not be asked (outage, block page, rate limit): says nothing about the picture."""
 
 
-async def lookup_image_url(barcode: str, name: Optional[str]) -> Optional[str]:
-    """Shufersal's picture URL, or None when it has none (found by barcode, then by a similar name).
-    Raises ImageLookupError when the lookup itself failed, so callers never record a failure as 'no picture'."""
+async def lookup_image_url(barcode: str, name: Optional[str], client: Optional[httpx.AsyncClient] = None) -> Optional[str]:
+    """Shufersal's picture URL for THIS product, or None. Found by barcode (the result's own code must be this
+    barcode); failing that by name, but only when their name contains every meaningful word of ours (the closest
+    name wins). Raises ImageLookupError when the lookup itself failed, so callers never record a failure as
+    'no picture'."""
+    if len(barcode or "") < MIN_BARCODE_LEN:
+        return None
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
+        async with (nullcontext(client) if client is not None else httpx.AsyncClient(timeout=8)) as http:
             async def search(q: str) -> list[dict]:
-                resp = await client.get(
-                    SHUFERSAL_SEARCH, params={"q": q, "format": "json"}, headers=SHUFERSAL_HEADERS)
+                resp = await http.get(SHUFERSAL_SEARCH, params={"q": q, "format": "json"}, headers=SHUFERSAL_HEADERS)
                 resp.raise_for_status()
                 return resp.json().get("results", [])
 
-            results = await search(barcode)
-            if not results and name:
-                results = [r for r in await search(name) if _names_similar(name, r.get("name", ""))]
-        url = results[0].get("baseProductImageMedium") if results else None
-        return url if is_allowed_image_url(url) else None
+            def picture(result: dict) -> Optional[str]:
+                url = result.get("baseProductImageMedium")
+                return url if is_allowed_image_url(url) else None
+
+            for result in await search(barcode):
+                if code_matches_barcode(str(result.get("code", "")).removeprefix("P_"), barcode) and picture(result):
+                    return picture(result)
+            ours = _meaningful_words(name or "")
+            if len(ours) >= 3:                                   # fewer words can never match: do not ask
+                best, fewest_extra = None, None
+                for result in await search(name):
+                    if picture(result) and names_match(name, result.get("name", "")):
+                        extra = len(_meaningful_words(result.get("name", "")) - ours)
+                        if fewest_extra is None or extra < fewest_extra:
+                            best, fewest_extra = picture(result), extra
+                return best
+        return None
     except (httpx.HTTPError, ValueError, AttributeError) as exc:
         raise ImageLookupError(str(exc)) from exc
 
