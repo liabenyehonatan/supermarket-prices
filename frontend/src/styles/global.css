@@ -698,7 +698,7 @@ img { max-width: 100%; display: block; }
 }
 .compare-row-promo {
   font-size: var(--fs-12);
-  color: var(--orange-700);
+  color: var(--green-700);
   font-weight: var(--fw-semibold);
   margin-top: 2px;
 }
@@ -779,7 +779,7 @@ img { max-width: 100%; display: block; }
 .product-hero-savings {
   font-size: var(--fs-14);
   font-weight: var(--fw-semibold);
-  color: var(--orange-700);
+  color: var(--green-700);
   margin-top: var(--sp-1);
 }
 
@@ -2732,16 +2732,17 @@ img { max-width: 100%; display: block; }
 /* Promotions in a store row: one muted line under the name, the full list when the row is open */
 .store-row-promo {
   margin-top: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: var(--fs-12); font-weight: var(--fw-medium); color: var(--orange-700);
+  font-size: var(--fs-12); font-weight: var(--fw-medium); color: var(--green-700);
 }
 .store-row-promos { margin-bottom: var(--sp-2); }
 .store-row-promos ul { margin: var(--sp-1) 0 0; padding-inline-start: var(--sp-5); font-size: var(--fs-13); color: var(--ink-700); }
 .store-row-promo-end { color: var(--ink-400); }
 
 /* Basket promotions: the promotion under the item name, the shelf total struck through, the saving row */
-.basket-breakdown-promo { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-12); font-weight: var(--fw-medium); color: var(--orange-700); }
+.basket-breakdown-promo { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-12); font-weight: var(--fw-medium); color: var(--green-700); }
 .basket-breakdown-was { margin-inline-end: var(--sp-2); color: var(--ink-400); font-weight: var(--fw-medium); }
-.basket-breakdown-saving { background: var(--orange-50); color: var(--orange-700); }
+.basket-breakdown-ends { color: var(--ink-700); font-weight: var(--fw-semibold); }
+.basket-breakdown-saving { background: var(--green-50); color: var(--green-700); }
 .basket-no-promo { padding: var(--sp-2) var(--sp-4); color: var(--ink-400); }
 .basket-promo-note { margin-bottom: var(--sp-3); font-size: var(--fs-12); color: var(--ink-400); }
 
@@ -2750,30 +2751,36 @@ img { max-width: 100%; display: block; }
 
 /* Promotions section: a card per promotion per brand */
 .deals-all-link { font-size: var(--fs-13); font-weight: var(--fw-semibold); color: var(--green-700); align-self: center; }
-.deals-strip { display: flex; gap: var(--sp-3); overflow-x: auto; padding-bottom: var(--sp-3); margin-bottom: var(--sp-8); scroll-snap-type: x proximity; }
+.deals-strip { display: flex; gap: var(--sp-3); overflow-x: auto; padding: 4px 4px var(--sp-3); margin-bottom: var(--sp-8); scroll-snap-type: x proximity; }
 .deals-strip > .deal-card { flex: 0 0 min(80vw, 300px); scroll-snap-align: start; }
 .deals-grid { display: grid; gap: var(--sp-3); grid-template-columns: 1fr; margin-bottom: var(--sp-4); }
 @media (min-width: 640px) { .deals-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 960px) { .deals-grid { grid-template-columns: repeat(3, 1fr); } }
 .deals-filters { margin-bottom: var(--sp-3); overflow-x: auto; flex-wrap: nowrap; }
 .deals-more { margin-bottom: var(--sp-4); }
-.deals-footnote { font-size: var(--fs-12); color: var(--ink-400); margin: var(--sp-4) 0 var(--sp-8); }
-.deal-card { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.deals-footnote { font-size: var(--fs-12); color: var(--ink-500); margin: var(--sp-4) 0 var(--sp-8); }
+.deal-card { position: relative; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard); display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--r-lg); }
 .deal-card-head { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-13); }
 .deal-card-brand { font-weight: var(--fw-semibold); }
-.deal-card-stores { margin-inline-start: auto; color: var(--ink-400); font-size: var(--fs-12); }
 .deal-card-body { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); align-items: center; }
 .deal-card-pics { display: flex; gap: var(--sp-1); flex-shrink: 0; }
 .deal-card-main { flex: 1 1 140px; min-width: 0; }
 .deal-card-title { font-size: var(--fs-14); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.deal-card-offer { font-size: var(--fs-20); font-weight: var(--fw-bold); color: var(--ink-900); white-space: nowrap; }
+/* One click target for the whole card: the title's link stretches over it; the buttons sit above.
+   It relies on .deal-card being position:relative and .deal-card-title NOT positioned (or the link would be clipped). */
+.deal-card-link { all: unset; cursor: pointer; }
+.deal-card-link::after { content: ''; position: absolute; inset: 0; border-radius: var(--r-lg); }
+.deal-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.deal-card-link:focus-visible::after { outline: 2px solid var(--green-600); outline-offset: -2px; }   /* on the stretched layer itself: no :has() needed, and it survives forced colours */
+.deal-card-actions { position: relative; z-index: 1; }
+.deal-card-offer { font-size: var(--fs-20); font-weight: var(--fw-bold); color: var(--green-700); white-space: nowrap; }
 .deal-card-offer-row { display: flex; align-items: center; gap: var(--sp-2); }
 .deal-card-more { font-size: var(--fs-12); color: var(--ink-500); }
-/* The saving: a light warm tag with the normal text colour (a brick-red price read as a warning, not a deal) */
-.deal-saving-pill { padding: 2px 8px; border-radius: var(--r-full); background: var(--orange-100); color: var(--ink-900); font-size: var(--fs-12); font-weight: var(--fw-bold); white-space: nowrap; }
-.deal-card-unit { font-size: var(--fs-12); color: var(--ink-400); }
+/* Savings are green everywhere (the cheapest store's price, the basket savings): the price and the saving tag follow */
+.deal-saving-pill { padding: 2px 8px; border-radius: var(--r-full); background: var(--green-100); color: var(--green-700); font-size: var(--fs-12); font-weight: var(--fw-bold); white-space: nowrap; }
+.deal-card-unit { font-size: var(--fs-12); color: var(--ink-500); }
 .deal-card-saving { font-size: var(--fs-12); color: var(--ink-500); }
-.deal-card-note, .deal-card-ends { font-size: var(--fs-12); color: var(--ink-400); }
+.deal-card-note, .deal-card-ends { font-size: var(--fs-12); color: var(--ink-500); }
 .deal-card-ends { color: var(--ink-700); font-weight: var(--fw-medium); }
 .deal-card-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-1); }
 .deal-sheet-hint { padding: 0 var(--sp-4) var(--sp-3); font-size: var(--fs-13); color: var(--ink-400); }

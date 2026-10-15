@@ -163,8 +163,7 @@ export function DealsPage() {
           <button className="btn btn-secondary btn-full deals-more" disabled={loadingMore} onClick={() => void more()}>{loadingMore ? 'טוענים…' : 'עוד מבצעים'}</button>
         )}
         <p className="deals-footnote">
-          המחיר ליחידה מחושב מהמבצע. ההשוואה היא למחיר המדף הזול ביותר שמצאנו של אותו מוצר בכל הרשתות. מבצעי מועדון וקופונים לא מוצגים,
-          ומוצגים רק מבצעים מרשתות שיש לנו עבורן נתונים עדכניים. מוצר שנמכר רק ברשת אחת מושווה למחיר המדף שלה.
+          המחיר ליחידה מחושב מהמבצע ומושווה למחיר המדף הזול ביותר שמצאנו. מבצעי מועדון וקופונים לא מוצגים.
         </p>
       </div>
       {picking && <DealProductsSheet deal={picking} onClose={() => setPicking(null)} />}

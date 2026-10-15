@@ -524,7 +524,7 @@ async def test_a_promotion_can_make_the_dearer_shelf_store_win(client, session):
     line = b["item_prices"][0]
     assert float(line["unit_price"]) == 5.0 and float(line["regular_line_total"]) == 15.0
     assert float(line["line_total"]) == 10.0
-    assert line["promo"] == {"description": "3 ב-10", "min_qty": 3, "price": "10.00", "sets": 1}
+    assert {k: v for k, v in line["promo"].items() if k != "ends_at"} == {"description": "3 ב-10", "min_qty": 3, "price": "10.00", "sets": 1}
     a = _by_chain(body)["רשת א"]
     assert (float(a["savings"]), a["promotions_known"], a["item_prices"][0]["promo"]) == (0.0, False, None)
 
@@ -740,3 +740,32 @@ async def test_records_split_per_product_that_agree_and_are_confirmed_are_pooled
     await _split_world(session, [dict(min_qty=2, price="10.00", price_is_total=True)] * 2)
     store = await _split_basket(client)
     assert float(store["total_price"]) == 10.0 and len(store["promo_adjustments"]) == 1
+
+
+
+def _days_from_now(iso):
+    from datetime import datetime, timezone
+    return (datetime.fromisoformat(iso) - datetime.now(timezone.utc)).total_seconds() / 86400
+
+
+async def test_a_basket_line_promotion_says_when_it_ends(client, session):
+    await _basket_world(session)                                    # B's promotion runs for 5 more days (Israel time)
+    line = _by_chain(await _basket(client, 3))["רשת ב"]["item_prices"][0]
+    assert 4.0 < _days_from_now(line["promo"]["ends_at"]) < 5.2
+
+
+async def test_a_group_promotion_adjustment_says_when_it_ends(client, session):
+    await _group_world(session)
+    b = _by_chain(await _group_basket(client, (1, 1, 1)))["רשת ב"]
+    [adjustment] = b["promo_adjustments"]
+    assert 4.0 < _days_from_now(adjustment["ends_at"]) < 5.2
+
+
+async def test_a_promotion_without_an_end_date_has_no_end_in_the_basket(client, session):
+    from sqlalchemy import update
+    from app.db.models import Promotion
+
+    await _basket_world(session)
+    await session.execute(update(Promotion).values(end_date=None))
+    await session.commit()
+    assert _by_chain(await _basket(client, 3))["רשת ב"]["item_prices"][0]["promo"]["ends_at"] is None
