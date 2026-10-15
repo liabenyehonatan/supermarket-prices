@@ -12,6 +12,7 @@
 #    text confirmed it as the total for N (otherwise it may be a per-unit price)
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Mapping, Optional, Sequence
 
@@ -43,6 +44,7 @@ class StorePromo:
     max_qty: Optional[int]
     price_is_total: bool
     product_ids: frozenset[int]
+    ends_at: Optional[datetime] = None   # Israel local time, the earliest end among its rows; only for display
 
 
 @dataclass(frozen=True)
