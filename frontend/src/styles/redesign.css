@@ -548,3 +548,23 @@ body { background: #FFFFFF; font-size: 14px; }
 .promo-slide.is-direct .promo-cta { height: 30px; font-size: 12px; }
 .promo-slide { height: 150px; }   /* every slide the same height, so the banner does not jump when it is swiped */
 @media (min-width: 768px) { .promo-slide, .promo-slide.is-direct { height: 230px; } }
+
+/* ============================================================
+   Banner v3: the photo stays bright on one side and melts into a deep green panel that carries white text and a white button
+   ============================================================ */
+.promo-slide { height: 150px; background: linear-gradient(to left, #122814 0%, #1B3A1F 48%, #2F4B24 100%); }
+.promo-photo {
+  inset: 0 auto 0 0; width: 64%; height: 100%; object-fit: cover; object-position: left center; transform: none;
+  -webkit-mask-image: linear-gradient(to right, #000 58%, transparent 100%); mask-image: linear-gradient(to right, #000 58%, transparent 100%);
+}
+.promo-text {
+  position: absolute; top: 50%; transform: translateY(-50%); inset-inline-start: 16px; width: 44%; max-width: none; padding: 0;
+  background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0;
+}
+.promo-title { font-size: 19px; line-height: 1.18; font-weight: var(--fw-bold); color: #fff; text-shadow: none; }
+.promo-sub { margin: 5px 0 11px; font-size: 12px; color: rgba(255, 255, 255, 0.9); text-shadow: none; font-weight: var(--fw-regular); }
+.promo-cta { height: 32px; padding: 0 12px 0 10px; background: #fff; color: var(--ink-900); font-size: 12.5px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25); }
+.promo-cta:hover { background: var(--green-50); }
+.promo-track { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+@media (min-width: 768px) { .promo-slide { height: 230px; } .promo-photo { width: 58%; } .promo-text { width: 38%; inset-inline-start: 28px; } .promo-title { font-size: 28px; } .promo-sub { font-size: 14px; } .promo-cta { height: 38px; font-size: 14px; padding: 0 16px 0 12px; } }
+.promo-photo { transform: scale(1.04); transform-origin: 100% 50%; }   /* trims the thin dark edge the photos carry on their outer side */
