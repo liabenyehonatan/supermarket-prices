@@ -73,7 +73,12 @@ export function ProductCard({ product, summary }: {
         <a
           className="result-card-name"
           href={`#/product/${product.barcode}`}
-          onClick={e => { e.preventDefault(); e.stopPropagation(); open(); }}
+          onClick={e => {
+            e.stopPropagation();
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;   // let the browser open it in a new tab
+            e.preventDefault();
+            open();
+          }}
           title={displayName}
         >
           {displayName}
@@ -105,7 +110,7 @@ export function ProductCard({ product, summary }: {
             type="button"
             className={`card-add${justAdded ? ' is-added' : ''}${inBasket ? ' in-basket' : ''}`}
             onClick={add}
-            aria-label={inBasket ? `${product.name}: ${inBasket} בסל. הוספת עוד אחד` : `הוספת ${product.name} לסל`}
+            aria-label={inBasket ? `${product.name}: ${inBasket} בסל. הוספה של עוד אחד` : `הוספה לסל: ${product.name}`}
           >
             {justAdded
               ? <><Check size={15} strokeWidth={2.6} /> נוסף</>

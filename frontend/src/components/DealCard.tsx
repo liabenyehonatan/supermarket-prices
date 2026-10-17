@@ -78,7 +78,7 @@ export function DealCard({ deal, onAdd, onPick }: {
           <button
             type="button"
             className={`card-add${justAdded ? ' is-added' : ''}`}
-            aria-label={`הוספת ${deal.min_qty} יחידות לסל`}
+            aria-label={`הוספה לסל: ${first.name}${deal.min_qty > 1 ? ` (×${deal.min_qty})` : ''}`}
             onClick={() => onAdd(deal, () => {
               flyToBasket(mediaRef.current);
               setJustAdded(true);
