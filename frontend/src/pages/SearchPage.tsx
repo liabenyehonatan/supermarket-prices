@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, X, ChevronLeft, Barcode, Plus, Trash2, SearchX } from 'lucide-react';
+import { Search, X, ChevronLeft, ChevronRight, Barcode, Plus, Trash2, SearchX, LayoutGrid, ChevronUp } from 'lucide-react';
 import { searchProducts, priceSummaryBatch, type PriceSummary } from '../api/client';
-import { HeroBanner } from '../components/HeroBanner';
+import { PromoBanner } from '../components/PromoBanner';
 import { HowItWorksTour } from '../components/HowItWorksTour';
 import { ProductCard, ProductCardSkeleton } from '../components/ProductCard';
 import { useBasketWatch } from '../lib/basketWatch';
@@ -12,7 +12,6 @@ import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { useChainNames, readChainFilter, saveChainFilter } from '../lib/filters';
-import { usePeekSpacing } from '../lib/usePeekSpacing';
 import { setMainSearchHidden } from '../lib/mainSearchVisibility';
 
 /* ── constants ────────────────────────────────────────────── */
@@ -47,17 +46,20 @@ function writeSnapshot(snap: SearchSnapshot) {
     // storage full or blocked — going back just reloads the results
   }
 }
-// The quick searches on the home page: a picture-tile each (a pastel colour and an emoji for now)
+// The quick searches on the home page: a round picture each (a pastel colour and an emoji for now); five show, the rest open on request
 const POPULAR: { label: string; q: string; icon: string }[] = [
   { label: 'חלב', q: 'חלב', icon: '🥛' },
   { label: 'לחם', q: 'לחם', icon: '🍞' },
   { label: 'ביצים', q: 'ביצים', icon: '🥚' },
   { label: 'קוטג׳', q: 'קוטג', icon: '🥣' },
+  { label: 'גבינה צהובה', q: 'גבינה', icon: '🧀' },
   { label: 'אורז', q: 'אורז', icon: '🍚' },
   { label: 'שמן זית', q: 'שמן זית', icon: '🫒' },
   { label: 'יוגורט', q: 'יוגורט', icon: '🍦' },
-  { label: 'גבינה צהובה', q: 'גבינה', icon: '🧀' },
+  { label: 'עוף', q: 'עוף', icon: '🍗' },
+  { label: 'קפה', q: 'קפה', icon: '☕' },
 ];
+const CATEGORIES_SHOWN = 5;
 
 /* ── main component ───────────────────────────────────────── */
 export function SearchPage() {
@@ -97,7 +99,7 @@ export function SearchPage() {
   const [chainFilter, setChainFilter] = useState<string>(() => searchParams.get('supermarket') ?? readChainFilter());
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const chipsRef  = useRef<HTMLDivElement>(null);
+  const [moreCategories, setMoreCategories] = useState(false);
   const panelRef  = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -271,8 +273,6 @@ export function SearchPage() {
     return results;
   })();
 
-  usePeekSpacing(chipsRef, !hasQuery);
-
   // Tell the header when the search field has gone up under it, so it can offer its own search button
   useEffect(() => {
     const el = panelRef.current?.querySelector('.search-hero');
@@ -304,6 +304,12 @@ export function SearchPage() {
 
   const showSkeletonGrid = pending && results.length === 0 && !error;
 
+  // The banner's button: bring the search field into view and put the cursor in it
+  function focusSearch() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    inputRef.current?.focus({ preventScroll: true });
+  }
+
   /* ── render ─────────────────────────────────────────────── */
   return (
     <div className="page-wrapper">
@@ -313,13 +319,19 @@ export function SearchPage() {
         <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={heroRef} aria-hidden={hasQuery || undefined}>
           <div className="home-fold-inner">
             <div className="hero-section">
-              <HeroBanner title="השוואת מחירי סופרמרקט" subtitle="כל הרשתות, במקום אחד" />
+              <PromoBanner onSearch={focusSearch} />
             </div>
           </div>
         </div>
 
         {/* ── Search panel ──────────────────────────────────── */}
         <div className="search-panel-box" ref={panelRef}>
+          <div className={`search-row${hasQuery ? ' has-back' : ''}`}>
+          {hasQuery && (
+            <button className="round-btn search-back" onClick={clearSearch} aria-label="חזרה לדף הבית">
+              <ChevronRight size={20} strokeWidth={2} />
+            </button>
+          )}
           <div className="search-hero">
             <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
             <input
@@ -344,17 +356,24 @@ export function SearchPage() {
               </button>
             )}
           </div>
+          </div>
 
-          {/* Quick searches, right under the input */}
+          {/* The quick searches, in a card under the field */}
           <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={chipsWrapRef} aria-hidden={hasQuery || undefined}>
             <div className="home-fold-inner">
-              <div className="suggestions-row search-panel-chips" ref={chipsRef}>
-                {POPULAR.map(({ label, q, icon }, i) => (
-                  <button key={q} className={`category-tile tone-${i % 6}`} onClick={() => startSearch(q)}>
-                    <span className="category-tile-art" aria-hidden>{icon}</span>
-                    <span className="category-tile-label">{label}</span>
-                  </button>
-                ))}
+              <div className="category-card">
+                <div className="category-grid">
+                  {(moreCategories ? POPULAR : POPULAR.slice(0, CATEGORIES_SHOWN)).map(({ label, q, icon }, i) => (
+                    <button key={q} className={`category-item tone-${i % 6}`} onClick={() => startSearch(q)}>
+                      <span className="category-item-art" aria-hidden>{icon}</span>
+                      <span className="category-item-label">{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <button className="category-more" onClick={() => setMoreCategories(v => !v)} aria-expanded={moreCategories}>
+                  {moreCategories ? <ChevronUp size={16} strokeWidth={2.2} /> : <LayoutGrid size={16} strokeWidth={2.2} />}
+                  {moreCategories ? 'פחות קטגוריות' : 'עוד קטגוריות'}
+                </button>
               </div>
             </div>
           </div>
@@ -413,10 +432,6 @@ export function SearchPage() {
               </>
             )}
 
-            <ExampleComparisons />
-
-            <DealsStrip chain={chainFilter} />
-
             <div className="section-header home-section-head">
               <div>
                 <div className="section-title">מחירים לפי רשת</div>
@@ -429,7 +444,7 @@ export function SearchPage() {
               chains={chainNames}
               selected={chainFilter}
               onSelect={selectChain}
-              style={{ marginBottom: chainFilter ? 8 : 32 }}
+              style={{ marginBottom: chainFilter ? 8 : 0 }}
             />
             {chainFilter && (
               <div className="chain-active-note" role="status">
@@ -441,6 +456,9 @@ export function SearchPage() {
               </div>
             )}
 
+            <ExampleComparisons />
+
+            <DealsStrip chain={chainFilter} />
           </div>
         )}
 
