@@ -11,7 +11,8 @@ export function ProductImage({
   name: string;
   /** When the API already knows the picture, load it directly: no extra round trip through our server. */
   imageUrl?: string | null;
-  size?: number;
+  /** Pixels, or a CSS length such as '100%' to fill the parent (the search result cards). */
+  size?: number | string;
   borderRadius?: number;
 }) {
   const [failed, setFailed] = useState(false);
@@ -22,7 +23,7 @@ export function ProductImage({
   };
 
   return (
-    <div style={{ ...sharedStyle, position: 'relative', background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px var(--line)', overflow: 'hidden' }}>
+    <div style={{ ...sharedStyle, position: 'relative', background: '#FFFFFF', overflow: 'hidden' }}>
       {!failed && (
         <img
           src={imageUrl || `/api/v1/products/${barcode}/image`}

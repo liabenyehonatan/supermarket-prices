@@ -1,0 +1,597 @@
+/* ============================================================
+   Sali — fresh look (v2)
+   Built from two grocery-app references: a white page, small and quiet type, borderless white cards on a faint shadow,
+   photo-first product cards with a small green round "+", round store logos, a grey flat search field, pill chips,
+   a promotion banner with a button, a category card of five round pictures, a five-tab bottom bar.
+   Loaded after global.css and overrides it. To go back to the previous design, remove its import in App.tsx.
+   ============================================================ */
+
+/* ── Tokens ─────────────────────────────────────────────────── */
+:root {
+  --green-900: #0A4D26;
+  --green-800: #0D6A32;
+  --green-700: #118438;
+  --green-600: #14A044;     /* the "+" buttons, the active tab, the main button */
+  --green-500: #34BE62;
+  --green-400: #74D79A;
+  --green-200: #C4ECD3;
+  --green-100: #E1F6E8;
+  --green-50:  #F1FAF4;
+
+  --orange-500: #F97316;
+  --orange-50:  #FFF4E8;
+
+  /* Neutral greys, like the references (no green cast) */
+  --ink-900: #1B1B1B;
+  --ink-800: #262626;
+  --ink-700: #3A3A3A;
+  --ink-600: #555555;
+  --ink-500: #707070;
+  --ink-400: #8F8F8F;
+  --ink-300: #BDBDBD;
+
+  --surface-0:   #FFFFFF;
+  --surface-50:  #FAFAFA;
+  --surface-100: #F4F5F4;
+  --surface-200: #E9EBE9;
+  --line:        #EFEFEF;
+  --line-strong: #E2E2E2;
+
+  --bg-page: #FFFFFF;
+  --cheapest-bg:     #F1FAF4;
+  --cheapest-border: #C4ECD3;
+  --savings-bg:      #FFF4E8;
+  --savings-border:  #F9D6AE;
+
+  /* Smaller, quieter type: 12-14px does most of the work (inputs stay 16px so iOS does not zoom) */
+  --fs-12: 11px; --fs-13: 12px; --fs-14: 13px; --fs-15: 14px;
+  --fs-18: 16px; --fs-20: 17px; --fs-24: 20px; --fs-28: 23px;
+
+  --r-sm: 10px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.05), 0 8px 22px rgba(0, 0, 0, 0.09);
+  --shadow-pill: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-sm: var(--shadow-card);
+  --shadow-md: var(--shadow-card);
+  --shadow-focus: 0 0 0 2px #fff, 0 0 0 4px var(--green-600);
+
+  --header-h: calc(58px + var(--safe-top));
+  --bottom-nav-h: calc(60px + var(--safe-bottom));
+  --home-card-w: 158px;
+}
+
+body { background: #FFFFFF; font-size: 14px; }
+.container { padding-inline: 14px; }
+@media (min-width: 768px) { .container { padding-inline: var(--sp-8); } }
+.page-wrapper { padding-block-start: calc(var(--header-h) + 8px); }
+
+/* ── Header: flat and white, like the top of the reference ──── */
+.site-header { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border-bottom: 0; box-shadow: none; }
+.header-logo-text { font-size: 21px; color: var(--ink-900); }
+.header-logo-text span { color: var(--green-600); }
+.header-nav-link.active { background: var(--green-50); color: var(--green-700); }
+
+/* The round buttons beside the logo: a thin outline on white, like the bag and bell of the reference */
+.location-chip, .basket-pill, .header-search-toggle {
+  height: 38px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink-700); box-shadow: none;
+  font-size: var(--fs-13);
+}
+.header-search-toggle { width: 38px; }
+.location-chip:hover, .basket-pill:hover, .header-search-toggle:hover { background: var(--surface-100); border-color: var(--line-strong); color: var(--ink-900); }
+.location-chip.active { border-color: var(--green-200); background: var(--green-50); color: var(--green-700); }
+.basket-pill { border-color: var(--green-200); background: var(--green-50); color: var(--green-700); }
+.header-basket-btn:hover { background: var(--surface-100); }
+.basket-count { background: var(--green-600); box-shadow: 0 0 0 2px #fff; font-size: 9.5px; }
+.header-search-input { border: 0; background: var(--surface-100); }
+.header-search-input:focus { background: #fff; box-shadow: 0 0 0 2px var(--green-600); }
+.header-search-pop { border-bottom: 1px solid var(--line); }
+.header-search-field-input { border: 0; background: var(--surface-100); box-shadow: none; }
+.header-search-field-input:focus { box-shadow: 0 0 0 2px var(--green-600); }
+
+/* ── Bottom bar: five tabs, a green bar over the active one ── */
+.bottom-nav { border-top: 0; background: #fff; box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.06); }
+.bottom-nav-item { position: relative; gap: 3px; color: var(--ink-400); font-size: 10.5px; }
+.bottom-nav-item-label { font-size: 10.5px; font-weight: var(--fw-medium); }
+.bottom-nav-item.active { color: var(--green-600); }
+.bottom-nav-item.active::before {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 24px; height: 3px; border-radius: 0 0 4px 4px; background: var(--green-600);
+}
+.bottom-nav-scan { color: var(--ink-400); gap: 3px; padding-bottom: 7px; }
+.bottom-nav-scan-btn {
+  width: 48px; height: 48px; margin-top: -20px; background: var(--green-600); border: 4px solid #fff;
+  box-shadow: 0 4px 12px rgba(20, 160, 68, 0.35);
+}
+.bottom-nav-scan.active .bottom-nav-scan-btn { background: var(--green-700); }
+.bottom-nav-scan.active { color: var(--green-600); }
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.btn { border-radius: var(--r-full); min-height: 42px; font-size: 14px; }
+.btn-sm { min-height: 34px; font-size: 12.5px; }
+.btn-lg { min-height: 48px; font-size: 15px; }
+.btn-primary { background: var(--green-600); color: #fff; box-shadow: none; }
+.btn-primary:hover  { background: var(--green-700); color: #fff; }
+.btn-primary:active { background: var(--green-800); color: #fff; }
+.btn-compare:hover  { background: var(--green-700); color: #fff; }
+.btn-compare:active { background: var(--green-800); color: #fff; }
+.btn-secondary { background: var(--surface-100); color: var(--ink-800); }
+.btn-secondary:hover { background: var(--surface-200); }
+.round-btn { width: 40px; height: 40px; border: 1px solid var(--line-strong); background: #fff; box-shadow: none; }
+.round-btn:hover { background: var(--surface-100); }
+.btn-icon:hover { background: var(--surface-100); }
+.size-chip { background: #E6F1FF; color: #2B63B9; padding: 1px 8px; font-size: 10.5px; font-weight: var(--fw-semibold); }
+
+/* The small round green "+" used on every product card */
+.add-circle, .result-card-add {
+  position: relative; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; border: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--green-600); color: #fff; box-shadow: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: 13px; font-weight: var(--fw-bold);
+  transition: background var(--dur-fast), transform var(--dur-fast);
+}
+.add-circle::after, .result-card-add::after { content: ''; position: absolute; inset: -6px; }
+.add-circle:hover, .result-card-add:hover { background: var(--green-700); }
+.add-circle:active, .result-card-add:active { transform: scale(0.9); }
+.result-card-add.in-basket { background: #fff; color: var(--green-700); box-shadow: inset 0 0 0 2px var(--green-600); }
+.add-circle.is-added, .result-card-add.is-added { background: var(--green-600); color: #fff; box-shadow: none; animation: pop-in var(--dur-base) var(--ease-spring); }
+
+/* ── Cards: borderless white, lifted by a faint shadow ──────── */
+.card, .example-card, .deal-card, .result-card, .basket-item, .sparkline-section, .product-sheet, .add-to-basket-bar,
+.modal-card, .edit-bar, .basket-menu, .compare-delta, .deals-rules, .store-row, .basket-card {
+  border: 0; box-shadow: var(--shadow-card);
+}
+.deals-rules, .compare-delta { background: var(--green-50); box-shadow: none; }
+.deal-saving-pill { background: var(--orange-500); color: #fff; }
+
+/* ── Search field: flat and grey, scan button at the end ────── */
+.search-row { display: flex; align-items: center; gap: 10px; }
+.search-row .search-hero { flex: 1; min-width: 0; }
+.search-back { width: 44px; height: 44px; }
+.search-hero-input, .search-panel-box .search-hero-input {
+  height: 46px; border: 0; border-radius: 14px; background: var(--surface-100); box-shadow: none;
+  padding-inline-start: 44px; padding-inline-end: 50px; font-size: 16px; color: var(--ink-900);
+}
+.search-hero-input:focus, .search-panel-box .search-hero-input:focus { background: #fff; box-shadow: 0 0 0 1.5px var(--green-600); border: 0; }
+.search-hero-input::placeholder, .search-panel-box .search-hero-input::placeholder { color: var(--ink-400); font-size: 13.5px; }
+.search-hero-icon { inset-inline-start: 14px; color: var(--ink-400); width: 19px; height: 19px; }
+.search-hero-scan { inset-inline-end: 6px; width: 36px; height: 36px; background: transparent; color: var(--green-600); }
+.search-hero-scan:hover { background: var(--green-50); color: var(--green-700); }
+.search-hero-clear { inset-inline-end: 10px; width: 24px; height: 24px; background: var(--surface-200); }
+
+/* ── Promotion banner: text and a button on one side, picture on the other, dots below ── */
+.hero-section { padding: 6px 0 12px; text-align: start; }
+.promo-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 18px; }
+.promo-track::-webkit-scrollbar { display: none; }
+.promo-slide { position: relative; flex: 0 0 100%; scroll-snap-align: start; height: 150px; display: flex; align-items: center; overflow: hidden; }
+.promo-text { position: relative; z-index: 1; max-width: 54%; padding: 14px 18px; }
+.promo-title { margin: 0; font-size: 17px; font-weight: var(--fw-bold); line-height: 1.22; letter-spacing: -0.01em; color: var(--ink-900); text-wrap: balance; }
+.promo-sub { margin: 4px 0 11px; font-size: 11.5px; color: var(--ink-600); line-height: 1.35; }
+.promo-cta {
+  height: 30px; padding: 0 16px; border: 0; border-radius: var(--r-full); cursor: pointer;
+  background: var(--green-600); color: #fff; font-family: var(--font-sans); font-size: 12px; font-weight: var(--fw-semibold);
+}
+.promo-cta:hover { background: var(--green-700); }
+.promo-dots { display: flex; justify-content: center; gap: 5px; margin-top: 9px; }
+.promo-dot { position: relative; width: 5px; height: 5px; padding: 0; border: 0; border-radius: 99px; background: #D4D7D4; cursor: pointer; transition: width var(--dur-base) var(--ease-standard), background var(--dur-base); }
+.promo-dot::after { content: ''; position: absolute; inset: -8px -3px; }
+.promo-dot.on { width: 16px; background: var(--green-600); }
+
+/* ── Category card: five round pictures and a "more" button ─── */
+.search-panel-box { margin-bottom: 0; }
+.category-card { margin-top: 14px; padding: 14px 8px 8px; background: #fff; border-radius: var(--r-lg); box-shadow: var(--shadow-card); }
+.category-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px 2px; }
+.category-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; background: none; cursor: pointer; font-family: var(--font-sans); -webkit-tap-highlight-color: transparent; }
+.category-item-art {
+  width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1; background: var(--tile-bg, var(--green-50));
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.category-item:hover .category-item-art { transform: translateY(-2px); }
+.category-item:active .category-item-art { transform: scale(0.92); }
+.category-item:focus-visible .category-item-art { box-shadow: var(--shadow-focus); }
+.category-item-label { max-width: 62px; font-size: 11px; color: var(--ink-600); line-height: 1.2; text-align: center; text-wrap: balance; }
+.category-more {
+  margin-top: 12px; width: 100%; height: 38px; border: 0; border-radius: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--green-50); color: var(--green-700); font-family: var(--font-sans); font-size: 12.5px; font-weight: var(--fw-semibold);
+}
+.category-more:hover { background: var(--green-100); }
+.tone-0 { --tile-bg: #E6F7EC; }
+.tone-1 { --tile-bg: #FFEBD8; }
+.tone-2 { --tile-bg: #E3F0FD; }
+.tone-3 { --tile-bg: #FFF4CC; }
+.tone-4 { --tile-bg: #FDE6EC; }
+.tone-5 { --tile-bg: #EEE8FB; }
+
+/* ── Section headings: a short bold title, a quiet link ─────── */
+.home-section-head { margin-top: 22px; margin-bottom: 10px; }
+.section-title { font-size: 15px; font-weight: var(--fw-semibold); letter-spacing: 0; color: var(--ink-900); }
+.section-subtitle { font-size: 11.5px; color: var(--ink-400); }
+.deals-all-link { padding: 0; background: none; color: var(--ink-400); font-size: 12px; font-weight: var(--fw-medium); }
+.deals-all-link:hover { background: none; color: var(--green-700); }
+
+/* ── Store row: round logos with a name under each ──────────── */
+.chain-carousel-track {
+  gap: 10px; padding: 4px 14px 10px; margin-inline: -14px;
+  scroll-snap-type: x proximity; scroll-padding-inline: 14px; -webkit-mask-image: none; mask-image: none;
+}
+.chain-carousel-item { scroll-snap-align: start; padding: 0; border-radius: 12px; transform: none !important; opacity: 1 !important; width: 64px; }
+.chain-carousel-item:active { transform: scale(0.95) !important; }
+.chain-carousel-item .chain-logo-wrap { gap: 7px; width: 100%; }
+.chain-carousel-item .chain-logo-mark { background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.13); }
+.chain-carousel-item .chain-logo-name { max-width: 64px; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; font-weight: var(--fw-regular); color: var(--ink-500); }
+.chain-carousel-item.selected { outline: 0; }
+.chain-carousel-item.selected .chain-logo-mark { box-shadow: 0 0 0 2px var(--green-600), 0 1px 6px rgba(0, 0, 0, 0.13); }
+.chain-carousel-item.selected .chain-logo-name { color: var(--green-700); font-weight: var(--fw-semibold); }
+.chain-carousel-item.dimmed > * { opacity: 0.45; }
+.chain-carousel-arrow { border: 0; box-shadow: var(--shadow-card); width: 30px; height: 30px; }
+.chain-search { background: var(--surface-100); box-shadow: none; border: 0; border-radius: 12px; height: 38px; }
+.chain-search:focus-within { box-shadow: 0 0 0 1.5px var(--green-600); }
+.chain-active-note { background: var(--green-50); border-radius: 12px; color: var(--green-700); }
+
+/* ── Rows of cards that scroll sideways ─────────────────────── */
+.card-row, .deals-strip, .example-carousel { scrollbar-width: none; }
+.card-row::-webkit-scrollbar, .deals-strip::-webkit-scrollbar { display: none; }
+.card-row { margin-inline: -14px; padding: 6px 14px 22px; margin-bottom: -10px; }
+.deals-strip { gap: 10px; margin-inline: -14px; padding: 6px 14px 22px; margin-bottom: -6px; }
+.deals-strip > .deal-card { flex: 0 0 var(--home-card-w); }
+
+/* ── Product-style cards: home examples and promotions ──────── */
+.example-card {
+  flex: 0 0 var(--home-card-w); width: var(--home-card-w); gap: 8px; padding: 10px; border-radius: var(--r-lg); background: #fff;
+}
+.example-card-top { flex-direction: column; align-items: stretch; gap: 8px; }
+.example-card-top > div { width: 100% !important; height: 92px !important; box-shadow: none !important; }
+.example-card-top > div img:not([aria-hidden]) { width: 100% !important; height: 100% !important; }
+.example-name { font-size: 12.5px; font-weight: var(--fw-semibold); min-height: 2.6em; color: var(--ink-900); }
+.example-save-amount { font-size: 13.5px; color: var(--green-700); }
+.example-save-pct { background: var(--green-600); color: #fff; padding: 1px 8px; font-size: 10.5px; }
+.example-prices-row { padding-top: 8px; border-top: 1px dashed var(--line-strong); font-size: 11px; }
+
+.deal-card { position: relative; gap: 0; padding: 0; border-radius: var(--r-lg); overflow: hidden; background: #fff; }
+.deal-card:hover { box-shadow: var(--shadow-card-hover); border: 0; }
+.deal-card-media { position: relative; aspect-ratio: 1 / 0.85; padding: 12px 12px 0; display: flex; align-items: center; justify-content: center; }
+.deal-saving-pill { position: absolute; top: 10px; inset-inline-start: 10px; z-index: 1; padding: 2px 8px; font-size: 10.5px; font-weight: var(--fw-bold); border-radius: 7px; }
+.deal-card-pics { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.deal-card-pics > div { width: 100% !important; height: 100% !important; box-shadow: none !important; }
+.deal-card-pics.is-group > div { width: 52px !important; height: 52px !important; }
+.deal-card-body { padding: 6px 11px 11px; }
+.deal-card-offer-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; position: relative; z-index: 1; }
+.deal-card-offer-col { min-width: 0; display: flex; flex-direction: column; }
+.deal-card-offer { font-size: 16px; font-weight: var(--fw-bold); color: var(--ink-900); letter-spacing: -0.01em; white-space: nowrap; }
+.deal-card-unit { font-size: 10.5px; color: var(--ink-400); }
+.deal-pick { height: 30px; padding: 0 12px; border: 0; border-radius: 99px; background: var(--green-600); color: #fff; font-family: var(--font-sans); font-size: 11.5px; font-weight: var(--fw-semibold); cursor: pointer; flex-shrink: 0; }
+.deal-card-title { margin-top: 6px; font-size: 12.5px; font-weight: var(--fw-semibold); color: var(--ink-900); line-height: 1.3; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.deal-card-more { font-size: 11px; color: var(--ink-400); margin-top: 2px; }
+.deal-card-where { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 11px; color: var(--ink-500); }
+.deal-card-brand { font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deal-card-saving, .deal-card-note { margin-top: 2px; font-size: 10.5px; color: var(--ink-400); }
+.deal-card-ends { margin-top: 3px; font-size: 10.5px; font-weight: var(--fw-medium); color: var(--orange-500); }
+.deal-card-link::after { border-radius: var(--r-lg); }
+.deal-card-actions { display: none; }
+.deals-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 768px) { .deals-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.deals-filters { margin-inline: -14px; padding: 2px 14px 6px; }
+
+/* ── Baskets on the home page ───────────────────────────────── */
+.basket-card { background: #fff; border-radius: var(--r-lg); transform: none; border-top-width: 0; }
+.basket-card.is-active { background: #fff; transform: none; box-shadow: 0 0 0 1.5px var(--green-600), var(--shadow-card); }
+.basket-card-new { background: var(--green-50); box-shadow: none; border: 1.5px dashed var(--green-200); color: var(--green-700); }
+.basket-card-cta, .basket-card-delta.down { color: var(--green-700); }
+.basket-card-delta.down { background: var(--green-100); }
+
+/* ── Pills: sort and filters ────────────────────────────────── */
+.sort-row, .filter-bar { gap: 8px; }
+.sort-pill, .filter-chip, .suggestion-pill {
+  height: 32px; padding: 0 14px; border: 0; background: #fff; color: var(--ink-700); box-shadow: var(--shadow-pill);
+  font-size: 12px; font-weight: var(--fw-medium); display: inline-flex; align-items: center; gap: 6px;
+}
+.filter-chip { padding: 0 12px; }
+.sort-pill.on { background: var(--green-600); color: #fff; box-shadow: none; }
+.filter-chip:hover:not(:disabled), .suggestion-pill:hover { background: var(--green-50); color: var(--green-700); }
+.filter-chip.active { background: var(--green-50); color: var(--green-700); box-shadow: inset 0 0 0 1px var(--green-200); }
+.filter-chain { border-radius: var(--r-md); }
+.filter-chain.selected { background: var(--green-50); border-color: var(--green-600); }
+
+/* ── Search results: a two-column grid of product cards ─────── */
+.results-head { gap: 10px; margin: 14px 0 12px; }
+.results-title { font-size: 15px; font-weight: var(--fw-semibold); }
+.results-grid { gap: 10px; }
+.result-card { border-radius: var(--r-lg); background: #fff; }
+.result-card:hover { box-shadow: var(--shadow-card-hover); border: 0; }
+.result-card-media { aspect-ratio: 1 / 0.82; padding: 10px 12px 0; }
+.result-card-body { padding: 6px 11px 11px; }
+.result-card-name { font-size: 12.5px; font-weight: var(--fw-semibold); color: var(--ink-900); }
+.result-card-meta { margin-top: 5px; font-size: 11px; color: var(--ink-400); }
+.result-card-brand { color: var(--ink-500); }
+.result-card-foot { padding-top: 8px; }
+.result-card-where { margin-bottom: 5px; font-size: 11px; color: var(--ink-500); font-weight: var(--fw-regular); }
+.result-card-price { font-size: 16px; color: var(--ink-900); letter-spacing: -0.01em; }
+.result-card-unit { font-size: 10.5px; color: var(--ink-400); }
+
+/* The "no picture yet" placeholder: smaller and softer, so a card without a photo does not shout */
+.result-card-media img[aria-hidden], .deal-card-pics img[aria-hidden], .example-card-top img[aria-hidden] { padding: 22%; opacity: 0.35; }
+/* Chain photos often have an almost-white background; a touch of brightness makes it white, so no pale box shows on a white card */
+.result-card-media img:not([aria-hidden]), .product-stage-image img:not([aria-hidden]),
+.example-card-top img:not([aria-hidden]), .deal-card-pics img:not([aria-hidden]) { filter: brightness(1.035); }
+
+/* ── Product page ───────────────────────────────────────────── */
+.product-stage { background: transparent; box-shadow: none; border: 0; padding: 2px 0 calc(var(--sp-6) + var(--sp-4)); border-radius: 0; }
+.product-stage-title { font-size: 15px; font-weight: var(--fw-semibold); color: var(--ink-900); }
+.product-stage-image { height: 230px; }
+.product-sheet { border-radius: 22px; background: #fff; padding: var(--sp-4); box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.06), var(--shadow-card); }
+.product-sheet-maker { font-size: 12px; color: var(--ink-400); }
+.product-sheet-name { font-size: 19px; font-weight: var(--fw-semibold); }
+.product-qty-btn { width: 30px; height: 30px; background: var(--surface-100); border-radius: 50%; }
+.product-qty-btn.is-plus { background: var(--green-600); box-shadow: none; }
+.product-qty-btn.is-plus:hover { background: var(--green-700); }
+.product-price { border-top-color: var(--line); }
+.product-price-value { font-size: 25px; }
+.product-price-off { background: var(--green-50); color: var(--green-700); padding: 2px 9px; border-radius: var(--r-full); font-size: 12px; }
+.product-price-note, .product-price-unit { font-size: 12px; }
+.add-to-basket-bar { border-radius: 22px; padding: 10px 10px 10px 14px; box-shadow: 0 4px 22px rgba(0, 0, 0, 0.12); }
+.product-buy-btn { min-height: 48px; border-radius: var(--r-full); font-size: 15px; }
+.product-buy-price { font-size: 17px; }
+.qty-btn { width: 30px; height: 30px; border: 0; background: var(--surface-100); }
+.qty-btn:hover { background: var(--surface-200); border: 0; }
+
+/* The stores: one white card each, like the product cards */
+.store-list { background: transparent; box-shadow: none; border: 0; border-radius: 0; overflow: visible; display: flex; flex-direction: column; gap: 8px; }
+.store-list > .store-row, .store-list > .compare-row { border: 0; border-bottom: 0; border-radius: var(--r-lg); box-shadow: var(--shadow-card); background: #fff; overflow: hidden; }
+.store-list > .store-row.cheapest { background: var(--green-50); box-shadow: inset 0 0 0 1.5px var(--green-200); border-bottom-color: transparent; }
+.store-list > .store-row:not(.cheapest):hover { background: #fff; box-shadow: var(--shadow-card-hover); }
+.store-row { border-radius: var(--r-lg); background: #fff; }
+.store-row.cheapest { background: var(--green-50); box-shadow: inset 0 0 0 1.5px var(--green-200); }
+.store-row-main { padding: 12px 14px; gap: 12px; }
+.store-row-name { font-size: 13.5px; font-weight: var(--fw-semibold); }
+.store-row-price { font-size: 16px; letter-spacing: -0.01em; }
+.store-row-actions a { background: var(--surface-100); }
+.store-row-actions a:hover { background: var(--green-100); color: var(--green-700); }
+.badge-cheapest { background: var(--green-600); color: #fff; box-shadow: none; border-radius: 7px; }
+
+/* ── Basket page ────────────────────────────────────────────── */
+.basket-switcher { font-size: 20px; }
+.basket-item { border-radius: var(--r-lg); padding: 10px 12px; gap: 12px; }
+.basket-item-name { font-size: 13px; font-weight: var(--fw-semibold); }
+.basket-item.selected { background: var(--green-50); box-shadow: inset 0 0 0 1.5px var(--green-600); }
+.basket-more { background: var(--surface-100); border-radius: var(--r-md); }
+.basket-add-more { border-color: var(--green-200); color: var(--green-700); background: var(--green-50); border-radius: var(--r-md); }
+.basket-name-input { border-color: var(--green-600); }
+.section-divider { color: var(--ink-400); letter-spacing: 0; text-transform: none; font-size: 12px; }
+
+/* ── Sheets, modals, tour ───────────────────────────────────── */
+.location-sheet { border-radius: 24px 24px 0 0; }
+.modal-card, .tour-card { border-radius: 24px; }
+.modal-icon { background: var(--green-50); color: var(--green-700); }
+.empty-state-icon { background: var(--green-50); color: var(--green-600); border-radius: 50%; }
+.undo-toast { border-radius: var(--r-full); }
+.location-search, .city-picker input, .filter-city-input input, .location-input { border: 0; background: var(--surface-100); }
+.city-picker input:focus, .filter-city-input input:focus, .location-input:focus { box-shadow: 0 0 0 1.5px var(--green-600); border: 0; }
+.city-picker-list, .filter-suggestions { border: 0; box-shadow: var(--shadow-card-hover); border-radius: var(--r-lg); }
+.skeleton { background-image: linear-gradient(90deg, var(--surface-100) 0%, var(--surface-100) 38%, var(--surface-200) 50%, var(--surface-100) 62%, var(--surface-100) 100%); }
+
+/* ── Desktop: the same, with more columns ───────────────────── */
+@media (min-width: 768px) {
+  .home-container { max-width: 880px; }
+  .promo-slide { height: 190px; }
+  .promo-title { font-size: 22px; }
+  .promo-sub { font-size: 13px; }
+  .category-item-art { width: 56px; height: 56px; font-size: 26px; }
+  .category-item-label { font-size: 12px; }
+  .results-grid { gap: 14px; }
+}
+
+/* Sideways rows of chips scroll without a visible bar */
+.deals-filters, .filter-bar, .sort-row { scrollbar-width: none; }
+.deals-filters::-webkit-scrollbar, .filter-bar::-webkit-scrollbar, .sort-row::-webkit-scrollbar { display: none; }
+
+/* Snapping a card to the start of a row must keep the row's own side padding */
+.card-row, .deals-strip { scroll-padding-inline: 14px; }
+
+
+/* ============================================================
+   Third reference: a greeting, a big dark banner with a white button, picture cards for the categories,
+   product cards with a full-width green "add" button
+   ============================================================ */
+
+/* The folds that hide the greeting, banner and categories during a search reach the screen edges, so rows inside them can too */
+.home-fold-inner { margin-inline: -14px; }
+.home-fold-inner > * { margin-inline: 14px; }
+.home-fold-inner > .category-row { margin-inline: 0; padding-inline: 14px; }
+@media (min-width: 768px) { .home-fold-inner { margin-inline: -32px; } .home-fold-inner > * { margin-inline: 32px; } .home-fold-inner > .category-row { padding-inline: 32px; } }
+
+/* Greeting */
+.greeting { padding: 8px 0 12px; }
+.greeting-title { margin: 0; font-size: 24px; font-weight: var(--fw-bold); letter-spacing: -0.01em; color: var(--ink-900); line-height: 1.2; }
+.greeting-sub { margin: 3px 0 0; font-size: 13px; color: var(--ink-500); }
+
+/* Banner: deep colour, big picture, white text and a white button */
+.hero-section { padding: 14px 0 4px; }
+.promo-slide { height: 172px; border-radius: 0; }
+.promo-track { border-radius: 20px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14); }
+.promo-text { max-width: 52%; padding: 16px 18px; }
+.promo-title { font-size: 20px; line-height: 1.2; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
+.promo-sub { margin: 5px 0 13px; font-size: 12px; color: rgba(255, 255, 255, 0.88); }
+.promo-cta { display: inline-flex; align-items: center; gap: 2px; height: 34px; padding: 0 12px 0 10px; background: #fff; color: var(--ink-900); font-size: 12.5px; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18); }
+.promo-cta:hover { background: #F1FAF4; }
+.promo-dot { background: #D4D7D4; }
+
+/* Categories: a card with a big picture each, in a row that scrolls sideways */
+.categories-head { margin-top: 18px; }
+.category-row {
+  display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; scroll-padding-inline: 14px;
+  padding-top: 4px; padding-bottom: 22px; margin-bottom: -10px;
+}
+.category-row::-webkit-scrollbar { display: none; }
+.category-card-tile {
+  flex: 0 0 calc((100vw - 58px) / 4); height: 98px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+  padding: 0; border: 0; border-radius: var(--r-lg); background: #fff; box-shadow: var(--shadow-card); cursor: pointer;
+  scroll-snap-align: start; font-family: var(--font-sans); -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
+}
+.category-card-tile:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-2px); }
+.category-card-tile:active { transform: scale(0.95); }
+.category-card-tile:focus-visible { box-shadow: var(--shadow-focus); }
+.category-card-art { font-size: 38px; line-height: 1; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.16)); }
+.category-card-label { max-width: 74px; font-size: 12.5px; font-weight: var(--fw-semibold); color: var(--ink-900); line-height: 1.2; text-align: center; text-wrap: balance; }
+@media (min-width: 480px) { .category-card-tile { flex-basis: 84px; } }
+@media (min-width: 768px) { .category-card-tile { flex-basis: 104px; height: 118px; } .category-card-art { font-size: 46px; } }
+
+/* Product cards: a big picture, name, price and unit, and a full-width green button */
+.result-card-media { aspect-ratio: 1 / 0.9; padding: 8px 10px 0; }
+.result-card-foot { padding-top: 6px; }
+.result-card-pricing { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 6px; margin-top: 2px; }
+.result-card-price { font-size: 17px; font-weight: var(--fw-bold); color: var(--ink-900); letter-spacing: -0.01em; line-height: 1.15; }
+.result-card-unit { margin-top: 0; font-size: 10.5px; color: var(--ink-400); }
+.card-add {
+  position: relative; z-index: 1; width: 100%; height: 34px; margin-top: 9px; border: 0; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  background: var(--green-600); color: #fff; cursor: pointer; font-family: var(--font-sans); font-size: 12.5px; font-weight: var(--fw-semibold);
+  transition: background var(--dur-fast), transform var(--dur-fast);
+}
+.card-add:hover { background: var(--green-700); }
+.card-add:active { transform: scale(0.97); }
+.card-add.in-basket { background: var(--green-50); color: var(--green-700); box-shadow: inset 0 0 0 1.5px var(--green-600); }
+.card-add.is-added { background: var(--green-700); color: #fff; box-shadow: none; animation: pop-in var(--dur-base) var(--ease-spring); }
+.deal-card-offer-row { align-items: baseline; justify-content: flex-start; flex-wrap: wrap; gap: 0 6px; }
+.deal-card { display: flex; flex-direction: column; }
+.deal-card-body { flex: 1; display: flex; flex-direction: column; }
+.deal-card-body > .card-add { margin-top: auto; }
+.deal-card-body > :nth-last-child(2) { margin-bottom: 10px; }   /* the button sits at the foot of every card, whatever its height */
+
+/* The bottom bar's active icon is filled, like the reference */
+.bottom-nav-item.active svg { fill: currentColor; fill-opacity: 0.18; }
+
+/* Quick searches: a photo card each, all the same size (the photos are trimmed and centred to equal squares) */
+.category-card-tile { height: 116px; gap: 6px; justify-content: flex-end; padding: 8px 4px 10px; }
+.category-card-photo { width: 68px; height: 68px; object-fit: contain; mix-blend-mode: multiply; flex-shrink: 0; }
+.category-card-label { font-size: 12px; }
+@media (min-width: 768px) { .category-card-tile { height: 136px; } .category-card-photo { width: 84px; height: 84px; } }
+
+/* ============================================================
+   Floating bottom bar: a white capsule detached from the screen edges, on a soft shadow, the scan button raised in the middle
+   ============================================================ */
+:root {
+  --float-bar-h: 64px;
+  --float-bar-gap: 10px;
+  /* Everything that sits above the bar (the add bar, toasts, page padding) is offset by this */
+  --bottom-nav-h: calc(var(--float-bar-h) + var(--float-bar-gap) * 2 + var(--safe-bottom));
+}
+.bottom-nav {
+  inset-inline: 14px; inset-block-end: calc(var(--float-bar-gap) + var(--safe-bottom));
+  height: var(--float-bar-h); padding: 0 6px; border-radius: 32px;
+  background: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.bottom-nav-item { color: var(--ink-400); }
+.bottom-nav-item:hover { color: var(--ink-700); }
+.bottom-nav-item.active { color: var(--green-600); }
+.bottom-nav-item.active::before { display: none; }
+.bottom-nav-item.active svg { fill: currentColor; fill-opacity: 0.18; }
+.bottom-nav-item-label { font-size: 10px; }
+.bottom-nav .basket-count { box-shadow: 0 0 0 2px #fff; }
+.bottom-nav-scan { color: var(--ink-400); padding-bottom: 12px; justify-content: flex-end; }
+.bottom-nav-scan.active { color: var(--green-600); }
+.bottom-nav-scan-btn {
+  width: 54px; height: 54px; margin-top: -24px; background: var(--green-600); color: #fff; border: 0;
+  box-shadow: 0 8px 18px rgba(20, 160, 68, 0.4), 0 0 0 5px #fff;
+}
+.bottom-nav-scan.active .bottom-nav-scan-btn { background: var(--green-700); color: #fff; }
+.site-footer { padding-bottom: calc(var(--bottom-nav-h) + var(--sp-4)); }
+
+
+/* Banner: a full-width photo, a dark fade on the reading side so the white text is easy to read */
+.promo-slide { height: 176px; background: #1B2A22; }
+.promo-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 16% 50%; }
+.promo-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to left, rgba(6, 16, 10, 0.86) 0%, rgba(6, 16, 10, 0.7) 34%, rgba(6, 16, 10, 0.3) 62%, rgba(6, 16, 10, 0) 82%);
+}
+.promo-text { max-width: 56%; }
+.promo-title { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35); }
+@media (min-width: 768px) { .promo-slide { height: 230px; } .promo-photo { object-position: 30% 50%; } .promo-text { max-width: 46%; } }
+.promo-photo { transform: scale(1.05); transform-origin: 16% 30%; }   /* trims the thin light edge the photos carry along the bottom */
+
+/* Banner v2: the photo stays whole and bright, with no fade over it; the text sits on a small white card floating over its blurry side */
+.promo-scrim { display: none; }
+.promo-text {
+  position: absolute; top: 50%; transform: translateY(-50%); inset-inline-start: 12px; width: 50%; max-width: none;
+  padding: 13px 14px 14px; border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.promo-title { font-size: 16px; color: var(--ink-900); text-shadow: none; }
+.promo-sub { margin: 4px 0 11px; font-size: 11.5px; color: var(--ink-500); }
+.promo-cta { height: 32px; background: var(--green-600); color: #fff; box-shadow: none; padding: 0 14px 0 10px; font-size: 12.5px; }
+.promo-cta:hover { background: var(--green-700); }
+.promo-slide { background: #E9ECE9; }
+@media (min-width: 768px) { .promo-text { width: 40%; inset-inline-start: 22px; padding: 18px 20px 20px; } .promo-title { font-size: 22px; } .promo-sub { font-size: 13px; } }
+.promo-text { width: 45%; padding: 12px 12px 13px; inset-inline-start: 10px; }
+.promo-title { font-size: 15px; }
+.promo-sub { font-size: 11px; margin: 3px 0 10px; }
+.promo-cta { height: 30px; font-size: 12px; padding: 0 12px 0 8px; }
+.promo-photo { object-position: 0% 50%; transform-origin: 0% 30%; }
+
+.promo-slide { height: 150px; }   /* every slide the same height, so the banner does not jump when it is swiped */
+@media (min-width: 768px) { .promo-slide { height: 230px; } }
+
+/* ============================================================
+   Banner v3: the photo stays bright on one side and melts into a deep green panel that carries white text and a white button
+   ============================================================ */
+.promo-slide { height: 150px; background: linear-gradient(to left, #122814 0%, #1B3A1F 48%, #2F4B24 100%); }
+.promo-photo {
+  inset: 0 auto 0 0; width: 64%; height: 100%; object-fit: cover; object-position: left center; transform: none;
+  -webkit-mask-image: linear-gradient(to right, #000 58%, transparent 100%); mask-image: linear-gradient(to right, #000 58%, transparent 100%);
+}
+.promo-text {
+  position: absolute; top: 50%; transform: translateY(-50%); inset-inline-start: 16px; width: 44%; max-width: none; padding: 0;
+  background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0;
+}
+.promo-title { font-size: 19px; line-height: 1.18; font-weight: var(--fw-bold); color: #fff; text-shadow: none; }
+.promo-sub { margin: 5px 0 11px; font-size: 12px; color: rgba(255, 255, 255, 0.9); text-shadow: none; font-weight: var(--fw-regular); }
+.promo-cta { height: 32px; padding: 0 12px 0 10px; background: #fff; color: var(--ink-900); font-size: 12.5px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25); }
+.promo-cta:hover { background: var(--green-50); }
+.promo-track { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+@media (min-width: 768px) { .promo-slide { height: 230px; } .promo-photo { width: 58%; } .promo-text { width: 38%; inset-inline-start: 28px; } .promo-title { font-size: 28px; } .promo-sub { font-size: 14px; } .promo-cta { height: 38px; font-size: 14px; padding: 0 16px 0 12px; } }
+.promo-photo { transform: scale(1.04); transform-origin: 100% 50%; }   /* trims the thin dark edge the photos carry on their outer side */
+.promo-slide { background: linear-gradient(to left, #21512D 0%, #2B5E36 48%, #386A3B 100%); }   /* a little lighter green panel */
+.promo-slide { background: var(--green-600); }   /* the same green as the scan button and the add buttons, flat */
+.promo-sub { color: rgba(255, 255, 255, 0.96); }
+.promo-slide { background: #3E8C4F; }   /* a calm, lighter green: not as bright as the buttons */
+
+/* ============================================================
+   Product page and basket: the same photo-first cards as the home page
+   ============================================================ */
+/* The product stands on a soft green glow: the white of its photo is multiplied away, so no pale box shows */
+.product-stage {
+  position: relative; padding: 12px 12px 44px; border-radius: 28px; box-shadow: var(--shadow-card);
+  background: radial-gradient(120% 90% at 50% 58%, #FFFFFF 0%, #F2FAF5 48%, #DCF3E4 100%);
+}
+.product-stage .round-btn { border: 0; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+.product-stage-image { height: 250px; margin-top: 4px; }
+.product-stage-image > div { background: transparent !important; width: 240px !important; height: 240px !important; }
+.product-stage-image img:not([aria-hidden]) { width: 100% !important; height: 100% !important; mix-blend-mode: multiply; filter: brightness(1.04) contrast(1.03) drop-shadow(0 12px 10px rgba(0, 0, 0, 0.08)); }
+.product-sheet { margin-top: -30px; }
+.product-sheet-name { font-size: 20px; }
+
+/* Basket: each product on a soft tile, so the picture is the first thing you see */
+.basket-item-pic { flex-shrink: 0; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; border-radius: 16px; background: var(--surface-100); overflow: hidden; }
+.basket-item-pic > div { background: transparent !important; }
+.basket-item-pic img:not([aria-hidden]) { mix-blend-mode: multiply; filter: brightness(1.04); }
+.basket-item { padding: 10px 12px 10px 14px; }
+.basket-item-name { font-size: 13.5px; }
+.basket-item-meta { font-size: 11.5px; color: var(--ink-400); }
+.basket-switcher { font-size: 22px; font-weight: var(--fw-bold); }
+
+/* iPhones zoom the page in when a text field smaller than 16px is touched, and it stays zoomed. Every field is 16px
+   (placeholders stay smaller), and double-tap zoom is off so a quick second tap on a button never zooms either. */
+input, textarea, select { font-size: 16px !important; }
+input::placeholder, textarea::placeholder { font-size: 14px; }
+html { touch-action: manipulation; }
+
+/* Three tabs: a narrower capsule, centred */
+.bottom-nav { max-width: 340px; margin-inline: auto; }
+.bottom-nav-item-label { font-size: 10.5px; }

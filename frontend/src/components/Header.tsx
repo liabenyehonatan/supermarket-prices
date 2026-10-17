@@ -1,9 +1,13 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { Search, ShoppingBasket } from 'lucide-react';
 import { SaliLogo } from './SaliLogo';
 import { LocationChip } from './LocationChip';
 import { BasketSwitcher } from './BasketSwitcher';
 import { useBasket } from '../context/BasketContext';
+import { HeaderSearch } from './HeaderSearch';
+import { useMainSearchHidden } from '../lib/mainSearchVisibility';
 
 export function Header() {
   const navigate = useNavigate();
@@ -11,9 +15,34 @@ export function Header() {
   const { totalItems } = useBasket();
 
   const isOnSearch = location.pathname === '/';
+  const mainSearchHidden = useMainSearchHidden();
+  // On the home page the button appears once the page's own field is out of sight; elsewhere it is always there
+  const showSearchButton = !isOnSearch || mainSearchHidden;
+  const [searchOrigin, setSearchOrigin] = useState<DOMRect | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+  const headerRef = useRef<HTMLElement>(null);
+  // Read when the header field loses focus: on the home page with its own field in sight, one field is enough
+  const pageFieldInSight = useRef(false);
+  pageFieldInSight.current = isOnSearch && !mainSearchHidden;
+  const closeOnBlur = useCallback(() => pageFieldInSight.current, []);
+
+  function openSearch(from: HTMLElement) {
+    setSearchOrigin(from.getBoundingClientRect());
+    // Rendered and focused within the tap itself, or a phone will not raise its keyboard
+    flushSync(() => setSearchOpen(true));
+    headerRef.current?.querySelector<HTMLInputElement>('.header-search-field-input')?.focus();
+  }
+
+  // Scrolled back to the page's own field: the header one is no longer needed (unless it is being typed in)
+  useEffect(() => {
+    if (!searchOpen || !isOnSearch || mainSearchHidden) return;
+    const input = headerRef.current?.querySelector('.header-search-field-input');
+    if (document.activeElement !== input) setSearchOpen(false);
+  }, [searchOpen, isOnSearch, mainSearchHidden]);
 
   return (
-    <header className="site-header">
+    <header className="site-header" ref={headerRef}>
       <div className="header-inner">
         <button
           className="header-logo"
@@ -40,7 +69,8 @@ export function Header() {
               type="search"
               className="header-search-input"
               placeholder="חפש מוצר..."
-              onFocus={() => navigate('/')}
+              onClick={e => openSearch(e.currentTarget)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSearch(e.currentTarget); } }}
               readOnly
               style={{ cursor: 'pointer' }}
               aria-label="חיפוש מוצר"
@@ -49,6 +79,17 @@ export function Header() {
         )}
 
         <div className="header-actions">
+          {showSearchButton && (
+            <button
+              type="button"
+              className={`header-search-toggle${isOnSearch ? '' : ' is-compact-only'}`}
+              onClick={e => openSearch(e.currentTarget)}
+              aria-label="חיפוש מוצר"
+              aria-expanded={searchOpen}
+            >
+              <Search size={18} strokeWidth={2} />
+            </button>
+          )}
           <LocationChip />
           {location.pathname !== '/basket' && <BasketSwitcher variant="pill" />}
           <button
@@ -65,6 +106,7 @@ export function Header() {
           </button>
         </div>
       </div>
+      {searchOpen && <HeaderSearch origin={searchOrigin} onClose={closeSearch} closeOnBlur={closeOnBlur} />}
     </header>
   );
 }
