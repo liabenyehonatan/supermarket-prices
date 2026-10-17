@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronLeft } from 'lucide-react';
 
 interface Slide {
   id: string;
@@ -8,17 +9,39 @@ interface Slide {
   cta: string;
   /** a route to open, or 'search' to move to the search field */
   to: string;
-  img: string;
-  tone: string;
+  tone: 'forest' | 'ocean' | 'amber';
 }
 
 const SLIDES: Slide[] = [
-  { id: 'compare', title: 'השוואת מחירי סופרמרקט', sub: 'כל הרשתות, במקום אחד', cta: 'חיפוש מוצר', to: 'search', img: '/hero-basket.webp', tone: 'cream' },
-  { id: 'scan', title: 'סורקים ברקוד', sub: 'ורואים מיד איפה הכי זול', cta: 'לסריקה', to: '/scan', img: '/icons/search-apple.webp', tone: 'mint' },
-  { id: 'deals', title: 'מבצעים שבאמת זולים', sub: 'רק כאלה שזולים מהמחיר שמצאנו', cta: 'למבצעים', to: '/promotions', img: '/icons/piggy-bank.webp', tone: 'peach' },
+  { id: 'compare', title: 'השוואת מחירי סופרמרקט', sub: 'כל הרשתות, במקום אחד', cta: 'חיפוש מוצר', to: 'search', tone: 'forest' },
+  { id: 'scan', title: 'סורקים ברקוד', sub: 'ורואים מיד איפה הכי זול', cta: 'לסריקה', to: '/scan', tone: 'ocean' },
+  { id: 'deals', title: 'מבצעים שבאמת זולים', sub: 'רק כאלה שזולים מהמחיר שמצאנו', cta: 'למבצעים', to: '/promotions', tone: 'amber' },
 ];
 
-/** The home banner: a photo or drawing, a line of text and a button; swipe for the next one, dots show where you are. */
+/** The picture side of each slide: the basket photo on a plate with produce around it, or a few large pictures. */
+function Art({ id }: { id: string }) {
+  if (id === 'compare') {
+    return (
+      <div className="promo-art" aria-hidden>
+        <img className="promo-plate" src="/hero-basket.webp" alt="" width={400} height={260} loading="eager" />
+        <span className="promo-bit b1">🥕</span>
+        <span className="promo-bit b2">🍅</span>
+        <span className="promo-bit b3">🥬</span>
+        <span className="promo-bit b4">🍋</span>
+      </div>
+    );
+  }
+  return (
+    <div className="promo-art promo-art-emoji" aria-hidden>
+      <span className="promo-big e1">{id === 'scan' ? '📱' : '🏷️'}</span>
+      <span className="promo-big e2">{id === 'scan' ? '🥫' : '🛒'}</span>
+      <span className="promo-bit b1">{id === 'scan' ? '🍎' : '🥦'}</span>
+      <span className="promo-bit b3">{id === 'scan' ? '🥛' : '🍊'}</span>
+    </div>
+  );
+}
+
+/** The home banner: a big colourful picture, a line of text and a white button; swipe for the next one, dots show where you are. */
 export function PromoBanner({ onSearch }: { onSearch: () => void }) {
   const navigate = useNavigate();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -50,7 +73,7 @@ export function PromoBanner({ onSearch }: { onSearch: () => void }) {
       <div className="promo-track" ref={trackRef}>
         {SLIDES.map((s, i) => (
           <div key={s.id} className={`promo-slide tone-${s.tone}`} aria-hidden={i !== index || undefined}>
-            <img className={`promo-art promo-art-${s.id}`} src={s.img} alt="" aria-hidden width={400} height={260} loading={i === 0 ? 'eager' : 'lazy'} />
+            <Art id={s.id} />
             <div className="promo-text">
               <h2 className="promo-title">{s.title}</h2>
               <p className="promo-sub">{s.sub}</p>
@@ -61,6 +84,7 @@ export function PromoBanner({ onSearch }: { onSearch: () => void }) {
                 onClick={() => (s.to === 'search' ? onSearch() : navigate(s.to))}
               >
                 {s.cta}
+                <ChevronLeft size={14} strokeWidth={2.5} aria-hidden />
               </button>
             </div>
           </div>
