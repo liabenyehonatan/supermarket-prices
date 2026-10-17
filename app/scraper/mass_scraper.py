@@ -42,6 +42,10 @@ BLOCKED_FROM_ABROAD = {
 # Use the newer REST API source for Victory instead of the legacy ASPX scraper.
 SUPERSEDED = {"VICTORY"}
 
+# Publishers that are not supermarkets and must never be scraped, whatever SKIP_CHAINS says.
+# H. Cohen is a wholesaler (decided 2026-10-17); its data was removed from the database.
+NOT_SUPERMARKETS = {"HET_COHEN_NEW_SOURCE"}
+
 
 def installed_scrapers() -> list[str]:
     """Scraper names the installed library version actually knows."""
@@ -49,7 +53,8 @@ def installed_scrapers() -> list[str]:
 
 
 def get_enabled_scrapers(skip_blocked: bool = False) -> list[str]:
-    result = [n for n in installed_scrapers() if n not in SUPERSEDED and n not in settings.SKIP_CHAINS]
+    result = [n for n in installed_scrapers()
+              if n not in SUPERSEDED and n not in NOT_SUPERMARKETS and n not in settings.SKIP_CHAINS]
     if skip_blocked:
         result = [n for n in result if n not in BLOCKED_FROM_ABROAD]
     return result
