@@ -493,3 +493,9 @@ body { background: #FFFFFF; font-size: 14px; }
 
 /* The bottom bar's active icon is filled, like the reference */
 .bottom-nav-item.active svg { fill: currentColor; fill-opacity: 0.18; }
+
+/* Quick searches: a photo card each, all the same size (the photos are trimmed and centred to equal squares) */
+.category-card-tile { height: 116px; gap: 6px; justify-content: flex-end; padding: 8px 4px 10px; }
+.category-card-photo { width: 68px; height: 68px; object-fit: contain; mix-blend-mode: multiply; flex-shrink: 0; }
+.category-card-label { font-size: 12px; }
+@media (min-width: 768px) { .category-card-tile { height: 136px; } .category-card-photo { width: 84px; height: 84px; } }

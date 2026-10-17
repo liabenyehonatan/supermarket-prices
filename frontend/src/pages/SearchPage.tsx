@@ -46,18 +46,18 @@ function writeSnapshot(snap: SearchSnapshot) {
     // storage full or blocked — going back just reloads the results
   }
 }
-// The quick searches on the home page: a card with a large picture each (an emoji for now), in a row that scrolls sideways
-const POPULAR: { label: string; q: string; icon: string }[] = [
-  { label: 'חלב', q: 'חלב', icon: '🥛' },
-  { label: 'לחם', q: 'לחם', icon: '🍞' },
-  { label: 'ביצים', q: 'ביצים', icon: '🥚' },
-  { label: 'קוטג׳', q: 'קוטג', icon: '🥣' },
-  { label: 'גבינה צהובה', q: 'גבינה', icon: '🧀' },
-  { label: 'אורז', q: 'אורז', icon: '🍚' },
-  { label: 'שמן זית', q: 'שמן זית', icon: '🫒' },
-  { label: 'יוגורט', q: 'יוגורט', icon: '🍦' },
-  { label: 'עוף', q: 'עוף', icon: '🍗' },
-  { label: 'קפה', q: 'קפה', icon: '☕' },
+// The quick searches on the home page: a card with a photo each (public/quick), in a row that scrolls sideways
+const POPULAR: { label: string; q: string; img: string }[] = [
+  { label: 'חלב', q: 'חלב', img: '/quick/milk.jpg' },
+  { label: 'ביצים', q: 'ביצים', img: '/quick/eggs.jpg' },
+  { label: 'לחם', q: 'לחם', img: '/quick/bread.jpg' },
+  { label: 'קוטג׳', q: 'קוטג', img: '/quick/cottage.jpg' },
+  { label: 'גבינה צהובה', q: 'גבינה', img: '/quick/cheese.jpg' },
+  { label: 'אורז', q: 'אורז', img: '/quick/rice.jpg' },
+  { label: 'שמן זית', q: 'שמן זית', img: '/quick/olive-oil.jpg' },
+  { label: 'יוגורט', q: 'יוגורט', img: '/quick/yogurt.jpg' },
+  { label: 'עוף', q: 'עוף', img: '/quick/chicken.jpg' },
+  { label: 'קפה', q: 'קפה', img: '/quick/coffee.jpg' },
 ];
 
 /* ── main component ───────────────────────────────────────── */
@@ -368,16 +368,16 @@ export function SearchPage() {
           </div>
         </div>
 
-        {/* ── Categories ────────────────────────────────────── */}
+        {/* ── Quick searches ────────────────────────────────────── */}
         <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={chipsWrapRef} aria-hidden={hasQuery || undefined}>
           <div className="home-fold-inner">
             <div className="section-header home-section-head categories-head">
-              <div className="section-title">קטגוריות</div>
+              <div className="section-title">חיפוש מהיר</div>
             </div>
             <div className="category-row">
-              {POPULAR.map(({ label, q, icon }, i) => (
-                <button key={q} className={`category-card-tile tone-${i % 6}`} onClick={() => startSearch(q)}>
-                  <span className="category-card-art" aria-hidden>{icon}</span>
+              {POPULAR.map(({ label, q, img }) => (
+                <button key={q} className="category-card-tile" onClick={() => startSearch(q)}>
+                  <img className="category-card-photo" src={img} alt="" aria-hidden width={72} height={72} loading="lazy" decoding="async" />
                   <span className="category-card-label">{label}</span>
                 </button>
               ))}
