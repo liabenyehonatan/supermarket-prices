@@ -47,15 +47,16 @@ function writeSnapshot(snap: SearchSnapshot) {
     // storage full or blocked — going back just reloads the results
   }
 }
-const POPULAR: { label: string; q: string }[] = [
-  { label: 'חלב 3%', q: 'חלב' },
-  { label: 'לחם אחיד', q: 'לחם' },
-  { label: 'ביצים', q: 'ביצים' },
-  { label: 'קוטג׳', q: 'קוטג' },
-  { label: 'אורז בסמטי', q: 'אורז' },
-  { label: 'שמן זית', q: 'שמן זית' },
-  { label: 'יוגורט', q: 'יוגורט' },
-  { label: 'גבינה צהובה', q: 'גבינה' },
+// The quick searches on the home page: a picture-tile each (a pastel colour and an emoji for now)
+const POPULAR: { label: string; q: string; icon: string }[] = [
+  { label: 'חלב', q: 'חלב', icon: '🥛' },
+  { label: 'לחם', q: 'לחם', icon: '🍞' },
+  { label: 'ביצים', q: 'ביצים', icon: '🥚' },
+  { label: 'קוטג׳', q: 'קוטג', icon: '🥣' },
+  { label: 'אורז', q: 'אורז', icon: '🍚' },
+  { label: 'שמן זית', q: 'שמן זית', icon: '🫒' },
+  { label: 'יוגורט', q: 'יוגורט', icon: '🍦' },
+  { label: 'גבינה צהובה', q: 'גבינה', icon: '🧀' },
 ];
 
 /* ── main component ───────────────────────────────────────── */
@@ -312,7 +313,7 @@ export function SearchPage() {
         <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={heroRef} aria-hidden={hasQuery || undefined}>
           <div className="home-fold-inner">
             <div className="hero-section">
-              <HeroBanner title="השוואת מחירי סופרמרקט" />
+              <HeroBanner title="השוואת מחירי סופרמרקט" subtitle="כל הרשתות, במקום אחד" />
             </div>
           </div>
         </div>
@@ -348,10 +349,10 @@ export function SearchPage() {
           <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={chipsWrapRef} aria-hidden={hasQuery || undefined}>
             <div className="home-fold-inner">
               <div className="suggestions-row search-panel-chips" ref={chipsRef}>
-                {POPULAR.map(({ label, q }) => (
-                  <button key={q} className="suggestion-pill" onClick={() => startSearch(q)}>
-                    <Search size={13} strokeWidth={2} />
-                    {label}
+                {POPULAR.map(({ label, q, icon }, i) => (
+                  <button key={q} className={`category-tile tone-${i % 6}`} onClick={() => startSearch(q)}>
+                    <span className="category-tile-art" aria-hidden>{icon}</span>
+                    <span className="category-tile-label">{label}</span>
                   </button>
                 ))}
               </div>
