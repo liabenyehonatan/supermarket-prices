@@ -602,3 +602,7 @@ body { background: #FFFFFF; font-size: 14px; }
 input, textarea, select { font-size: 16px !important; }
 input::placeholder, textarea::placeholder { font-size: 14px; }
 html { touch-action: manipulation; }
+
+/* Three tabs: a narrower capsule, centred */
+.bottom-nav { max-width: 340px; margin-inline: auto; }
+.bottom-nav-item-label { font-size: 10.5px; }
