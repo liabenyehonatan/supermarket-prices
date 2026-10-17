@@ -52,7 +52,7 @@ export function PromoBanner({ onSearch }: { onSearch: () => void }) {
         {SLIDES.map((s, i) => (
           <div key={s.id} className="promo-slide" aria-hidden={i !== index || undefined}>
             <img className="promo-photo" src={s.img} alt="" width={970} height={381} loading="eager" decoding="async" />
-                        <div className="promo-text">
+            <div className="promo-text">
               <h2 className="promo-title">{s.title}</h2>
               <p className="promo-sub">{s.sub}</p>
               <button
@@ -68,13 +68,12 @@ export function PromoBanner({ onSearch }: { onSearch: () => void }) {
           </div>
         ))}
       </div>
-      <div className="promo-dots" role="tablist" aria-label="בחירת הצעה">
+      <div className="promo-dots" role="group" aria-label="בחירת הצעה">
         {SLIDES.map((s, i) => (
           <button
             key={s.id}
             type="button"
-            role="tab"
-            aria-selected={i === index}
+            aria-current={i === index || undefined}
             aria-label={`הצעה ${i + 1} מתוך ${SLIDES.length}`}
             className={`promo-dot${i === index ? ' on' : ''}`}
             onClick={() => go(i)}
