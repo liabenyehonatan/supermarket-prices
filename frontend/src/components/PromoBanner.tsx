@@ -51,7 +51,7 @@ export function PromoBanner({ onSearch }: { onSearch: () => void }) {
       <div className="promo-track" ref={trackRef}>
         {SLIDES.map((s, i) => (
           <div key={s.id} className="promo-slide" aria-hidden={i !== index || undefined}>
-            <img className="promo-photo" src={s.img} alt="" width={970} height={381} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" />
+            <img className="promo-photo" src={s.img} alt="" width={970} height={381} loading="eager" decoding="async" />
             <div className="promo-scrim" aria-hidden />
             <div className="promo-text">
               <h2 className="promo-title">{s.title}</h2>
