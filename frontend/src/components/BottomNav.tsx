@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { Home, ScanLine, ShoppingBasket } from 'lucide-react';
 import { useBasket } from '../context/BasketContext';
 
+/** The floating bottom bar: home, the scan button raised in the middle, the basket. */
 export function BottomNav() {
   const { totalItems } = useBasket();
 
@@ -18,7 +19,7 @@ export function BottomNav() {
       </NavLink>
 
       <NavLink to="/scan" className="bottom-nav-scan" aria-label="סריקת ברקוד">
-        <span className="bottom-nav-scan-btn"><ScanLine size={26} strokeWidth={2} /></span>
+        <span className="bottom-nav-scan-btn"><ScanLine size={24} strokeWidth={2} /></span>
         <span className="bottom-nav-item-label">סריקה</span>
       </NavLink>
 
@@ -26,16 +27,11 @@ export function BottomNav() {
         to="/basket"
         className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}
         aria-label={`סל קניות — ${totalItems} פריטים`}
-        style={{ position: 'relative' }}
       >
-        <div style={{ position: 'relative' }}>
+        <div className="bottom-nav-basket-icon" style={{ position: 'relative' }}>
           <ShoppingBasket size={22} strokeWidth={1.8} />
           {totalItems > 0 && (
-            <span
-              className="basket-count"
-              style={{ top: -6, insetInlineEnd: -8 }}
-              aria-hidden="true"
-            >
+            <span className="basket-count" style={{ top: -7, insetInlineEnd: -9 }} aria-hidden="true">
               {totalItems > 99 ? '99+' : totalItems}
             </span>
           )}

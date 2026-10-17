@@ -67,7 +67,7 @@ export function ExampleComparisons() {
           return (
             <button key={x.barcode} className="example-card" onClick={() => navigate(`/product/${x.barcode}`)}>
               <span className="example-card-top">
-                <ProductImage barcode={x.barcode} name={x.name} size={36} />
+                <ProductImage barcode={x.barcode} name={x.name} size={96} borderRadius={14} />
                 <span className="example-name">{displayName}</span>
               </span>
               <span className="example-save-row">

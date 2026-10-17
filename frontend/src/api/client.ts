@@ -36,11 +36,20 @@ export function compareProduct(barcode: string): Promise<ProductCompareResponse>
   return request<ProductCompareResponse>(`/api/v1/products/${barcode}/compare`);
 }
 
-// Cheapest current price for many barcodes in one request — used by the search
-// results list, instead of one /compare call per visible product.
-export function cheapestPricesBatch(barcodes: string[]): Promise<Record<string, number>> {
+/** What a search result card shows about a product's price (see /products/price-summary-batch). */
+export interface PriceSummary {
+  price: number | string;
+  /** Every brand with a store at that price, alphabetical */
+  chains: string[];
+  /** The chain-reported price per `unit` at that price; lib/productMeta decides whether it is worth showing */
+  unit_price?: number | string | null;
+  unit?: string | null;
+}
+
+// The cheapest price, where it is, and its unit price, for a page of search results in one request.
+export function priceSummaryBatch(barcodes: string[]): Promise<Record<string, PriceSummary>> {
   if (barcodes.length === 0) return Promise.resolve({});
-  return request<Record<string, number>>('/api/v1/products/cheapest-batch', {
+  return request<Record<string, PriceSummary>>('/api/v1/products/price-summary-batch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ barcodes }),

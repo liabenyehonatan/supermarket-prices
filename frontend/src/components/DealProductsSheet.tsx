@@ -5,6 +5,7 @@ import { fetchDealProducts, type Deal, type DealProduct } from '../api/client';
 import { useBasket } from '../context/BasketContext';
 import { useFocusTrap } from '../lib/useFocusTrap';
 import { ProductImage } from './ProductImage';
+import { flyToBasket } from '../lib/flyToBasket';
 
 /** The products a group promotion covers: add any, the basket prices "any N of these" itself. */
 export function DealProductsSheet({ deal, onClose }: { deal: Deal; onClose: () => void }) {
@@ -20,8 +21,8 @@ export function DealProductsSheet({ deal, onClose }: { deal: Deal; onClose: () =
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  function add(p: DealProduct) {
-    addItem({ barcode: p.barcode, name: p.name, brand: p.brand, unit: p.unit_of_measure, quantity: 1 });
+  function add(p: DealProduct, row: Element | null) {
+    addItem({ barcode: p.barcode, name: p.name, brand: p.brand, unit: p.unit_of_measure, quantity: 1 }, () => flyToBasket(row));
     setAdded(prev => new Set(prev).add(p.barcode));
   }
 
@@ -41,7 +42,7 @@ export function DealProductsSheet({ deal, onClose }: { deal: Deal; onClose: () =
             <div key={p.barcode} className="deal-sheet-row">
               <ProductImage barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={40} />
               <div className="deal-sheet-name">{p.name}</div>
-              <button className="btn btn-secondary btn-sm" onClick={() => add(p)} aria-label={`הוסיפי ${p.name} לסל`}>
+              <button className="btn btn-secondary btn-sm" onClick={e => add(p, e.currentTarget.closest('.deal-sheet-row'))} aria-label={`הוסיפי ${p.name} לסל`}>
                 {added.has(p.barcode) ? <Check size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
               </button>
             </div>

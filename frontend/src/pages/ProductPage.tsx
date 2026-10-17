@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowRight, MapPin, Truck, Plus, Minus,
+  ArrowRight, MapPin, Truck, Plus, Minus, Share2, ShoppingBasket,
   Check, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
@@ -13,9 +13,11 @@ import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
+import { unitPriceLabel } from '../lib/productMeta';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { FilterSheet } from '../components/FilterSheet';
+import { flyToBasket } from '../lib/flyToBasket';
 import { LocationPrompt } from '../components/LocationPrompt';
 
 const NEARBY_KM = 15;
@@ -103,6 +105,7 @@ export function ProductPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   // Raw coordinates (not just the city) so each geocoded store can show its distance.
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
+  const heroImageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, [barcode]);
 
@@ -131,12 +134,29 @@ export function ProductPage() {
     if (ex) setQty(ex.quantity);
   }, [items, barcode]);
 
+  // The phone's own share sheet where there is one; otherwise copy the link.
+  function handleShare() {
+    if (!data) return;
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: data.product.name, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url).catch(() => {});
+    }
+  }
+
+  function goBack() {
+    if (window.history.length > 1) navigate(-1); else navigate('/');
+  }
+
   function handleAdd() {
     if (!data) return;
     addItem({ barcode: data.product.barcode, quantity: qty, name: data.product.name,
-              brand: data.product.brand, unit: data.product.unit_of_measure });
-    setAdded(true);
-    setTimeout(() => setAdded(false), 2200);
+              brand: data.product.brand, unit: data.product.unit_of_measure }, () => {
+      flyToBasket(heroImageRef.current);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 2200);
+    });
   }
 
   const onLocatedCity = useCallback(async (found: string) => {
@@ -188,6 +208,11 @@ export function ProductPage() {
   const headlineMax = listedPrices.length ? Math.max(...listedPrices) : Number(data?.most_expensive_price ?? 0);
   const savings     = data ? headlineMax - headlineMin : 0;
   const savingsPct  = data && headlineMax > 0 ? Math.round((savings / headlineMax) * 100) : 0;
+  // Where the cheapest price is: one chain by name, several by count
+  const cheapestChains = [...new Set(namedPrices.filter(row => Math.abs(Number(row.price) - headlineMin) < 0.005).map(row => row.chain_name))];
+  const cheapestWhere = cheapestChains.length === 1 ? `ב${cheapestChains[0]}` : cheapestChains.length > 1 ? `ב-${cheapestChains.length} רשתות` : '';
+  const cheapestRow = namedPrices.find(row => Math.abs(Number(row.price) - headlineMin) < 0.005);
+  const perUnit = cheapestRow && data ? unitPriceLabel(cheapestRow.price, cheapestRow.unit_price, data.product.unit_of_measure) : null;
 
   return (
     <div className="page-wrapper">
@@ -196,23 +221,30 @@ export function ProductPage() {
           matching stores) don't end up with their last bit of content hidden under it. */}
       <div className="container" style={{ paddingBottom: data ? 96 : 0 }}>
 
-        {/* Back */}
-        <button className="page-back" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}>
-          <ArrowRight size={18} strokeWidth={2} />
-          חזרה לתוצאות
-        </button>
+        {/* ── Picture stage: back, title, share, and the product picture large ── */}
+        <div className="product-stage">
+          <div className="product-stage-bar">
+            <button className="round-btn" onClick={goBack} aria-label="חזרה">
+              <ArrowRight size={20} strokeWidth={2} />
+            </button>
+            <span className="product-stage-title">פרטי מוצר</span>
+            <button className="round-btn" onClick={handleShare} aria-label="שיתוף" disabled={!data}>
+              <Share2 size={18} strokeWidth={2} />
+            </button>
+          </div>
+          <div className="product-stage-image" ref={heroImageRef}>
+            {data && !loading
+              ? <ProductImage barcode={data.product.barcode} name={data.product.name} imageUrl={data.product.image_url} size={200} borderRadius={0} />
+              : !error && <div className="skeleton" style={{ width: 180, height: 180, borderRadius: 24 }} aria-hidden />}
+          </div>
+        </div>
 
-        {/* ── Product hero ─────────────────────────────────── */}
         {loading && (
-          <div className="product-hero" style={{ marginBottom: 8 }}>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <div className="skeleton" style={{ width: 72, height: 72, borderRadius: 12, flexShrink: 0 }} />
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div className="skeleton" style={{ height: 20, width: '70%' }} />
-                <div className="skeleton" style={{ height: 14, width: '45%' }} />
-                <div className="skeleton" style={{ height: 44, width: '55%', marginTop: 6 }} />
-              </div>
-            </div>
+          <div className="product-sheet" aria-hidden>
+            <div className="skeleton" style={{ height: 13, width: '30%' }} />
+            <div className="skeleton" style={{ height: 22, width: '75%', marginTop: 10 }} />
+            <div className="skeleton" style={{ height: 30, width: '40%', marginTop: 20 }} />
+            <div className="skeleton" style={{ height: 13, width: '55%', marginTop: 8 }} />
           </div>
         )}
 
@@ -228,55 +260,56 @@ export function ProductPage() {
 
         {data && !loading && (
           <>
-            {/* Product card */}
-            <div className="product-hero">
-              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <ProductImage barcode={data.product.barcode} name={data.product.name} imageUrl={data.product.image_url} size={112} borderRadius={16} />
+            {/* Product sheet over the picture: maker and quantity, name and size, then the two numbers that matter */}
+            <div className="product-sheet">
+              {(() => {
+                const { displayName, size } = extractProductDisplay(data.product.name, data.product.brand, data.product.unit_of_measure);
+                const mfr = cleanBrand(data.product.manufacturer || data.product.brand);
+                return (
+                  <>
+                    <div className="product-sheet-top">
+                      <span className="product-sheet-maker">{mfr && mfr !== '---' ? mfr : ''}</span>
+                      <div className="product-qty" role="group" aria-label="כמות">
+                        <button className="product-qty-btn" onClick={() => setQty(q => Math.max(1, q - 1))} aria-label="הורד כמות" disabled={qty <= 1}>
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span className="product-qty-value tabular">{qty}</span>
+                        <button className="product-qty-btn is-plus" onClick={() => setQty(q => q + 1)} aria-label="הגדל כמות">
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    </div>
+                    <h1 className="product-sheet-name">
+                      {displayName}
+                      {size && <span className="size-chip">{size}</span>}
+                    </h1>
+                  </>
+                );
+              })()}
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {(() => {
-                    const { displayName, size } = extractProductDisplay(data.product.name, data.product.brand, data.product.unit_of_measure);
-                    const mfr = cleanBrand(data.product.manufacturer || data.product.brand);
-                    return (
-                      <>
-                        <h1 className="product-hero-name">{displayName}{size ? `, ${size}` : ''}</h1>
-                        <div className="product-hero-meta">
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-400)' }}>
-                            ({[data.product.barcode, mfr].filter(s => s && s !== '---').join(' · ')})
-                          </span>
-                        </div>
-                      </>
-                    );
-                  })()}
+              {/* The price as plain text, the way a shelf tag reads: cheapest price, how much less than the dearest, where */}
+              <div className="product-price">
+                <div className="product-price-row">
+                  <span className="product-price-value tabular" dir="ltr">{fmt(headlineMin)}</span>
+                  {savings > 0.01 && <span className="product-price-off">עד {savingsPct}% פחות</span>}
+                  {perUnit && <span className="product-price-unit tabular"><bdi dir="ltr">{perUnit.price}</bdi> {perUnit.per}</span>}
+                </div>
+                <div className="product-price-note">
+                  {`הכי זול${cheapestWhere ? ` ${cheapestWhere}` : ''}`}
+                  {savings > 0.01 && <> · הכי יקר <s><bdi dir="ltr">{fmt(headlineMax)}</bdi></s></>}
                 </div>
               </div>
-
-              {/* One headline price; the range and savings are supporting detail */}
-              <div className="product-hero-price-row">
-                <span className="product-hero-price-from">מ־</span>
-                <span className="product-hero-price-min tabular">{fmt(headlineMin)}</span>
-              </div>
-              {savings > 0.01 && (
-                <div className="product-hero-range">
-                  טווח מחירים <bdi dir="ltr">{fmt(headlineMin)} – {fmt(headlineMax)}</bdi> · {namedPrices.length} חנויות
-                </div>
-              )}
-              {savings > 0.01 && (
-                <div className="product-hero-savings">
-                  חיסכון של עד <bdi dir="ltr">{fmt(savings)}</bdi> ({savingsPct}%)
-                </div>
-              )}
             </div>
 
             {/* ── Compare table ──────────────────────────────── */}
             <div className="section-header">
               <div>
-                <div className="section-title">
+                <h2 className="section-title">{nearbyMode ? 'הכי זול לידך' : 'איפה הכי זול?'}</h2>
+                <div className="section-subtitle">
                   {nearbyMode
-                    ? `${filteredPrices.length} חנויות ליד המיקום שלך`
-                    : `${filteredPrices.length}${filteredPrices.length !== namedPrices.length ? ` מתוך ${namedPrices.length}` : ''} חנויות · מחיר נוכחי`}
+                    ? `${filteredPrices.length} חנויות עד ${NEARBY_KM} ק״מ ממך, מהזול ליקר`
+                    : `${filteredPrices.length}${filteredPrices.length !== namedPrices.length ? ` מתוך ${namedPrices.length}` : ''} חנויות, מהזול ליקר`}
                 </div>
-                <div className="section-subtitle">ממוין מהזול ליקר</div>
               </div>
             </div>
 
@@ -339,7 +372,7 @@ export function ProductPage() {
               </div>
             )}
 
-            <div className="compare-table" style={{ marginBottom: 20 }}>
+            <div className="compare-table store-list" style={{ marginBottom: 20 }}>
               {shownPrices.map((row, idx) => {
                 const isCheapest = idx === 0;
                 const diff = Number(row.price) - Number(filteredPrices[0]?.price ?? row.price);
@@ -432,7 +465,7 @@ export function ProductPage() {
         {/* Loading skeleton */}
         {loading && (
           <>
-            <div className="compare-table" style={{ marginBottom: 20 }}>
+            <div className="compare-table store-list" style={{ marginBottom: 20 }}>
               {Array.from({ length: 7 }).map((_, i) => <SkeletonRow key={i} />)}
             </div>
           </>
@@ -442,27 +475,18 @@ export function ProductPage() {
 
       {/* ── Sticky add-to-basket bar ───────────────────────── */}
       {data && (
-        <div className="add-to-basket-bar">
-          <div className="add-to-basket-qty">
-            <button className="qty-btn" onClick={() => setQty(q => Math.max(1, q - 1))} aria-label="הורד כמות">
-              <Minus size={14} strokeWidth={2.5} />
-            </button>
-            <span className="qty-value">{qty}</span>
-            <button className="qty-btn" onClick={() => setQty(q => q + 1)} aria-label="הגדל כמות">
-              <Plus size={14} strokeWidth={2.5} />
-            </button>
+        <div className="add-to-basket-bar product-buy-bar">
+          <div className="product-buy-total">
+            <span className="product-buy-label">{qty > 1 ? `${qty} יח׳, החל מ-` : 'החל מ-'}</span>
+            <span className="product-buy-price tabular" dir="ltr">{fmt(Number(data.cheapest_price) * qty)}</span>
           </div>
-
           <button
-            className={`btn btn-full ${added ? 'btn-secondary' : 'btn-primary'}`}
-            style={{ flex: 1, transition: 'background 0.2s' }}
+            className={`btn btn-full ${added ? 'btn-secondary' : 'btn-primary'} product-buy-btn`}
             onClick={handleAdd}
           >
-            {added ? (
-              <><Check size={18} strokeWidth={2.5} /> נוסף לסל</>
-            ) : (
-              <>הוסף לסל · <span className="tabular" dir="ltr">{fmt(Number(data.cheapest_price) * qty)}</span></>
-            )}
+            {added
+              ? <><Check size={18} strokeWidth={2.5} /> נוסף לסל</>
+              : <><ShoppingBasket size={18} strokeWidth={2} /> הוסף לסל</>}
           </button>
         </div>
       )}

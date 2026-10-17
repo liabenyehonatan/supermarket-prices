@@ -59,6 +59,16 @@ class UnitPriceInfo(BaseModel):
     unit: Optional[str] = None
 
 
+class PriceSummary(BaseModel):
+    """What a search result card shows: the cheapest current price, every brand selling at it, and its unit price."""
+    price: Decimal
+    # The brands (as shown to users) with a store at the cheapest price, alphabetical
+    chains: List[str]
+    # The chain-reported price per `unit` (e.g. per "100 גרם") at the cheapest price; the app decides when it is meaningful
+    unit_price: Optional[Decimal] = None
+    unit: Optional[str] = None
+
+
 class ChainResponse(BaseModel):
     id: int
     name: str

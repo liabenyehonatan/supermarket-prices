@@ -2,10 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 
-/**
- * Horizontal chain picker shown as a 3D carousel: items tilt and shrink as they
- * move away from the center, with arrows that appear while there is more to see.
- */
+/** Horizontal chain picker: a row of round logos, with arrows that appear while there is more to see. */
 export function ChainCarousel({ chains: allChains, selected, onSelect, style, counts }: {
   chains: string[];
   counts?: Record<string, number>;     // an optional number under each logo (e.g. how many deals the chain has)
@@ -27,24 +24,6 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
     const max = track.scrollWidth - track.clientWidth;
     setCanBack(pos > 2);
     setCanFwd(pos < max - 2);
-
-    const items = Array.from(track.children) as HTMLElement[];
-    if (max <= 2) {
-      // Everything fits — show a flat row
-      for (const el of items) { el.style.transform = ''; el.style.opacity = ''; }
-      return;
-    }
-
-    const box = track.getBoundingClientRect();
-    const center = box.left + box.width / 2;
-    for (const el of items) {
-      const r = el.getBoundingClientRect();
-      // -1 … 1: how far the item sits from the center, relative to half the width
-      const d = Math.max(-1, Math.min(1, (r.left + r.width / 2 - center) / (box.width / 2)));
-      const a = Math.abs(d);
-      el.style.transform = `perspective(600px) rotateY(${d * -28}deg) scale(${1 - a * 0.18})`;
-      el.style.opacity = String(1 - a * 0.35);
-    }
   }, []);
 
   useEffect(() => {
@@ -100,7 +79,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
             aria-label={counts?.[name] != null ? `סנן לפי ${name}, ${counts[name] === 1 ? 'מבצע אחד' : `${counts[name]} מבצעים`}` : `סנן לפי ${name}`}
             aria-pressed={selected === name}
           >
-            <ChainLogo name={name} size={52} showLabel />
+            <ChainLogo name={name} size={50} showLabel />
             {counts?.[name] != null && <span className="chain-carousel-count tabular">{counts[name]}</span>}
           </button>
         ))}
