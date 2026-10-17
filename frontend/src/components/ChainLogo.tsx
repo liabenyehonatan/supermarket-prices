@@ -28,6 +28,7 @@ const LOGO_MAP: Record<string, string> = {
   'משנת יוסף':           '/logos/meshnat-yosef.webp',
   'פוליצר':              '/logos/polizer.webp',
   'סאלח דבאח':           '/logos/salach-dabach.webp',
+  'שפע ברכת השם':        '/logos/shefa-birkat-hashem.webp',
   'שוק העיר':            '/logos/shuk-ahir.webp',
   'סטופ מרקט':           '/logos/stop-market.webp',
   'סופר ספיר':           '/logos/super-sapir.webp',
