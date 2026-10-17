@@ -707,24 +707,17 @@ img { max-width: 100%; display: block; }
 .product-qty-btn.is-plus { background: var(--accent); color: var(--fg-on-brand); }
 .product-qty-btn.is-plus:hover { background: var(--accent-pressed); }
 .product-qty-value { min-width: 20px; text-align: center; font-size: var(--fs-16); font-weight: var(--fw-semibold); color: var(--ink-900); }
-/* The two numbers that matter, side by side: the cheapest price (mint) and how much can be saved (sand) */
-.product-hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-top: var(--sp-4); }
-.product-hero-stats.is-single { grid-template-columns: 1fr; }
-.hero-stat {
-  display: flex; flex-direction: column; gap: 2px; min-width: 0;
-  padding: var(--sp-3); border-radius: var(--r-md); border: 1px solid transparent;
+/* The price reads like a shelf tag: one plain number, a small "less" tag beside it, the comparison in grey below */
+.product-price { margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--line); }
+.product-price-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
+.product-price-value {
+  font-size: var(--fs-28); font-weight: var(--fw-bold); line-height: 1.1; letter-spacing: -0.01em;
+  color: var(--ink-900);
 }
-.hero-stat.is-cheapest { background: var(--cheapest-bg); border-color: var(--cheapest-border); }
-.hero-stat.is-saving { background: var(--savings-bg); border-color: var(--savings-border); }
-.hero-stat-label { font-size: var(--fs-12); font-weight: var(--fw-semibold); color: var(--ink-600); }
-.hero-stat-value {
-  font-size: var(--fs-24); font-weight: var(--fw-black); line-height: 1.1; letter-spacing: -0.02em;
-  color: var(--ink-900); align-self: flex-start;
-}
-.hero-stat.is-cheapest .hero-stat-value { color: var(--green-700); }
-.hero-stat.is-saving .hero-stat-value { color: #7A5320; }
-.hero-stat-sub { font-size: var(--fs-12); color: var(--ink-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.product-hero-range { font-size: var(--fs-12); color: var(--ink-500); margin-top: var(--sp-2); }
+.product-price-off { font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--green-700); }
+.product-price-unit { margin-inline-start: auto; font-size: var(--fs-13); color: var(--ink-400); }
+.product-price-note { margin-top: var(--sp-1); font-size: var(--fs-13); color: var(--ink-500); }
+.product-price-note s { color: var(--ink-400); }
 
 /* ============================================================
    Sticky add-to-basket bar
@@ -2865,3 +2858,10 @@ img { max-width: 100%; display: block; }
   font-family: var(--font-sans); font-size: var(--fs-15); font-weight: var(--fw-semibold); color: var(--green-700);
 }
 @media (prefers-reduced-motion: reduce) { .header-search-toggle { animation: none; } }
+
+/* Phones: a smaller hint in the search fields. Only the placeholder: the typed text stays 16px, below which
+   iOS zooms the page in when the field is focused. */
+@media (max-width: 480px) {
+  .search-hero-input::placeholder,
+  .header-search-field-input::placeholder { font-size: var(--fs-14); }
+}
