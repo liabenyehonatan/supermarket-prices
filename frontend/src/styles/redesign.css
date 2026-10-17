@@ -167,15 +167,6 @@ body { background: #FFFFFF; font-size: 14px; }
 .promo-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 18px; }
 .promo-track::-webkit-scrollbar { display: none; }
 .promo-slide { position: relative; flex: 0 0 100%; scroll-snap-align: start; height: 150px; display: flex; align-items: center; overflow: hidden; }
-.promo-slide.tone-cream { background: #F4F1E6; }   /* the basket photo's own background, so its fade leaves no edge */
-.promo-slide.tone-mint  { background: #E5F6EB; }
-.promo-slide.tone-peach { background: #FFEEDC; }
-.promo-art { position: absolute; left: 0; bottom: 0; }
-.promo-art-compare {
-  top: 0; width: 64%; height: 100%; object-fit: cover; object-position: center 58%;
-  -webkit-mask-image: linear-gradient(to right, #000 55%, transparent 100%); mask-image: linear-gradient(to right, #000 55%, transparent 100%);
-}
-.promo-art-scan, .promo-art-deals { top: 10px; left: 14px; width: 44%; height: calc(100% - 20px); object-fit: contain; mix-blend-mode: multiply; }
 .promo-text { position: relative; z-index: 1; max-width: 54%; padding: 14px 18px; }
 .promo-title { margin: 0; font-size: 17px; font-weight: var(--fw-bold); line-height: 1.22; letter-spacing: -0.01em; color: var(--ink-900); text-wrap: balance; }
 .promo-sub { margin: 4px 0 11px; font-size: 11.5px; color: var(--ink-600); line-height: 1.35; }
@@ -422,25 +413,6 @@ body { background: #FFFFFF; font-size: 14px; }
 .hero-section { padding: 14px 0 4px; }
 .promo-slide { height: 172px; border-radius: 0; }
 .promo-track { border-radius: 20px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14); }
-.promo-slide.tone-forest { background: linear-gradient(105deg, #184F2D 0%, #2A7A46 55%, #3A9455 100%); }
-.promo-slide.tone-ocean  { background: linear-gradient(105deg, #0F4660 0%, #1C7195 55%, #2A8CB2 100%); }
-.promo-slide.tone-amber  { background: linear-gradient(105deg, #A33F05 0%, #D26A12 55%, #EC8A25 100%); }
-.promo-art { position: absolute; inset: 0 auto 0 0; width: 56%; pointer-events: none; }
-.promo-plate {
-  position: absolute; left: -22px; bottom: -28px; width: 196px; height: 196px; border-radius: 50%;
-  object-fit: cover; object-position: 50% 62%; background: #F4F1E6;
-  border: 5px solid rgba(255, 255, 255, 0.92); box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
-}
-.promo-bit { position: absolute; font-size: 26px; line-height: 1; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.3)); }
-.promo-art .b1 { left: 12px; top: 10px; transform: rotate(-14deg); }
-.promo-art .b2 { left: 84px; top: 4px; transform: rotate(12deg); }
-.promo-art .b3 { left: 150px; top: 18px; transform: rotate(-8deg); }
-.promo-art .b4 { left: 152px; top: 110px; transform: rotate(16deg); }
-.promo-big { position: absolute; font-size: 66px; line-height: 1; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.32)); }
-.promo-art-emoji .e1 { left: 22px; top: 34px; transform: rotate(-9deg); }
-.promo-art-emoji .e2 { left: 92px; top: 84px; font-size: 54px; transform: rotate(10deg); }
-.promo-art-emoji .b1 { left: 96px; top: 14px; font-size: 30px; }
-.promo-art-emoji .b3 { left: 16px; top: 116px; font-size: 30px; }
 .promo-text { max-width: 52%; padding: 16px 18px; }
 .promo-title { font-size: 20px; line-height: 1.2; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
 .promo-sub { margin: 5px 0 13px; font-size: 12px; color: rgba(255, 255, 255, 0.88); }
@@ -529,3 +501,16 @@ body { background: #FFFFFF; font-size: 14px; }
 }
 .bottom-nav-scan.active .bottom-nav-scan-btn { background: var(--green-700); color: #fff; }
 .site-footer { padding-bottom: calc(var(--bottom-nav-h) + var(--sp-4)); }
+
+
+/* Banner: a full-width photo, a dark fade on the reading side so the white text is easy to read */
+.promo-slide { height: 176px; background: #1B2A22; }
+.promo-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 16% 50%; }
+.promo-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to left, rgba(6, 16, 10, 0.86) 0%, rgba(6, 16, 10, 0.7) 34%, rgba(6, 16, 10, 0.3) 62%, rgba(6, 16, 10, 0) 82%);
+}
+.promo-text { max-width: 56%; }
+.promo-title { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35); }
+@media (min-width: 768px) { .promo-slide { height: 230px; } .promo-photo { object-position: 30% 50%; } .promo-text { max-width: 46%; } }
+.promo-photo { transform: scale(1.05); transform-origin: 16% 30%; }   /* trims the thin light edge the photos carry along the bottom */
