@@ -79,7 +79,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
             aria-label={counts?.[name] != null ? `סנן לפי ${name}, ${counts[name] === 1 ? 'מבצע אחד' : `${counts[name]} מבצעים`}` : `סנן לפי ${name}`}
             aria-pressed={selected === name}
           >
-            <ChainLogo name={name} size={58} showLabel />
+            <ChainLogo name={name} size={50} showLabel />
             {counts?.[name] != null && <span className="chain-carousel-count tabular">{counts[name]}</span>}
           </button>
         ))}
