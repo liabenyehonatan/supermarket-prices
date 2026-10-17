@@ -1,0 +1,429 @@
+/* ============================================================
+   Sali — fresh look
+   Loaded after global.css and overrides it: clean white page, borderless white cards lifted by a soft shadow,
+   big product pictures, solid green round "add" buttons, round store logos, pastel colour tiles.
+   To go back to the previous design, remove the import of this file in App.tsx.
+   ============================================================ */
+
+/* ── Tokens ─────────────────────────────────────────────────── */
+:root {
+  /* A fresher green; --green-600 is the brand colour (buttons, the active tab), --green-700 the text-safe one */
+  --green-900: #0A4F27;
+  --green-800: #0C6A33;
+  --green-700: #0E7A35;
+  --green-600: #12913F;
+  --green-500: #2DBE5F;
+  --green-400: #6FD596;
+  --green-200: #BFEBCF;
+  --green-100: #DDF5E5;
+  --green-50:  #EEFAF2;
+
+  --orange-500: #F97316;
+  --orange-50:  #FFF4E8;
+
+  --ink-900: #14211A;
+  --ink-800: #1F2D25;
+  --ink-700: #34443A;
+  --ink-600: #4C5C52;
+  --ink-500: #66756B;
+  --ink-400: #8A978E;
+  --ink-300: #B3BDB5;
+
+  --surface-0:   #FFFFFF;
+  --surface-50:  #F8FBF8;
+  --surface-100: #F1F5F1;
+  --surface-200: #E6ECE7;
+  --line:        #EDF1ED;
+  --line-strong: #DCE4DD;
+
+  --bg-page: #FFFFFF;
+  --cheapest-bg:     #E8F8EE;
+  --cheapest-border: #BFEBCF;
+  --savings-bg:      #FFF1DE;
+  --savings-border:  #F6D3A2;
+  --bg-promo: var(--orange-50);
+
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+
+  --shadow-card: 0 1px 3px rgba(20, 50, 35, 0.05), 0 8px 24px rgba(20, 50, 35, 0.07);
+  --shadow-card-hover: 0 2px 6px rgba(20, 50, 35, 0.06), 0 14px 32px rgba(20, 50, 35, 0.11);
+  --shadow-pill: 0 1px 2px rgba(20, 50, 35, 0.06), 0 2px 8px rgba(20, 50, 35, 0.07);
+  --shadow-sm: var(--shadow-card);
+  --shadow-md: var(--shadow-card);
+  --shadow-focus: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--green-600);
+
+  --home-card-w: 176px;
+}
+
+/* ── Page ───────────────────────────────────────────────────── */
+body {
+  /* White, with a faint fresh-green wash behind the top of the page that scrolls away with it */
+  background: #FFFFFF linear-gradient(180deg, #E6F7EC 0, #F4FBF6 240px, #FFFFFF 460px) no-repeat top / 100% 460px;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.site-header {
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 0;
+  box-shadow: 0 1px 0 rgba(20, 50, 35, 0.04), 0 8px 24px rgba(20, 50, 35, 0.05);
+}
+.header-logo-text { color: var(--ink-900); }
+.header-logo-text span { color: var(--green-600); }
+.header-nav-link.active { background: var(--green-50); color: var(--green-700); }
+
+/* The chips beside the logo: soft filled pills, no outline */
+.location-chip,
+.basket-pill,
+.header-search-toggle {
+  border: 0;
+  background: var(--surface-100);
+  color: var(--ink-700);
+  height: 38px;
+  box-shadow: none;
+}
+.header-search-toggle { width: 38px; }
+.location-chip:hover,
+.basket-pill:hover,
+.header-search-toggle:hover { background: var(--surface-200); color: var(--ink-900); border: 0; }
+.location-chip.active { background: var(--green-50); color: var(--green-700); }
+.basket-pill { background: var(--green-50); color: var(--green-700); }
+.basket-pill:hover { background: var(--green-100); color: var(--green-800); }
+.header-basket-btn:hover { background: var(--surface-100); }
+.basket-count { background: var(--green-600); box-shadow: 0 0 0 2px #fff; }
+
+.header-search-input { border: 0; background: var(--surface-100); }
+.header-search-input:focus { background: #fff; box-shadow: 0 0 0 2px var(--green-600); }
+.header-search-pop { border-bottom: 0; box-shadow: 0 8px 24px rgba(20, 50, 35, 0.08); }
+.header-search-field-input { border-width: 2px; }
+
+/* ── Bottom navigation ──────────────────────────────────────── */
+.bottom-nav {
+  border-top: 0;
+  background: #FFFFFF;
+  box-shadow: 0 -4px 20px rgba(20, 50, 35, 0.07);
+}
+.bottom-nav-item { position: relative; color: var(--ink-400); }
+.bottom-nav-item.active { color: var(--green-600); }
+.bottom-nav-item.active::before {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 26px; height: 3px; border-radius: 0 0 4px 4px; background: var(--green-600);
+}
+.bottom-nav-scan { color: var(--green-700); }
+.bottom-nav-scan-btn {
+  background: linear-gradient(160deg, #1BAA4B, var(--green-600));
+  border: 4px solid #fff;
+  box-shadow: 0 8px 18px rgba(18, 145, 63, 0.38);
+}
+.bottom-nav-scan.active .bottom-nav-scan-btn { background: var(--green-700); }
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.btn { border-radius: var(--r-full); }
+.btn-sm { border-radius: var(--r-full); }
+.btn-lg { border-radius: var(--r-full); }
+.btn-primary { background: var(--green-600); color: #fff; box-shadow: 0 6px 14px rgba(18, 145, 63, 0.26); }
+.btn-primary:hover  { background: var(--green-700); color: #fff; }
+.btn-primary:active { background: var(--green-800); color: #fff; }
+.btn-secondary { background: var(--surface-100); color: var(--ink-800); }
+.btn-secondary:hover { background: var(--surface-200); }
+.btn-compare:hover  { background: var(--green-700); color: #fff; }
+.btn-compare:active { background: var(--green-800); color: #fff; }
+.round-btn { border: 0; background: #fff; box-shadow: var(--shadow-pill); }
+.round-btn:hover { background: var(--surface-100); }
+.btn-icon:hover { background: var(--surface-100); }
+.size-chip { background: #E3F0FD; color: #1F5BBE; }
+
+/* ── Cards: borderless, lifted by the shadow ────────────────── */
+.card,
+.example-card,
+.deal-card,
+.result-card,
+.store-list,
+.basket-item,
+.sparkline-section,
+.product-stage,
+.product-sheet,
+.add-to-basket-bar,
+.modal-card,
+.edit-bar,
+.basket-menu,
+.chain-search,
+.compare-delta,
+.deals-rules {
+  border: 0;
+  box-shadow: var(--shadow-card);
+}
+.store-row { box-shadow: var(--shadow-card); border: 0; }
+.store-row.cheapest, .compare-row.cheapest { box-shadow: 0 0 0 1.5px var(--mint-line), var(--shadow-card); }
+.store-list > .store-row, .store-list > .compare-row { box-shadow: none; }
+.store-list > .store-row.cheapest { box-shadow: none; }
+.compare-row { border: 0; box-shadow: var(--shadow-card); }
+.compare-row:hover { border: 0; }
+.deals-rules { background: var(--green-50); }
+.compare-delta { background: var(--green-50); }
+.basket-card-delta.down, .deal-saving-pill { background: var(--green-100); }
+
+/* ── Search field ───────────────────────────────────────────── */
+.search-hero-input,
+.search-panel-box .search-hero-input {
+  height: 56px;
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+  padding-inline-end: 62px;
+}
+.search-hero-input:focus,
+.search-panel-box .search-hero-input:focus {
+  border-color: var(--green-600);
+  box-shadow: var(--shadow-card), 0 0 0 4px var(--green-100);
+}
+.search-panel-box .search-hero-input::placeholder,
+.search-hero-input::placeholder { color: var(--ink-400); }
+.search-hero-icon { color: var(--green-600); }
+.search-hero-scan {
+  inset-inline-end: 9px; width: 40px; height: 40px;
+  background: var(--green-50); color: var(--green-700);
+}
+.search-hero-scan:hover { background: var(--green-100); color: var(--green-800); }
+.search-hero-clear { background: var(--surface-100); }
+
+/* ── Quick searches: picture tiles ──────────────────────────── */
+.search-panel-chips { gap: var(--sp-4); margin: var(--sp-4) -8px 0; padding: 4px 8px 12px; }
+.category-tile {
+  flex: 0 0 auto; width: 76px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font-family: var(--font-sans); -webkit-tap-highlight-color: transparent;
+}
+.search-panel-chips .category-tile { margin-inline: var(--peek-shift, 0px); }
+.category-tile-art {
+  width: 72px; height: 72px; border-radius: 26px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 34px; line-height: 1;
+  background: var(--tile-bg, var(--green-50));
+  box-shadow: 0 6px 14px var(--tile-shadow, rgba(20, 50, 35, 0.08));
+  transition: transform var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
+}
+.category-tile:hover .category-tile-art { transform: translateY(-2px); }
+.category-tile:active .category-tile-art { transform: scale(0.94); }
+.category-tile:focus-visible .category-tile-art { box-shadow: var(--shadow-focus); }
+.category-tile-label {
+  max-width: 80px; font-size: var(--fs-13); font-weight: var(--fw-medium); color: var(--ink-700);
+  line-height: 1.25; text-align: center; text-wrap: balance;
+}
+.tone-0 { --tile-bg: #E3F6EA; --tile-shadow: rgba(40, 160, 90, 0.18); }
+.tone-1 { --tile-bg: #FFEBD6; --tile-shadow: rgba(240, 140, 40, 0.18); }
+.tone-2 { --tile-bg: #E1F0FD; --tile-shadow: rgba(50, 130, 220, 0.16); }
+.tone-3 { --tile-bg: #FFF4C7; --tile-shadow: rgba(220, 170, 20, 0.2); }
+.tone-4 { --tile-bg: #FDE4EA; --tile-shadow: rgba(220, 80, 120, 0.16); }
+.tone-5 { --tile-bg: #EDE7FB; --tile-shadow: rgba(120, 90, 210, 0.16); }
+
+/* ── Home: hero banner ──────────────────────────────────────── */
+/* The photo keeps its colours on the far side; the text sits on a clean mint panel on the reading side */
+.hero-banner {
+  height: clamp(148px, 30vw, 196px);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+  background: #F4F1E6;   /* the photo's own background, so the fade leaves no edge */
+}
+.hero-banner::after { background: none; }
+.hero-banner-art {
+  position: absolute; inset-block: 0; left: 0; width: 66%; height: 100%;
+  object-fit: cover; object-position: center 58%; transform: none;
+  -webkit-mask-image: linear-gradient(to right, #000 55%, transparent 100%);
+          mask-image: linear-gradient(to right, #000 55%, transparent 100%);
+}
+.hero-banner-title {
+  flex-direction: column; align-items: flex-start; justify-content: center; gap: 6px;
+  padding: var(--sp-4) var(--sp-5);
+}
+.hero-banner-title::before { display: none; }
+.hero-banner-title .hero-title {
+  color: var(--ink-900); text-shadow: none; font-size: var(--fs-20); line-height: 1.2; max-width: 6.5em; text-wrap: balance;
+}
+.hero-sub { position: relative; z-index: 1; margin: 0; max-width: 11em; font-size: var(--fs-12); font-weight: var(--fw-semibold); color: var(--green-700); }
+
+/* ── Section headers ────────────────────────────────────────── */
+.home-section-head { margin-top: var(--sp-8); margin-bottom: var(--sp-3); }
+.section-title { font-size: var(--fs-18); font-weight: var(--fw-bold); letter-spacing: -0.01em; }
+.section-subtitle { color: var(--ink-500); }
+.deals-all-link {
+  padding: 6px 12px; border-radius: var(--r-full); background: var(--green-50); color: var(--green-700);
+  font-size: var(--fs-13); font-weight: var(--fw-semibold); white-space: nowrap;
+}
+.deals-all-link:hover { background: var(--green-100); }
+
+/* ── Home: store row (round logos) ──────────────────────────── */
+.chain-carousel-track {
+  gap: var(--sp-3); padding: var(--sp-3) var(--sp-4) 28px;
+  scroll-snap-type: x proximity; scroll-padding-inline: var(--sp-4);
+  -webkit-mask-image: none; mask-image: none;
+}
+.chain-carousel-item {
+  scroll-snap-align: start; padding: 2px; border-radius: var(--r-lg); transform: none !important; opacity: 1 !important;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.chain-carousel-item:active { transform: scale(0.95) !important; }
+.chain-carousel-item .chain-logo-wrap { gap: 8px; }
+.chain-carousel-item .chain-logo-mark { box-shadow: var(--shadow-card); background: #fff; }
+.chain-carousel-item .chain-logo-name {
+  max-width: 72px; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-12); font-weight: var(--fw-medium); color: var(--ink-700);
+}
+.chain-carousel-item.selected { outline: 0; }
+.chain-carousel-item.selected .chain-logo-mark { box-shadow: 0 0 0 3px var(--green-600), var(--shadow-card); }
+.chain-carousel-item.selected .chain-logo-name { color: var(--green-700); font-weight: var(--fw-bold); }
+.chain-carousel-item.dimmed > * { opacity: 0.5; }
+.chain-carousel-arrow { border: 0; box-shadow: var(--shadow-card); }
+.chain-carousel-arrow:hover { background: var(--green-50); color: var(--green-700); }
+.chain-search { background: var(--surface-100); box-shadow: none; }
+.chain-search:focus-within { box-shadow: 0 0 0 2px var(--green-600); }
+.chain-active-note { background: var(--green-50); border-radius: var(--r-lg); }
+
+/* ── Home: savings examples ─────────────────────────────────── */
+.card-row { padding: var(--sp-2) var(--sp-2) 36px; margin-bottom: -20px; }   /* room under the cards for their shadow, which a scrolling row would clip */
+.example-card {
+  flex: 0 0 var(--home-card-w); width: var(--home-card-w); gap: 10px; padding: var(--sp-3);
+  border-radius: var(--r-lg); background: #fff;
+  transition: box-shadow var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.example-card:hover { box-shadow: var(--shadow-card-hover); }
+.example-card:active { transform: scale(0.985); }
+.example-card-top { flex-direction: column; align-items: stretch; gap: 10px; }
+.example-card-top > div { width: 100% !important; height: 96px !important; box-shadow: none !important; background: #fff; }
+.example-card-top > div img:not([aria-hidden]) { width: 100% !important; height: 100% !important; }
+.example-name { font-size: var(--fs-14); font-weight: var(--fw-medium); min-height: 2.6em; }
+.example-save-amount { font-size: var(--fs-16); color: var(--green-700); }
+.example-save-pct { background: var(--green-600); color: #fff; padding: 2px 9px; }
+.example-prices-row { padding-top: 10px; border-top: 1px dashed var(--line-strong); }
+
+/* ── Promotions ─────────────────────────────────────────────── */
+.deals-strip { gap: var(--sp-4); padding: 6px 6px 36px; margin-bottom: 0; scrollbar-width: none; }
+.deals-strip::-webkit-scrollbar { display: none; }
+.deals-strip > .deal-card { flex: 0 0 min(72vw, 250px); }
+.deal-card { gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) var(--sp-4); border-radius: var(--r-lg); }
+.deal-card:hover { box-shadow: var(--shadow-card-hover); border: 0; }
+.deal-card-head { gap: 8px; }
+.deal-card-body { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
+.deal-card-pics { justify-content: center; padding-block: 4px; }
+.deal-card-pics > div { box-shadow: none !important; }
+.deal-card-main { flex: none; }
+.deal-card-title { font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--ink-900); }
+.deal-card-offer { font-size: var(--fs-20); color: var(--ink-900); }
+.deal-saving-pill { background: var(--orange-500); color: #fff; padding: 3px 10px; }
+.deal-card-actions .btn { width: 100%; }
+
+/* ── Baskets on the home page ───────────────────────────────── */
+.basket-card { border: 0; background: #fff; box-shadow: var(--shadow-card); border-radius: var(--r-lg); transform: none; }
+.basket-card.is-active { background: #fff; transform: none; box-shadow: 0 0 0 2px var(--green-600), var(--shadow-card); }
+.basket-card-new { background: var(--green-50); box-shadow: none; border: 1.5px dashed var(--green-200); color: var(--green-700); }
+.basket-card-cta { color: var(--green-700); }
+.basket-card-remove:hover { background: var(--surface-100); }
+.basket-card-delta.down { background: var(--green-100); color: var(--green-700); }
+
+/* ── Pills: sort, filters ───────────────────────────────────── */
+.sort-pill,
+.filter-chip,
+.suggestion-pill {
+  border: 0; background: #fff; color: var(--ink-700); box-shadow: var(--shadow-pill);
+  font-weight: var(--fw-medium);
+}
+.sort-pill { padding: 8px 16px; }
+.sort-pill.on { background: var(--green-600); color: #fff; box-shadow: 0 6px 14px rgba(18, 145, 63, 0.26); }
+.filter-chip:hover:not(:disabled), .suggestion-pill:hover { background: var(--green-50); color: var(--green-700); border: 0; }
+.filter-chip.active { background: var(--green-50); color: var(--green-700); box-shadow: 0 0 0 1.5px var(--green-200); }
+.filter-chip-clear { color: var(--ink-400); }
+.filter-chain { border-radius: var(--r-md); }
+.filter-chain.selected { background: var(--green-50); border-color: var(--green-600); }
+
+/* ── Search results: product cards ──────────────────────────── */
+.results-title { font-size: var(--fs-20); letter-spacing: -0.01em; }
+.results-grid { gap: var(--sp-3); }
+.result-card {
+  border-radius: 22px; background: #fff;
+  transition: box-shadow var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.result-card:hover { box-shadow: var(--shadow-card-hover); border: 0; }
+.result-card:active { transform: scale(0.985); }
+.result-card-media { aspect-ratio: 1 / 0.92; padding: var(--sp-3) var(--sp-3) 0; }
+.result-card-body { padding: var(--sp-1) var(--sp-3) var(--sp-3); }
+.result-card-name { font-size: var(--fs-14); font-weight: var(--fw-medium); color: var(--ink-900); }
+.result-card-meta { color: var(--ink-400); margin-top: 6px; }
+.result-card-brand { color: var(--ink-500); }
+.result-card-where { color: var(--green-700); font-weight: var(--fw-medium); }
+.result-card-logos > * { box-shadow: 0 0 0 1.5px #fff; }
+.result-card-price { font-size: var(--fs-18); color: var(--ink-900); letter-spacing: -0.02em; }
+.result-card-unit { color: var(--ink-400); }
+/* Add: a solid green circle; once the product is in the basket it turns white and shows how many */
+.result-card-add {
+  width: 38px; height: 38px; border: 0; background: var(--green-600); color: #fff;
+  box-shadow: 0 6px 14px rgba(18, 145, 63, 0.32);
+}
+.result-card-add:hover { background: var(--green-700); }
+.result-card-add.in-basket { background: #fff; color: var(--green-700); box-shadow: 0 0 0 2px var(--green-600), 0 6px 14px rgba(18, 145, 63, 0.18); font-size: var(--fs-14); }
+.result-card-add.is-added { background: var(--green-600); color: #fff; box-shadow: 0 6px 14px rgba(18, 145, 63, 0.32); }
+
+/* The "no picture yet" placeholder: smaller and softer, so a card without a photo does not shout */
+.result-card-media img[aria-hidden], .deal-card-pics img[aria-hidden], .example-card-top img[aria-hidden] { padding: 20%; opacity: 0.38; }
+
+/* Chain photos often have an almost-white background (#FAFAFA); a touch of brightness makes it white, so no pale box shows on a white card */
+.result-card-media img:not([aria-hidden]), .product-stage-image img:not([aria-hidden]),
+.example-card-top img:not([aria-hidden]), .deal-card-pics img:not([aria-hidden]) { filter: brightness(1.035); }
+
+/* ── Product page ───────────────────────────────────────────── */
+.product-stage { border-radius: var(--r-xl); background: #fff; }
+.product-stage-title { color: var(--ink-900); }
+.product-sheet { border-radius: var(--r-xl); background: #fff; box-shadow: 0 -10px 28px rgba(20, 50, 35, 0.07), var(--shadow-card); }
+.product-qty-btn { background: var(--surface-100); border-radius: var(--r-full); }
+.product-qty-btn.is-plus { background: var(--green-600); box-shadow: 0 4px 10px rgba(18, 145, 63, 0.3); }
+.product-qty-btn.is-plus:hover { background: var(--green-700); }
+.product-price { border-top-color: var(--line); }
+.product-price-off { color: var(--green-700); background: var(--green-50); padding: 3px 10px; border-radius: var(--r-full); }
+.add-to-basket-bar { border-radius: 28px; }
+.product-buy-btn { border-radius: var(--r-full); }
+.qty-btn { border: 0; background: var(--surface-100); }
+.qty-btn:hover { background: var(--surface-200); border: 0; }
+
+/* The stores list */
+.store-list { border-radius: var(--r-lg); }
+.store-list > .store-row, .store-list > .compare-row { border-bottom: 1px solid var(--line); }
+.store-list > .store-row.cheapest { background: var(--mint); border-bottom-color: var(--mint-line); }
+.store-row-actions a { background: var(--surface-100); }
+.store-row-actions a:hover { background: var(--green-100); color: var(--green-700); }
+.badge-cheapest { background: var(--green-600); color: #fff; box-shadow: none; }
+
+/* ── Basket page, sheets, modals ────────────────────────────── */
+.basket-item { border-radius: var(--r-lg); }
+.basket-item.selected { background: var(--green-50); box-shadow: 0 0 0 2px var(--green-600); border: 0; }
+.basket-more { background: var(--surface-100); }
+.basket-add-more { border-color: var(--green-200); color: var(--green-700); background: var(--green-50); }
+.basket-name-input { border-color: var(--green-600); }
+.location-sheet { border-radius: 28px 28px 0 0; }
+.sheet-handle { background: var(--line-strong); }
+.modal-card { border-radius: 28px; }
+.modal-icon { background: var(--green-50); color: var(--green-700); }
+.empty-state-icon { background: var(--green-50); color: var(--green-600); border-radius: 22px; }
+.undo-toast { border-radius: var(--r-full); }
+.tour-card { border-radius: 28px; }
+.location-search { background: var(--surface-100); }
+.city-picker input, .filter-city-input input, .location-input { border: 0; background: var(--surface-100); }
+.city-picker input:focus, .filter-city-input input:focus { box-shadow: 0 0 0 2px var(--green-600); border: 0; }
+.city-picker-list, .filter-suggestions { border: 0; box-shadow: var(--shadow-card-hover); border-radius: var(--r-lg); }
+
+/* Sideways rows scroll without a visible bar */
+.deals-filters, .filter-bar, .card-row { scrollbar-width: none; }
+.deals-filters::-webkit-scrollbar, .filter-bar::-webkit-scrollbar { display: none; }
+
+/* ── Skeletons keep the soft green-grey ─────────────────────── */
+.skeleton { background-image: linear-gradient(90deg, var(--surface-100) 0%, var(--surface-100) 38%, var(--surface-200) 50%, var(--surface-100) 62%, var(--surface-100) 100%); }
+
+/* ── Desktop: a wider, airier home ──────────────────────────── */
+@media (min-width: 768px) {
+  .home-container { max-width: 880px; }
+  .category-tile { width: 84px; }
+  .category-tile-art { width: 76px; height: 76px; font-size: 38px; }
+  .hero-banner { height: 220px; }
+  .hero-banner-title .hero-title { font-size: var(--fs-24); }
+}

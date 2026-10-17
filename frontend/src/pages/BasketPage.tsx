@@ -445,7 +445,7 @@ export function BasketPage() {
                     aria-label={`בחירת ${item.name}`}
                   />
                 )}
-                <ProductImage barcode={item.barcode} name={item.name} size={48} />
+                <ProductImage barcode={item.barcode} name={item.name} size={64} borderRadius={16} />
                 <div
                   className="basket-item-body"
                   style={{ cursor: 'pointer' }}
