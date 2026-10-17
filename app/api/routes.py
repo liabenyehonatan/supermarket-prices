@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import select, func, and_, or_, text, literal, update
+from sqlalchemy import select, func, and_, or_, text, literal, update, case
 from sqlalchemy import column as sa_column, table as sa_table
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -37,6 +37,7 @@ from app.api.schemas import (
     StatsResponse,
     ExampleComparison,
     UnitPriceInfo,
+    PriceSummary,
     DealProduct,
     Deal,
     DealFacet,
@@ -376,6 +377,63 @@ async def cheapest_prices_batch(
         .group_by(Product.barcode)
     )
     return {barcode: price for barcode, price in rows.all()}
+
+
+# ─── Endpoint: Price summary for search result cards ────────────────────────
+
+@router.post(
+    "/products/price-summary-batch",
+    response_model=dict[str, PriceSummary],
+    summary="Cheapest current price, the brands selling at it, and its unit price, for a list of barcodes",
+)
+async def price_summary_batch(
+    payload: CheapestPriceRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    One request per page of search results. Uses the same rows as /compare (current, above zero, no wholesale),
+    so the price and brands match the product page. A barcode with no current price is left out.
+    """
+    barcodes = [b for b in payload.barcodes if b]
+    if not barcodes:
+        return {}
+
+    current = (
+        select(
+            Product.barcode.label("barcode"),
+            Product.unit_of_measure.label("unit"),
+            Price.price.label("price"),
+            Price.unit_price.label("unit_price"),
+            display_chain_name_sql().label("chain"),
+            func.min(Price.price).over(partition_by=Product.barcode).label("min_price"),
+        )
+        .join(Price, Price.product_id == Product.id)
+        .join(Store, Price.store_id == Store.id)
+        .join(Chain, Chain.id == Store.chain_id)
+        .where(
+            Product.barcode.in_(barcodes),
+            _real_barcode(),
+            Price.is_current,
+            Price.price > 0,
+            _not_wholesale(),
+        )
+        .subquery()
+    )
+    rows = await db.execute(
+        select(
+            current.c.barcode,
+            current.c.unit,
+            current.c.min_price,
+            func.min(case((current.c.unit_price > 0, current.c.unit_price))),
+            func.array_agg(current.c.chain.distinct()),
+        )
+        .where(current.c.price == current.c.min_price)
+        .group_by(current.c.barcode, current.c.unit, current.c.min_price)
+    )
+    return {
+        barcode: PriceSummary(price=price, chains=sorted(set(chains)), unit_price=unit_price, unit=unit)
+        for barcode, unit, price, unit_price, chains in rows.all()
+    }
 
 
 # ─── Endpoint: Cheapest unit price for many products at once ────────────────

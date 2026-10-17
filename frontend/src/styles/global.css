@@ -2634,13 +2634,15 @@ img { max-width: 100%; display: block; }
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   transition: box-shadow var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
 }
-.result-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
+.result-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
 .result-card:active { transform: scale(0.985); }
 .result-card.is-skeleton { cursor: default; box-shadow: none; transform: none; }
-.result-card-media { aspect-ratio: 5 / 4; padding: var(--sp-3) var(--sp-3) var(--sp-1); background: #FFFFFF; }
-.result-card.is-skeleton .result-card-media { padding: 0; }
+/* The picture gets as much of the frame as it can: chain photos often carry a marketing panel beside the pack */
+.result-card-media { aspect-ratio: 5 / 4; padding: var(--sp-2) var(--sp-2) 0; background: #FFFFFF; }
+.result-card.is-skeleton .result-card-media { padding: var(--sp-2) var(--sp-2) 0; }
 .result-card-media > div { box-shadow: none !important; }   /* ProductImage draws a tile outline; the card has its own */
-.result-card-body { flex: 1; display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+
+.result-card-body { flex: 1; display: flex; flex-direction: column; padding: 10px var(--sp-3) var(--sp-3); }
 .result-card-name {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   line-height: 1.3;
@@ -2648,23 +2650,36 @@ img { max-width: 100%; display: block; }
 }
 .result-card-name:focus-visible { outline: none; }
 .result-card:has(.result-card-name:focus-visible) { box-shadow: var(--shadow-focus); }
-.result-card-meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-12); color: var(--ink-500); }
+.result-card-meta { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 6px; font-size: var(--fs-12); color: var(--ink-500); }
 .result-card-meta .size-chip { margin-inline-start: 0; flex-shrink: 0; }
 .result-card-brand { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.result-card-price { margin-top: auto; padding-top: var(--sp-2); display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
-.result-card-price-label { font-size: var(--fs-12); color: var(--ink-500); }
-.result-card-price-value { font-size: var(--fs-18); font-weight: var(--fw-bold); color: var(--green-700); letter-spacing: -0.02em; line-height: 1; }
-/* Add button on the picture's corner; filled with the count once the product is in the active basket */
+
+/* Foot: where it is cheapest, the price and its unit price on the reading side; the add button across from them */
+.result-card-foot { margin-top: auto; padding-top: var(--sp-3); }
+.result-card-price-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-2); }
+.result-card-pricing { flex: 1; min-width: 0; }
+.result-card-where { display: flex; align-items: center; gap: 5px; min-width: 0; margin-bottom: 6px; font-size: var(--fs-12); color: var(--ink-600); }
+.result-card-logos { display: flex; flex-shrink: 0; }
+.result-card-logos > * { box-shadow: 0 0 0 1.5px var(--bg-card); }
+.result-card-logos > * + * { margin-inline-start: -7px; }
+.result-card-where-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-card-price {
+  font-size: var(--fs-18); font-weight: var(--fw-bold); line-height: 1.1; letter-spacing: -0.01em; color: var(--green-700);
+}
+.result-card-unit { margin-top: 3px; font-size: var(--fs-12); color: var(--ink-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-card-noprice { font-size: var(--fs-12); color: var(--ink-400); }
+
+/* Add: an outlined circle; filled with the count once the product is in the active basket */
 .result-card-add {
-  position: absolute; top: var(--sp-2); inset-inline-end: var(--sp-2); z-index: 1;
-  width: 30px; height: 30px; border-radius: var(--r-full);
+  position: relative; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: var(--r-full);
   display: flex; align-items: center; justify-content: center;
   border: 1.5px solid var(--green-600); background: var(--surface-0); color: var(--green-700);
   font-family: var(--font-sans); font-size: var(--fs-12); font-weight: var(--fw-bold);
-  box-shadow: var(--shadow-sm); cursor: pointer;
+  cursor: pointer;
   transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
 }
-.result-card-add::after { content: ''; position: absolute; inset: -7px; }   /* 44px touch target */
+.result-card-add::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch target */
 .result-card-add:hover { background: var(--green-50); }
 .result-card-add:active { transform: scale(0.9); }
 .result-card-add.in-basket, .result-card-add.is-added { background: var(--green-600); border-color: var(--green-600); color: #fff; }

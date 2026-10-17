@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, X, ChevronLeft, Barcode, Plus, Trash2, SearchX } from 'lucide-react';
-import { searchProducts, cheapestPricesBatch } from '../api/client';
+import { searchProducts, priceSummaryBatch, type PriceSummary } from '../api/client';
 import { HeroBanner } from '../components/HeroBanner';
 import { HowItWorksTour } from '../components/HowItWorksTour';
 import { ProductCard, ProductCardSkeleton } from '../components/ProductCard';
@@ -20,12 +20,13 @@ const PAGE_SIZE = 10;
 const SKELETON_CARDS = 4;
 
 /* ── search snapshot: going back from a product returns to the same results and scroll position ── */
-const SNAPSHOT_KEY = 'sali_search_snapshot';
+const SNAPSHOT_KEY = 'sali_search_snapshot_v2';   // v2: price summaries instead of bare prices
 interface SearchSnapshot {
   q: string;
   results: Product[];
   hasMore: boolean;
-  cheapest: Record<string, number>;
+  /** null: asked, and the product has no current price */
+  summary: Record<string, PriceSummary | null>;
   scrollY: number;
 }
 function readSnapshot(q: string): SearchSnapshot | null {
@@ -88,7 +89,7 @@ export function SearchPage() {
   const [moreError, setMoreError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
-  const [cheapest, setCheapest] = useState<Record<string, number>>(() => initialSnap.current?.cheapest ?? {});
+  const [summary, setSummary] = useState<Record<string, PriceSummary | null>>(() => initialSnap.current?.summary ?? {});
   // City and chain filters also live in the URL (?city= / ?supermarket=) so a
   // refresh or a shared link keeps them; sessionStorage carries them across pages.
   const [chainFilter, setChainFilter] = useState<string>(() => searchParams.get('supermarket') ?? readChainFilter());
@@ -162,8 +163,8 @@ export function SearchPage() {
   useEffect(() => {
     const q = (searchParams.get('q') ?? '').trim();
     if (!q || loading || !results.length) return;
-    writeSnapshot({ q, results, hasMore, cheapest, scrollY: readSnapshot(q)?.scrollY ?? 0 });
-  }, [searchParams, results, hasMore, cheapest, loading]);
+    writeSnapshot({ q, results, hasMore, summary, scrollY: readSnapshot(q)?.scrollY ?? 0 });
+  }, [searchParams, results, hasMore, summary, loading]);
 
   // Track the scroll position for the current query (throttled)
   useEffect(() => {
@@ -189,16 +190,24 @@ export function SearchPage() {
     };
   }, [searchParams]);
 
-  // Fetch the cheapest price for every visible result in a single request,
-  // instead of one /compare call per product.
+  // The price line of every new result (cheapest price, where, per unit) in one request per page.
+  // Each barcode is asked once; one the server has no price for is stored as null, so it is not asked again.
+  const askedPrices = useRef(new Set<string>(Object.keys(initialSnap.current?.summary ?? {})));
   useEffect(() => {
-    const missing = results.filter(p => cheapest[p.barcode] == null).map(p => p.barcode);
+    const missing = results.map(p => p.barcode).filter(b => !askedPrices.current.has(b));
     if (!missing.length) return;
+    missing.forEach(b => askedPrices.current.add(b));
     void (async () => {
       try {
-        const map = await cheapestPricesBatch(missing);
-        setCheapest(prev => ({ ...prev, ...map }));
-      } catch { /* ignore — results just keep their skeleton price */ }
+        const map = await priceSummaryBatch(missing);
+        setSummary(prev => {
+          const next = { ...prev };
+          for (const b of missing) next[b] = map[b] ?? null;
+          return next;
+        });
+      } catch {
+        missing.forEach(b => askedPrices.current.delete(b));   // a failed request is tried again with the next page
+      }
     })();
   }, [results]);
 
@@ -246,7 +255,8 @@ export function SearchPage() {
   const orderedResults = (() => {
     if (sortMode === 'price') {
       return [...results].sort((a, b) => {
-        const pa = cheapest[a.barcode], pb = cheapest[b.barcode];
+        const pa = summary[a.barcode] ? Number(summary[a.barcode]!.price) : null;
+        const pb = summary[b.barcode] ? Number(summary[b.barcode]!.price) : null;
         if (pa == null || pb == null) return pa == null ? (pb == null ? 0 : 1) : -1;   // unknown prices last
         return pa - pb;
       });
@@ -458,7 +468,7 @@ export function SearchPage() {
 
                 <div className={`results-grid${pending && results.length > 0 ? ' is-stale' : ''}`}>
                   {orderedResults.map(product => (
-                    <ProductCard key={product.barcode} product={product} price={cheapest[product.barcode]} />
+                    <ProductCard key={product.barcode} product={product} summary={summary[product.barcode]} />
                   ))}
                   {(showSkeletonGrid || loadingMore || (hasMore && !moreError && !pending)) &&
                     Array.from({ length: showSkeletonGrid ? PAGE_SIZE : SKELETON_CARDS }).map((_, i) => <ProductCardSkeleton key={`sk-${i}`} />)}
