@@ -2642,14 +2642,14 @@ img { max-width: 100%; display: block; }
 /* Add button on the picture's corner; filled with the count once the product is in the active basket */
 .result-card-add {
   position: absolute; top: var(--sp-2); inset-inline-end: var(--sp-2); z-index: 1;
-  width: 36px; height: 36px; border-radius: var(--r-full);
+  width: 30px; height: 30px; border-radius: var(--r-full);
   display: flex; align-items: center; justify-content: center;
   border: 1.5px solid var(--green-600); background: var(--surface-0); color: var(--green-700);
-  font-family: var(--font-sans); font-size: var(--fs-14); font-weight: var(--fw-bold);
+  font-family: var(--font-sans); font-size: var(--fs-12); font-weight: var(--fw-bold);
   box-shadow: var(--shadow-sm); cursor: pointer;
   transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
 }
-.result-card-add::after { content: ''; position: absolute; inset: -6px; }   /* 48px touch target */
+.result-card-add::after { content: ''; position: absolute; inset: -7px; }   /* 44px touch target */
 .result-card-add:hover { background: var(--green-50); }
 .result-card-add:active { transform: scale(0.9); }
 .result-card-add.in-basket, .result-card-add.is-added { background: var(--green-600); border-color: var(--green-600); color: #fff; }
