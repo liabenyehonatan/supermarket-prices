@@ -635,30 +635,78 @@ img { max-width: 100%; display: block; }
 }
 
 /* ============================================================
-   Product hero (compare page header)
+   Product page: picture stage on top, the product sheet over its lower edge
    ============================================================ */
-.product-hero {
-  background: var(--bg-card);
-  border: 1px solid var(--line);
+/* White, the same as the product pictures' own background, so a picture never looks pasted on. */
+.product-stage {
+  background: var(--surface-0);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-sm);
-  padding: var(--sp-4);
-  margin-bottom: var(--sp-6);
+  border: 1px solid var(--line);
+  padding: var(--sp-3) var(--sp-3) calc(var(--sp-6) + var(--sp-4));
 }
-.product-hero-top { display: flex; gap: var(--sp-4); align-items: center; }
-.product-hero-text { flex: 1; min-width: 0; }
-.product-hero-name {
-  font-size: var(--fs-18);
-  font-weight: var(--fw-bold);
+.product-stage-bar { display: flex; align-items: center; justify-content: space-between; }
+.product-stage-title { font-size: var(--fs-16); font-weight: var(--fw-semibold); color: var(--ink-800); }
+.round-btn {
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-full);
+  border: 1px solid var(--line);
+  background: var(--surface-0);
+  color: var(--ink-800);
+  cursor: pointer;
+  transition: background var(--dur-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.round-btn:hover { background: var(--surface-100); }
+.round-btn:disabled { opacity: 0.4; cursor: default; }
+.product-stage-image {
+  display: flex; align-items: center; justify-content: center;
+  height: 220px; margin-top: var(--sp-2);
+}
+/* The image tile drops its own frame on the stage */
+.product-stage-image > div { box-shadow: none !important; }
+
+.product-sheet {
+  position: relative;
+  margin: calc(-1 * var(--sp-8)) 0 var(--sp-6);
+  background: var(--bg-card);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--line);
+  box-shadow: 0 -6px 20px rgba(16,20,24,0.05), var(--shadow-sm);
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+}
+.product-sheet-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); min-height: 32px; }
+.product-sheet-maker {
+  font-size: var(--fs-14); color: var(--ink-400);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.product-sheet-name {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-24);
+  font-weight: var(--fw-semibold);
   color: var(--ink-900);
   line-height: var(--lh-snug);
   text-wrap: pretty;
 }
-.product-hero-meta {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-  margin-top: 6px; font-size: var(--fs-13); color: var(--ink-500);
+.product-sheet-name .size-chip { font-size: var(--fs-13); vertical-align: 3px; }
+
+/* Quantity: quiet minus, filled plus */
+.product-qty { display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0; }
+.product-qty-btn {
+  position: relative;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: var(--r-sm);
+  background: var(--surface-100); color: var(--ink-800);
+  cursor: pointer;
+  transition: background var(--dur-fast), opacity var(--dur-fast);
 }
-.product-hero-meta .size-chip { margin-inline-start: 0; }
+.product-qty-btn::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch area */
+.product-qty-btn:hover { background: var(--surface-200); }
+.product-qty-btn:disabled { opacity: 0.45; cursor: default; }
+.product-qty-btn.is-plus { background: var(--accent); color: var(--fg-on-brand); }
+.product-qty-btn.is-plus:hover { background: var(--accent-pressed); }
+.product-qty-value { min-width: 20px; text-align: center; font-size: var(--fs-16); font-weight: var(--fw-semibold); color: var(--ink-900); }
 /* The two numbers that matter, side by side: the cheapest price (mint) and how much can be saved (sand) */
 .product-hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-top: var(--sp-4); }
 .product-hero-stats.is-single { grid-template-columns: 1fr; }
@@ -704,6 +752,13 @@ img { max-width: 100%; display: block; }
     width: 360px;
   }
 }
+/* Product page: the total on one side, a big add button on the other */
+.product-buy-bar { padding: var(--sp-3); gap: var(--sp-4); }
+.product-buy-total { display: flex; flex-direction: column; gap: 2px; padding-inline-start: var(--sp-2); flex-shrink: 0; }
+.product-buy-label { font-size: var(--fs-13); color: var(--ink-500); }
+.product-buy-price { font-size: var(--fs-20); font-weight: var(--fw-bold); color: var(--ink-900); line-height: 1.1; align-self: flex-start; }
+.product-buy-btn { flex: 1; min-height: 52px; gap: var(--sp-2); font-size: var(--fs-16); transition: background 0.2s; }
+
 .add-to-basket-qty {
   display: flex;
   align-items: center;
@@ -2763,17 +2818,17 @@ img { max-width: 100%; display: block; }
 /* ============================================================
    Header search: a button once the page's own field is out of sight, opening a field across the header
    ============================================================ */
-/* A quiet icon (no outline), so it does not compete with the location and basket chips beside it */
+/* Outlined like the location chip beside it: same height, border and hover */
 .header-search-toggle {
   position: relative; flex-shrink: 0;
-  width: 32px; height: 32px; border-radius: var(--r-full);
+  width: 36px; height: 36px; border-radius: var(--r-full);
   display: flex; align-items: center; justify-content: center;
-  border: none; background: transparent; color: var(--ink-700);
+  border: 1.5px solid var(--line-strong); background: transparent; color: var(--ink-700);
   cursor: pointer; animation: header-search-in 220ms var(--ease-standard);
-  transition: background var(--dur-fast), color var(--dur-fast);
+  transition: border-color var(--dur-fast), color var(--dur-fast);
 }
-.header-search-toggle::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch target */
-.header-search-toggle:hover { background: var(--surface-100); color: var(--green-700); }
+.header-search-toggle::after { content: ''; position: absolute; inset: -4px; }   /* 44px touch target */
+.header-search-toggle:hover { border-color: #2E5A40; color: #2E5A40; }
 /* On other pages wide screens have the header's search field already */
 @media (min-width: 481px) { .header-search-toggle.is-compact-only { display: none; } }
 @keyframes header-search-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
