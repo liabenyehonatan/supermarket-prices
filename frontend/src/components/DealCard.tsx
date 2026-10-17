@@ -31,7 +31,7 @@ export function DealCard({ deal, onAdd, onPick }: {
         {pictured.length > 0 && (
           <div className="deal-card-pics">
             {pictured.map(p => (
-              <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={deal.kind === 'group' ? 48 : 72} />
+              <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={deal.kind === 'group' ? 64 : 112} borderRadius={16} />
             ))}
           </div>
         )}

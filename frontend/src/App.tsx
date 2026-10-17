@@ -16,6 +16,7 @@ const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m
 const DealsPage = lazy(() => import('./pages/DealsPage').then(m => ({ default: m.DealsPage })));
 const ScanPage = lazy(() => import('./pages/ScanPage').then(m => ({ default: m.ScanPage })));
 import './styles/global.css';
+import './styles/redesign.css';
 
 // Once the home page is up, fetch the product and basket pages in the background so opening one is instant.
 if (typeof window !== 'undefined') {

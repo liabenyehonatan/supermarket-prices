@@ -23,7 +23,7 @@ export function ProductImage({
   };
 
   return (
-    <div style={{ ...sharedStyle, position: 'relative', background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px var(--line)', overflow: 'hidden' }}>
+    <div style={{ ...sharedStyle, position: 'relative', background: '#FFFFFF', overflow: 'hidden' }}>
       {!failed && (
         <img
           src={imageUrl || `/api/v1/products/${barcode}/image`}

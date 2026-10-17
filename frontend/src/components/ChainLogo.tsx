@@ -72,9 +72,11 @@ interface ChainLogoProps {
   name: string;
   size?: number;
   showLabel?: boolean;
+  /** A circle (the default) or, with `round={false}`, a rounded square */
+  round?: boolean;
 }
 
-export function ChainLogo({ name, size = 44, showLabel = false }: ChainLogoProps) {
+export function ChainLogo({ name, size = 44, showLabel = false, round = true }: ChainLogoProps) {
   const [imgError, setImgError] = useState(false);
   const logoPath = resolveLogoPath(name);
   const showImg = logoPath && !imgError;
@@ -82,7 +84,7 @@ export function ChainLogo({ name, size = 44, showLabel = false }: ChainLogoProps
   const containerStyle: React.CSSProperties = {
     width: size,
     height: size,
-    borderRadius: Math.round(size * 0.22),
+    borderRadius: round ? '50%' : Math.round(size * 0.22),
     flexShrink: 0,
     overflow: 'hidden',
     display: 'flex',
@@ -136,7 +138,7 @@ export function ChainLogo({ name, size = 44, showLabel = false }: ChainLogoProps
   if (showLabel) {
     return (
       <div className="chain-logo-wrap">
-        <div className="chain-logo-mark" style={{ width: size, height: size }}>
+        <div className="chain-logo-mark" style={{ width: size, height: size, borderRadius: round ? '50%' : undefined }}>
           {inner}
         </div>
         <span className="chain-logo-name">{name}</span>
