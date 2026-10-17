@@ -50,7 +50,7 @@ export function BottomNav() {
         className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}
         aria-label={`סל קניות — ${totalItems} פריטים`}
       >
-        <div style={{ position: 'relative' }}>
+        <div className="bottom-nav-basket-icon" style={{ position: 'relative' }}>
           <ShoppingBasket size={21} strokeWidth={1.8} />
           {totalItems > 0 && (
             <span className="basket-count" style={{ top: -7, insetInlineEnd: -9 }} aria-hidden="true">

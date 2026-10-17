@@ -1,9 +1,9 @@
-// "Add to basket" feedback: a copy of the product picture is thrown in an arc into the basket at the top of the
-// screen, which then bounces. Purely decorative: the item is already in the basket when this starts.
+// "Add to basket" feedback: a copy of the product picture is thrown in an arc into the basket, which then bounces.
+// Purely decorative: the item is already in the basket when this starts.
 
-/** The basket the picture flies into: the header basket button (desktop) or the active-basket pill (phones). */
+/** The basket the picture flies into: the basket icon of the bottom bar (phones), else the header basket button (desktop). */
 function basketTarget(): HTMLElement | null {
-  for (const sel of ['.header-basket-btn', '.basket-pill']) {
+  for (const sel of ['.bottom-nav-basket-icon', '.header-basket-btn', '.basket-pill']) {
     const el = document.querySelector<HTMLElement>(sel);
     if (el && el.getClientRects().length && getComputedStyle(el).display !== 'none') return el;
   }
