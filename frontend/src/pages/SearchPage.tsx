@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, X, ChevronLeft, ChevronRight, Barcode, Plus, Trash2, SearchX, LayoutGrid, ChevronUp } from 'lucide-react';
+import { Search, X, ChevronLeft, ChevronRight, Barcode, Plus, Trash2, SearchX } from 'lucide-react';
 import { searchProducts, priceSummaryBatch, type PriceSummary } from '../api/client';
 import { PromoBanner } from '../components/PromoBanner';
 import { HowItWorksTour } from '../components/HowItWorksTour';
@@ -46,7 +46,7 @@ function writeSnapshot(snap: SearchSnapshot) {
     // storage full or blocked — going back just reloads the results
   }
 }
-// The quick searches on the home page: a round picture each (a pastel colour and an emoji for now); five show, the rest open on request
+// The quick searches on the home page: a card with a large picture each (an emoji for now), in a row that scrolls sideways
 const POPULAR: { label: string; q: string; icon: string }[] = [
   { label: 'חלב', q: 'חלב', icon: '🥛' },
   { label: 'לחם', q: 'לחם', icon: '🍞' },
@@ -59,7 +59,6 @@ const POPULAR: { label: string; q: string; icon: string }[] = [
   { label: 'עוף', q: 'עוף', icon: '🍗' },
   { label: 'קפה', q: 'קפה', icon: '☕' },
 ];
-const CATEGORIES_SHOWN = 5;
 
 /* ── main component ───────────────────────────────────────── */
 export function SearchPage() {
@@ -99,7 +98,6 @@ export function SearchPage() {
   const [chainFilter, setChainFilter] = useState<string>(() => searchParams.get('supermarket') ?? readChainFilter());
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [moreCategories, setMoreCategories] = useState(false);
   const panelRef  = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -286,9 +284,10 @@ export function SearchPage() {
   // The home blocks above and below the field fold away while a search is on (and come back when it is cleared),
   // so the field glides to the top instead of jumping. Folded blocks stay in the page, so they must not take focus.
   const heroRef = useRef<HTMLDivElement>(null);
+  const bannerRef = useRef<HTMLDivElement>(null);
   const chipsWrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    for (const el of [heroRef.current, chipsWrapRef.current]) el?.toggleAttribute('inert', hasQuery);
+    for (const el of [heroRef.current, bannerRef.current, chipsWrapRef.current]) el?.toggleAttribute('inert', hasQuery);
   }, [hasQuery]);
 
   // Infinite scroll: the next page starts loading while the end of the list is still well below the screen
@@ -315,11 +314,12 @@ export function SearchPage() {
     <div className="page-wrapper">
       <div className="container home-container">
 
-        {/* ── Hero ─────────────────────────────────────────── */}
+        {/* ── Greeting ──────────────────────────────────────── */}
         <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={heroRef} aria-hidden={hasQuery || undefined}>
           <div className="home-fold-inner">
-            <div className="hero-section">
-              <PromoBanner onSearch={focusSearch} />
+            <div className="greeting">
+              <h1 className="greeting-title">מה נקנה היום? <span aria-hidden>👋</span></h1>
+              <p className="greeting-sub">חפשי מוצר וראי איפה הכי זול</p>
             </div>
           </div>
         </div>
@@ -357,24 +357,30 @@ export function SearchPage() {
             )}
           </div>
           </div>
+        </div>
 
-          {/* The quick searches, in a card under the field */}
-          <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={chipsWrapRef} aria-hidden={hasQuery || undefined}>
-            <div className="home-fold-inner">
-              <div className="category-card">
-                <div className="category-grid">
-                  {(moreCategories ? POPULAR : POPULAR.slice(0, CATEGORIES_SHOWN)).map(({ label, q, icon }, i) => (
-                    <button key={q} className={`category-item tone-${i % 6}`} onClick={() => startSearch(q)}>
-                      <span className="category-item-art" aria-hidden>{icon}</span>
-                      <span className="category-item-label">{label}</span>
-                    </button>
-                  ))}
-                </div>
-                <button className="category-more" onClick={() => setMoreCategories(v => !v)} aria-expanded={moreCategories}>
-                  {moreCategories ? <ChevronUp size={16} strokeWidth={2.2} /> : <LayoutGrid size={16} strokeWidth={2.2} />}
-                  {moreCategories ? 'פחות קטגוריות' : 'עוד קטגוריות'}
+        {/* ── Banner ────────────────────────────────────────── */}
+        <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={bannerRef} aria-hidden={hasQuery || undefined}>
+          <div className="home-fold-inner">
+            <div className="hero-section">
+              <PromoBanner onSearch={focusSearch} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Categories ────────────────────────────────────── */}
+        <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={chipsWrapRef} aria-hidden={hasQuery || undefined}>
+          <div className="home-fold-inner">
+            <div className="section-header home-section-head categories-head">
+              <div className="section-title">קטגוריות</div>
+            </div>
+            <div className="category-row">
+              {POPULAR.map(({ label, q, icon }, i) => (
+                <button key={q} className={`category-card-tile tone-${i % 6}`} onClick={() => startSearch(q)}>
+                  <span className="category-card-art" aria-hidden>{icon}</span>
+                  <span className="category-card-label">{label}</span>
                 </button>
-              </div>
+              ))}
             </div>
           </div>
         </div>

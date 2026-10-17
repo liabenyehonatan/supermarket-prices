@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowRight, MapPin, Truck, Plus, Minus,
+  ArrowRight, MapPin, Truck, Plus, Minus, Share2, ShoppingBasket,
   Check, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
@@ -13,6 +13,7 @@ import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
+import { unitPriceLabel } from '../lib/productMeta';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { FilterSheet } from '../components/FilterSheet';
@@ -133,6 +134,21 @@ export function ProductPage() {
     if (ex) setQty(ex.quantity);
   }, [items, barcode]);
 
+  // The phone's own share sheet where there is one; otherwise copy the link.
+  function handleShare() {
+    if (!data) return;
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: data.product.name, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url).catch(() => {});
+    }
+  }
+
+  function goBack() {
+    if (window.history.length > 1) navigate(-1); else navigate('/');
+  }
+
   function handleAdd() {
     if (!data) return;
     addItem({ barcode: data.product.barcode, quantity: qty, name: data.product.name,
@@ -195,6 +211,8 @@ export function ProductPage() {
   // Where the cheapest price is: one chain by name, several by count
   const cheapestChains = [...new Set(namedPrices.filter(row => Math.abs(Number(row.price) - headlineMin) < 0.005).map(row => row.chain_name))];
   const cheapestWhere = cheapestChains.length === 1 ? `ב${cheapestChains[0]}` : cheapestChains.length > 1 ? `ב-${cheapestChains.length} רשתות` : '';
+  const cheapestRow = namedPrices.find(row => Math.abs(Number(row.price) - headlineMin) < 0.005);
+  const perUnit = cheapestRow && data ? unitPriceLabel(cheapestRow.price, cheapestRow.unit_price, data.product.unit_of_measure) : null;
 
   return (
     <div className="page-wrapper">
@@ -203,26 +221,30 @@ export function ProductPage() {
           matching stores) don't end up with their last bit of content hidden under it. */}
       <div className="container" style={{ paddingBottom: data ? 96 : 0 }}>
 
-        {/* Back */}
-        <button className="page-back" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}>
-          <ArrowRight size={18} strokeWidth={2} />
-          חזרה לתוצאות
-        </button>
+        {/* ── Picture stage: back, title, share, and the product picture large ── */}
+        <div className="product-stage">
+          <div className="product-stage-bar">
+            <button className="round-btn" onClick={goBack} aria-label="חזרה">
+              <ArrowRight size={20} strokeWidth={2} />
+            </button>
+            <span className="product-stage-title">פרטי מוצר</span>
+            <button className="round-btn" onClick={handleShare} aria-label="שיתוף" disabled={!data}>
+              <Share2 size={18} strokeWidth={2} />
+            </button>
+          </div>
+          <div className="product-stage-image" ref={heroImageRef}>
+            {data && !loading
+              ? <ProductImage barcode={data.product.barcode} name={data.product.name} imageUrl={data.product.image_url} size={200} borderRadius={0} />
+              : !error && <div className="skeleton" style={{ width: 180, height: 180, borderRadius: 24 }} aria-hidden />}
+          </div>
+        </div>
 
-        {/* ── Product hero ─────────────────────────────────── */}
         {loading && (
-          <div className="product-hero" aria-hidden>
-            <div className="product-hero-top">
-              <div className="skeleton" style={{ width: 96, height: 96, borderRadius: 16, flexShrink: 0 }} />
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div className="skeleton" style={{ height: 20, width: '80%' }} />
-                <div className="skeleton" style={{ height: 14, width: '45%' }} />
-              </div>
-            </div>
-            <div className="product-hero-stats">
-              <div className="skeleton" style={{ height: 84, borderRadius: 12 }} />
-              <div className="skeleton" style={{ height: 84, borderRadius: 12 }} />
-            </div>
+          <div className="product-sheet" aria-hidden>
+            <div className="skeleton" style={{ height: 13, width: '30%' }} />
+            <div className="skeleton" style={{ height: 22, width: '75%', marginTop: 10 }} />
+            <div className="skeleton" style={{ height: 30, width: '40%', marginTop: 20 }} />
+            <div className="skeleton" style={{ height: 13, width: '55%', marginTop: 8 }} />
           </div>
         )}
 
@@ -238,48 +260,45 @@ export function ProductPage() {
 
         {data && !loading && (
           <>
-            {/* Product card: who it is (picture, name, size, maker), then the two numbers that matter */}
-            <div className="product-hero">
+            {/* Product sheet over the picture: maker and quantity, name and size, then the two numbers that matter */}
+            <div className="product-sheet">
               {(() => {
                 const { displayName, size } = extractProductDisplay(data.product.name, data.product.brand, data.product.unit_of_measure);
                 const mfr = cleanBrand(data.product.manufacturer || data.product.brand);
                 return (
-                  <div className="product-hero-top">
-                    <div ref={heroImageRef}>
-                      <ProductImage barcode={data.product.barcode} name={data.product.name} imageUrl={data.product.image_url} size={96} borderRadius={16} />
+                  <>
+                    <div className="product-sheet-top">
+                      <span className="product-sheet-maker">{mfr && mfr !== '---' ? mfr : ''}</span>
+                      <div className="product-qty" role="group" aria-label="כמות">
+                        <button className="product-qty-btn" onClick={() => setQty(q => Math.max(1, q - 1))} aria-label="הורד כמות" disabled={qty <= 1}>
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span className="product-qty-value tabular">{qty}</span>
+                        <button className="product-qty-btn is-plus" onClick={() => setQty(q => q + 1)} aria-label="הגדל כמות">
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="product-hero-text">
-                      <h1 className="product-hero-name">{displayName}</h1>
-                      {(size || (mfr && mfr !== '---')) && (
-                        <div className="product-hero-meta">
-                          {size && <span className="size-chip">{size}</span>}
-                          {mfr && mfr !== '---' && <span>{mfr}</span>}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    <h1 className="product-sheet-name">
+                      {displayName}
+                      {size && <span className="size-chip">{size}</span>}
+                    </h1>
+                  </>
                 );
               })()}
 
-              <div className={`product-hero-stats${savings > 0.01 ? '' : ' is-single'}`}>
-                <div className="hero-stat is-cheapest">
-                  <span className="hero-stat-label">המחיר הכי זול</span>
-                  <span className="hero-stat-value tabular" dir="ltr">{fmt(headlineMin)}</span>
-                  {cheapestWhere && <span className="hero-stat-sub">{cheapestWhere}</span>}
+              {/* The price as plain text, the way a shelf tag reads: cheapest price, how much less than the dearest, where */}
+              <div className="product-price">
+                <div className="product-price-row">
+                  <span className="product-price-value tabular" dir="ltr">{fmt(headlineMin)}</span>
+                  {savings > 0.01 && <span className="product-price-off">עד {savingsPct}% פחות</span>}
+                  {perUnit && <span className="product-price-unit tabular"><bdi dir="ltr">{perUnit.price}</bdi> {perUnit.per}</span>}
                 </div>
-                {savings > 0.01 && (
-                  <div className="hero-stat is-saving">
-                    <span className="hero-stat-label">אפשר לחסוך עד</span>
-                    <span className="hero-stat-value tabular" dir="ltr">{fmt(savings)}</span>
-                    <span className="hero-stat-sub">{savingsPct}% פחות מהיקר ביותר</span>
-                  </div>
-                )}
+                <div className="product-price-note">
+                  {`הכי זול${cheapestWhere ? ` ${cheapestWhere}` : ''}`}
+                  {savings > 0.01 && <> · הכי יקר <s><bdi dir="ltr">{fmt(headlineMax)}</bdi></s></>}
+                </div>
               </div>
-              {savings > 0.01 && (
-                <div className="product-hero-range">
-                  טווח המחירים <bdi dir="ltr">{fmt(headlineMin)} – {fmt(headlineMax)}</bdi> ב-{namedPrices.length} חנויות
-                </div>
-              )}
             </div>
 
             {/* ── Compare table ──────────────────────────────── */}
@@ -456,27 +475,18 @@ export function ProductPage() {
 
       {/* ── Sticky add-to-basket bar ───────────────────────── */}
       {data && (
-        <div className="add-to-basket-bar">
-          <div className="add-to-basket-qty">
-            <button className="qty-btn" onClick={() => setQty(q => Math.max(1, q - 1))} aria-label="הורד כמות">
-              <Minus size={14} strokeWidth={2.5} />
-            </button>
-            <span className="qty-value">{qty}</span>
-            <button className="qty-btn" onClick={() => setQty(q => q + 1)} aria-label="הגדל כמות">
-              <Plus size={14} strokeWidth={2.5} />
-            </button>
+        <div className="add-to-basket-bar product-buy-bar">
+          <div className="product-buy-total">
+            <span className="product-buy-label">{qty > 1 ? `${qty} יח׳, החל מ-` : 'החל מ-'}</span>
+            <span className="product-buy-price tabular" dir="ltr">{fmt(Number(data.cheapest_price) * qty)}</span>
           </div>
-
           <button
-            className={`btn btn-full ${added ? 'btn-secondary' : 'btn-primary'}`}
-            style={{ flex: 1, transition: 'background 0.2s' }}
+            className={`btn btn-full ${added ? 'btn-secondary' : 'btn-primary'} product-buy-btn`}
             onClick={handleAdd}
           >
-            {added ? (
-              <><Check size={18} strokeWidth={2.5} /> נוסף לסל</>
-            ) : (
-              <>הוסף לסל · <span className="tabular" dir="ltr">{fmt(Number(data.cheapest_price) * qty)}</span></>
-            )}
+            {added
+              ? <><Check size={18} strokeWidth={2.5} /> נוסף לסל</>
+              : <><ShoppingBasket size={18} strokeWidth={2} /> הוסף לסל</>}
           </button>
         </div>
       )}
