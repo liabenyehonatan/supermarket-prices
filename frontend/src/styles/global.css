@@ -2759,3 +2759,54 @@ img { max-width: 100%; display: block; }
 .store-list > :last-child { border-bottom: 0; }
 .store-list > .store-row.cheapest { background: var(--mint); border-bottom-color: var(--mint-line); }
 .store-list > .store-row:not(.cheapest):hover { background-color: var(--surface-50); }
+
+/* ============================================================
+   Header search: a button once the page's own field is out of sight, opening a field across the header
+   ============================================================ */
+/* A quiet icon (no outline), so it does not compete with the location and basket chips beside it */
+.header-search-toggle {
+  position: relative; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--ink-700);
+  cursor: pointer; animation: header-search-in 220ms var(--ease-standard);
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.header-search-toggle::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch target */
+.header-search-toggle:hover { background: var(--surface-100); color: var(--green-700); }
+/* On other pages wide screens have the header's search field already */
+@media (min-width: 481px) { .header-search-toggle.is-compact-only { display: none; } }
+@keyframes header-search-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+
+.header-search-pop {
+  position: absolute; inset: 0; z-index: 2;
+  padding: var(--safe-top) calc(var(--safe-right) + var(--sp-4)) 0 calc(var(--safe-left) + var(--sp-4));
+  display: flex; align-items: center; gap: var(--sp-3);
+  background: var(--surface-0); border-bottom: 1px solid var(--line);
+}
+@media (min-width: 768px) {
+  .header-search-pop { padding-inline: calc(max(0px, (100% - var(--container)) / 2) + var(--sp-8)); }
+}
+.header-search-field { position: relative; flex: 1; min-width: 0; max-width: 640px; margin-inline: auto; }
+.header-search-field-icon { position: absolute; inset-inline-start: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-400); pointer-events: none; }
+.header-search-field-input {
+  width: 100%; height: 44px; padding-inline: 42px 40px;
+  border: 1.5px solid var(--green-600); border-radius: var(--r-full); background: var(--surface-0);
+  box-shadow: 0 0 0 3px var(--green-100);
+  font-family: var(--font-sans); font-size: var(--fs-16); color: var(--ink-900);
+}
+.header-search-field-input:focus { outline: none; }
+.header-search-field-input::placeholder { color: var(--ink-500); }
+.header-search-field-input::-webkit-search-cancel-button,
+.header-search-field-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+.header-search-field-clear {
+  position: absolute; inset-inline-end: 8px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-100); color: var(--ink-500); cursor: pointer;
+}
+.header-search-cancel {
+  flex-shrink: 0; padding: 8px 2px; border: none; background: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-15); font-weight: var(--fw-semibold); color: var(--green-700);
+}
+@media (prefers-reduced-motion: reduce) { .header-search-toggle { animation: none; } }
