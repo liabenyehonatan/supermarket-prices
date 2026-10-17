@@ -233,3 +233,12 @@ def test_skipped_chains_are_left_out_of_the_schedule(monkeypatch):
     assert chains == ["WOLT"]
     default, _ = worker.resolve_chains(None, scrape=True)
     assert "WOLT" not in default
+
+
+def test_a_wholesaler_is_never_scraped_even_when_named_in_no_setting():
+    from app.scraper import mass_scraper
+
+    assert "HET_COHEN_NEW_SOURCE" in mass_scraper.installed_scrapers()      # the library knows it...
+    assert "HET_COHEN_NEW_SOURCE" not in mass_scraper.get_enabled_scrapers()  # ...the schedule never runs it
+    default, _ = worker.resolve_chains(None, scrape=True)
+    assert "HET_COHEN_NEW_SOURCE" not in default
