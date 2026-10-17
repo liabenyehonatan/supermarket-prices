@@ -530,6 +530,21 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
 }
 
+/* Package size, a small blue pill next to a product's name (result cards, product page) */
+.size-chip {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--blue-100);
+  color: var(--blue-600);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 /* ============================================================
    Compare Table
    ============================================================ */
@@ -2628,7 +2643,7 @@ img { max-width: 100%; display: block; }
 .result-card-body { flex: 1; display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2) var(--sp-3) var(--sp-3); }
 .result-card-name {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  min-height: calc(2 * 1.3em); line-height: 1.3;
+  line-height: 1.3;
   font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--ink-900); text-decoration: none;
 }
 .result-card-name:focus-visible { outline: none; }
