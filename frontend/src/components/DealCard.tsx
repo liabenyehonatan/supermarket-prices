@@ -43,31 +43,12 @@ export function DealCard({ deal, onAdd, onPick }: {
       </div>
 
       <div className="deal-card-body">
+        {/* "1 for ₪9" reads oddly: a one-unit promotion is just the price */}
         <div className="deal-card-offer-row">
-          <div className="deal-card-offer-col">
-            {/* "1 for ₪9" reads oddly: a one-unit promotion is just the price */}
-            <span className="deal-card-offer tabular">
-              {deal.min_qty === 1 ? <bdi>{money(deal.price)}</bdi> : <><bdi>{deal.min_qty}</bdi> ב-<bdi>{money(deal.price)}</bdi></>}
-            </span>
-            {deal.min_qty > 1 && <span className="deal-card-unit tabular"><bdi>{money(deal.unit_price)}</bdi> ליחידה</span>}
-          </div>
-          {single ? (
-            <button
-              type="button"
-              className={`add-circle${justAdded ? ' is-added' : ''}`}
-              aria-label={`הוספת ${deal.min_qty} יחידות לסל`}
-              onClick={() => onAdd(deal, () => {
-                flyToBasket(mediaRef.current);
-                setJustAdded(true);
-                if (timer.current) clearTimeout(timer.current);
-                timer.current = setTimeout(() => setJustAdded(false), 1200);
-              })}
-            >
-              {justAdded ? <Check size={15} strokeWidth={2.6} /> : <Plus size={16} strokeWidth={2.6} />}
-            </button>
-          ) : (
-            <button type="button" className="deal-pick" onClick={() => onPick(deal)} aria-label="בחרי מוצרים מהמבצע">בחירה</button>
-          )}
+          <span className="deal-card-offer tabular">
+            {deal.min_qty === 1 ? <bdi>{money(deal.price)}</bdi> : <><bdi>{deal.min_qty}</bdi> ב-<bdi>{money(deal.price)}</bdi></>}
+          </span>
+          {deal.min_qty > 1 && <span className="deal-card-unit tabular"><bdi>{money(deal.unit_price)}</bdi> ליחידה</span>}
         </div>
 
         {/* The whole card opens the product (or, for a group, the picker): the title carries the link and stretches over the card */}
@@ -92,6 +73,24 @@ export function DealCard({ deal, onAdd, onPick }: {
         </div>
         {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
         {ends && <div className="deal-card-ends">{ends}</div>}
+
+        {single ? (
+          <button
+            type="button"
+            className={`card-add${justAdded ? ' is-added' : ''}`}
+            aria-label={`הוספת ${deal.min_qty} יחידות לסל`}
+            onClick={() => onAdd(deal, () => {
+              flyToBasket(mediaRef.current);
+              setJustAdded(true);
+              if (timer.current) clearTimeout(timer.current);
+              timer.current = setTimeout(() => setJustAdded(false), 1200);
+            })}
+          >
+            {justAdded ? <><Check size={15} strokeWidth={2.6} /> נוסף</> : <><Plus size={15} strokeWidth={2.6} /> {deal.min_qty > 1 ? `הוספה (×${deal.min_qty})` : 'הוספה'}</>}
+          </button>
+        ) : (
+          <button type="button" className="card-add" onClick={() => onPick(deal)} aria-label="בחירת מוצרים מהמבצע">בחירת מוצרים</button>
+        )}
       </div>
     </article>
   );

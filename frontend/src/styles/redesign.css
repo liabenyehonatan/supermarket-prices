@@ -394,13 +394,102 @@ body { background: #FFFFFF; font-size: 14px; }
   .results-grid { gap: 14px; }
 }
 
-/* The fold that hides the banner and categories during a search clips overflow: leave room inside it for the card's shadow */
-.search-panel-box .home-fold-inner { padding: 4px 8px 16px; margin: 0 -8px -12px; }
-.hero-section { padding-bottom: 8px; }
-
 /* Sideways rows of chips scroll without a visible bar */
 .deals-filters, .filter-bar, .sort-row { scrollbar-width: none; }
 .deals-filters::-webkit-scrollbar, .filter-bar::-webkit-scrollbar, .sort-row::-webkit-scrollbar { display: none; }
 
 /* Snapping a card to the start of a row must keep the row's own side padding */
 .card-row, .deals-strip { scroll-padding-inline: 14px; }
+
+
+/* ============================================================
+   Third reference: a greeting, a big dark banner with a white button, picture cards for the categories,
+   product cards with a full-width green "add" button
+   ============================================================ */
+
+/* The folds that hide the greeting, banner and categories during a search reach the screen edges, so rows inside them can too */
+.home-fold-inner { margin-inline: -14px; }
+.home-fold-inner > * { margin-inline: 14px; }
+.home-fold-inner > .category-row { margin-inline: 0; padding-inline: 14px; }
+@media (min-width: 768px) { .home-fold-inner { margin-inline: -32px; } .home-fold-inner > * { margin-inline: 32px; } .home-fold-inner > .category-row { padding-inline: 32px; } }
+
+/* Greeting */
+.greeting { padding: 8px 0 12px; }
+.greeting-title { margin: 0; font-size: 24px; font-weight: var(--fw-bold); letter-spacing: -0.01em; color: var(--ink-900); line-height: 1.2; }
+.greeting-sub { margin: 3px 0 0; font-size: 13px; color: var(--ink-500); }
+
+/* Banner: deep colour, big picture, white text and a white button */
+.hero-section { padding: 14px 0 4px; }
+.promo-slide { height: 172px; border-radius: 0; }
+.promo-track { border-radius: 20px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14); }
+.promo-slide.tone-forest { background: linear-gradient(105deg, #184F2D 0%, #2A7A46 55%, #3A9455 100%); }
+.promo-slide.tone-ocean  { background: linear-gradient(105deg, #0F4660 0%, #1C7195 55%, #2A8CB2 100%); }
+.promo-slide.tone-amber  { background: linear-gradient(105deg, #A33F05 0%, #D26A12 55%, #EC8A25 100%); }
+.promo-art { position: absolute; inset: 0 auto 0 0; width: 56%; pointer-events: none; }
+.promo-plate {
+  position: absolute; left: -22px; bottom: -28px; width: 196px; height: 196px; border-radius: 50%;
+  object-fit: cover; object-position: 50% 62%; background: #F4F1E6;
+  border: 5px solid rgba(255, 255, 255, 0.92); box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+}
+.promo-bit { position: absolute; font-size: 26px; line-height: 1; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.3)); }
+.promo-art .b1 { left: 12px; top: 10px; transform: rotate(-14deg); }
+.promo-art .b2 { left: 84px; top: 4px; transform: rotate(12deg); }
+.promo-art .b3 { left: 150px; top: 18px; transform: rotate(-8deg); }
+.promo-art .b4 { left: 152px; top: 110px; transform: rotate(16deg); }
+.promo-big { position: absolute; font-size: 66px; line-height: 1; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.32)); }
+.promo-art-emoji .e1 { left: 22px; top: 34px; transform: rotate(-9deg); }
+.promo-art-emoji .e2 { left: 92px; top: 84px; font-size: 54px; transform: rotate(10deg); }
+.promo-art-emoji .b1 { left: 96px; top: 14px; font-size: 30px; }
+.promo-art-emoji .b3 { left: 16px; top: 116px; font-size: 30px; }
+.promo-text { max-width: 52%; padding: 16px 18px; }
+.promo-title { font-size: 20px; line-height: 1.2; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
+.promo-sub { margin: 5px 0 13px; font-size: 12px; color: rgba(255, 255, 255, 0.88); }
+.promo-cta { display: inline-flex; align-items: center; gap: 2px; height: 34px; padding: 0 12px 0 10px; background: #fff; color: var(--ink-900); font-size: 12.5px; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18); }
+.promo-cta:hover { background: #F1FAF4; }
+.promo-dot { background: #D4D7D4; }
+
+/* Categories: a card with a big picture each, in a row that scrolls sideways */
+.categories-head { margin-top: 18px; }
+.category-row {
+  display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; scroll-padding-inline: 14px;
+  padding-top: 4px; padding-bottom: 22px; margin-bottom: -10px;
+}
+.category-row::-webkit-scrollbar { display: none; }
+.category-card-tile {
+  flex: 0 0 calc((100vw - 58px) / 4); height: 98px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+  padding: 0; border: 0; border-radius: var(--r-lg); background: #fff; box-shadow: var(--shadow-card); cursor: pointer;
+  scroll-snap-align: start; font-family: var(--font-sans); -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
+}
+.category-card-tile:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-2px); }
+.category-card-tile:active { transform: scale(0.95); }
+.category-card-tile:focus-visible { box-shadow: var(--shadow-focus); }
+.category-card-art { font-size: 38px; line-height: 1; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.16)); }
+.category-card-label { max-width: 74px; font-size: 12.5px; font-weight: var(--fw-semibold); color: var(--ink-900); line-height: 1.2; text-align: center; text-wrap: balance; }
+@media (min-width: 480px) { .category-card-tile { flex-basis: 84px; } }
+@media (min-width: 768px) { .category-card-tile { flex-basis: 104px; height: 118px; } .category-card-art { font-size: 46px; } }
+
+/* Product cards: a big picture, name, price and unit, and a full-width green button */
+.result-card-media { aspect-ratio: 1 / 0.9; padding: 8px 10px 0; }
+.result-card-foot { padding-top: 6px; }
+.result-card-pricing { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 6px; margin-top: 2px; }
+.result-card-price { font-size: 17px; font-weight: var(--fw-bold); color: var(--ink-900); letter-spacing: -0.01em; line-height: 1.15; }
+.result-card-unit { margin-top: 0; font-size: 10.5px; color: var(--ink-400); }
+.card-add {
+  position: relative; z-index: 1; width: 100%; height: 34px; margin-top: 9px; border: 0; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  background: var(--green-600); color: #fff; cursor: pointer; font-family: var(--font-sans); font-size: 12.5px; font-weight: var(--fw-semibold);
+  transition: background var(--dur-fast), transform var(--dur-fast);
+}
+.card-add:hover { background: var(--green-700); }
+.card-add:active { transform: scale(0.97); }
+.card-add.in-basket { background: var(--green-50); color: var(--green-700); box-shadow: inset 0 0 0 1.5px var(--green-600); }
+.card-add.is-added { background: var(--green-700); color: #fff; box-shadow: none; animation: pop-in var(--dur-base) var(--ease-spring); }
+.deal-card-offer-row { align-items: baseline; justify-content: flex-start; flex-wrap: wrap; gap: 0 6px; }
+.deal-card { display: flex; flex-direction: column; }
+.deal-card-body { flex: 1; display: flex; flex-direction: column; }
+.deal-card-body > .card-add { margin-top: auto; }
+.deal-card-body > :nth-last-child(2) { margin-bottom: 10px; }   /* the button sits at the foot of every card, whatever its height */
+
+/* The bottom bar's active icon is filled, like the reference */
+.bottom-nav-item.active svg { fill: currentColor; fill-opacity: 0.18; }

@@ -89,7 +89,6 @@ export function ProductCard({ product, summary }: {
           {summary === undefined
             ? <span className="skeleton result-card-where" style={{ width: 96, height: 12 }} aria-hidden />
             : summary && <CheapestWhere chains={summary.chains} />}
-          <div className="result-card-price-row">
           {summary === undefined ? (
             <div className="result-card-pricing" aria-hidden>
               <span className="skeleton" style={{ width: 64, height: 20, display: 'block' }} />
@@ -98,21 +97,22 @@ export function ProductCard({ product, summary }: {
             <div className="result-card-pricing"><span className="result-card-noprice">אין מחיר עדכני</span></div>
           ) : (
             <div className="result-card-pricing">
-              <div className="result-card-price tabular"><bdi dir="ltr">{money(summary.price)}</bdi></div>
-              {perUnit && <div className="result-card-unit tabular"><bdi dir="ltr">{perUnit.price}</bdi> {perUnit.per}</div>}
+              <span className="result-card-price tabular"><bdi dir="ltr">{money(summary.price)}</bdi></span>
+              {perUnit && <span className="result-card-unit tabular"><bdi dir="ltr">{perUnit.price}</bdi> {perUnit.per}</span>}
             </div>
           )}
           <button
             type="button"
-            className={`result-card-add${justAdded ? ' is-added' : ''}${inBasket ? ' in-basket' : ''}`}
+            className={`card-add${justAdded ? ' is-added' : ''}${inBasket ? ' in-basket' : ''}`}
             onClick={add}
             aria-label={inBasket ? `${product.name}: ${inBasket} בסל. הוספת עוד אחד` : `הוספת ${product.name} לסל`}
           >
             {justAdded
-              ? <Check size={14} strokeWidth={2.5} />
-              : inBasket ? <span className="tabular">{inBasket}</span> : <Plus size={14} strokeWidth={2.5} />}
+              ? <><Check size={15} strokeWidth={2.6} /> נוסף</>
+              : inBasket
+                ? <><Plus size={15} strokeWidth={2.6} /> <span className="tabular">{inBasket}</span> בסל</>
+                : <><Plus size={15} strokeWidth={2.6} /> הוספה</>}
           </button>
-          </div>
         </div>
       </div>
     </article>
@@ -129,10 +129,8 @@ export function ProductCardSkeleton() {
         <div className="skeleton" style={{ height: 13, width: '56%', marginTop: 6 }} />
         <div className="result-card-foot">
           <span className="skeleton result-card-where" style={{ width: 96, height: 12 }} />
-          <div className="result-card-price-row">
-            <span className="skeleton" style={{ width: 64, height: 20, display: 'block' }} />
-            <span className="skeleton" style={{ width: 32, height: 32, borderRadius: 999, display: 'block' }} />
-          </div>
+          <span className="skeleton" style={{ width: 64, height: 20, display: 'block' }} />
+          <span className="skeleton" style={{ width: '100%', height: 34, borderRadius: 10, display: 'block', marginTop: 10 }} />
         </div>
       </div>
     </div>
