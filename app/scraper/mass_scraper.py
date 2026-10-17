@@ -17,6 +17,7 @@ from il_supermarket_scarper.scrapper_runner import MainScrapperRunner
 from il_supermarket_scarper.utils.file_types import FileTypesFilters
 
 from app import settings
+from app.chains import NOT_SUPERMARKETS
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +42,6 @@ BLOCKED_FROM_ABROAD = {
 
 # Use the newer REST API source for Victory instead of the legacy ASPX scraper.
 SUPERSEDED = {"VICTORY"}
-
-# Publishers that are not supermarkets and must never be scraped, whatever SKIP_CHAINS says.
-# H. Cohen is a wholesaler (decided 2026-10-17); its data was removed from the database.
-NOT_SUPERMARKETS = {"HET_COHEN_NEW_SOURCE"}
 
 
 def installed_scrapers() -> list[str]:

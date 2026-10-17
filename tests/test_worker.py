@@ -242,3 +242,13 @@ def test_a_wholesaler_is_never_scraped_even_when_named_in_no_setting():
     assert "HET_COHEN_NEW_SOURCE" not in mass_scraper.get_enabled_scrapers()  # ...the schedule never runs it
     default, _ = worker.resolve_chains(None, scrape=True)
     assert "HET_COHEN_NEW_SOURCE" not in default
+
+
+def test_leftover_files_of_a_wholesaler_are_not_parsed_either(tmp_path, monkeypatch):
+    from il_supermarket_scarper.utils.folders_name import DumpFolderNames
+    from app.parser import mass_parser
+
+    (tmp_path / DumpFolderNames.HET_COHEN_NEW_SOURCE.value).mkdir()
+    (tmp_path / DumpFolderNames.SHUFERSAL.value).mkdir()
+    monkeypatch.setattr(mass_parser, "DUMPS_ROOT", tmp_path)
+    assert mass_parser.chains_on_disk() == ["SHUFERSAL"]

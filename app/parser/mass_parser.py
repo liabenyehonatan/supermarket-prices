@@ -32,6 +32,7 @@ from il_supermarket_scarper.utils.file_types import FileTypesFilters
 from il_supermarket_scarper.utils.folders_name import DumpFolderNames
 
 from app import settings
+from app.chains import NOT_SUPERMARKETS
 from app.db.database import AsyncSessionLocal
 from app.db.models import Store
 from app.parser import ledger
@@ -481,7 +482,7 @@ def chains_on_disk() -> list[str]:
     for folder in sorted(DUMPS_ROOT.iterdir()):
         if folder.is_dir() and not folder.name.startswith((".", "_")):
             name = _chain_name_for_folder(folder.name)
-            if name:
+            if name and name not in NOT_SUPERMARKETS:   # leftover files of a non-supermarket are never loaded
                 names.append(name)
     return names
 

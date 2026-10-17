@@ -63,3 +63,26 @@ async def test_an_unknown_name_removes_nothing(session):
     counts = await remove_chain(session, "לא קיים", [], apply=True)
     assert counts["chains"] == 0
     assert await _count(session, Chain) == 2
+
+
+async def test_tens_of_thousands_of_products_only_one_chain_sold_are_removed_in_one_go(session):
+    from sqlalchemy import insert
+
+    cohen = Chain(chain_id="7290000000111", name="ח. כהן")
+    session.add(cohen)
+    await session.flush()
+    store = Store(chain_id=cohen.id, store_id="1", name="כהן סניף")
+    session.add(store)
+    await session.flush()
+    n = 40000                                                                   # more than the 32767 placeholders one statement may hold
+    await session.execute(insert(Product), [{"barcode": f"729{i:010d}", "name": f"מוצר {i}"} for i in range(n)])
+    ids = [r[0] for r in (await session.execute(select(Product.id))).all()]
+    now = datetime(2026, 10, 17)
+    await session.execute(insert(Price), [
+        {"product_id": pid, "store_id": store.id, "price": "1.00", "price_updated_at": now, "is_current": True} for pid in ids
+    ])
+    await session.commit()
+    counts = await remove_chain(session, "ח. כהן", [], apply=True)
+    await session.commit()
+    assert counts["orphan_products"] == n and counts["prices"] == n
+    assert await _count(session, Product) == 0 and await _count(session, Price) == 0 and await _count(session, Chain) == 0
