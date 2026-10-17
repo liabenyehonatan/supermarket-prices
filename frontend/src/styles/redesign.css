@@ -501,7 +501,7 @@ body { background: #FFFFFF; font-size: 14px; }
 @media (min-width: 768px) { .category-card-tile { height: 136px; } .category-card-photo { width: 84px; height: 84px; } }
 
 /* ============================================================
-   Floating bottom bar: a dark capsule detached from the screen edges, the scan button raised in the middle
+   Floating bottom bar: a white capsule detached from the screen edges, on a soft shadow, the scan button raised in the middle
    ============================================================ */
 :root {
   --float-bar-h: 64px;
@@ -512,20 +512,20 @@ body { background: #FFFFFF; font-size: 14px; }
 .bottom-nav {
   inset-inline: 14px; inset-block-end: calc(var(--float-bar-gap) + var(--safe-bottom));
   height: var(--float-bar-h); padding: 0 6px; border-radius: 32px;
-  background: #1D211F; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
+  background: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
-.bottom-nav-item { color: rgba(255, 255, 255, 0.58); }
-.bottom-nav-item:hover { color: rgba(255, 255, 255, 0.85); }
-.bottom-nav-item.active { color: #67DB93; }
+.bottom-nav-item { color: var(--ink-400); }
+.bottom-nav-item:hover { color: var(--ink-700); }
+.bottom-nav-item.active { color: var(--green-600); }
 .bottom-nav-item.active::before { display: none; }
-.bottom-nav-item.active svg { fill: currentColor; fill-opacity: 0.22; }
+.bottom-nav-item.active svg { fill: currentColor; fill-opacity: 0.18; }
 .bottom-nav-item-label { font-size: 10px; }
-.bottom-nav .basket-count { box-shadow: 0 0 0 2px #1D211F; }
-.bottom-nav-scan { color: rgba(255, 255, 255, 0.58); padding-bottom: 12px; justify-content: flex-end; }
-.bottom-nav-scan.active { color: #67DB93; }
+.bottom-nav .basket-count { box-shadow: 0 0 0 2px #fff; }
+.bottom-nav-scan { color: var(--ink-400); padding-bottom: 12px; justify-content: flex-end; }
+.bottom-nav-scan.active { color: var(--green-600); }
 .bottom-nav-scan-btn {
-  width: 54px; height: 54px; margin-top: -24px; background: #fff; color: var(--green-600); border: 0;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35), 0 0 0 5px #1D211F;
+  width: 54px; height: 54px; margin-top: -24px; background: var(--green-600); color: #fff; border: 0;
+  box-shadow: 0 8px 18px rgba(20, 160, 68, 0.4), 0 0 0 5px #fff;
 }
-.bottom-nav-scan.active .bottom-nav-scan-btn { background: #fff; color: var(--green-700); }
+.bottom-nav-scan.active .bottom-nav-scan-btn { background: var(--green-700); color: #fff; }
 .site-footer { padding-bottom: calc(var(--bottom-nav-h) + var(--sp-4)); }
