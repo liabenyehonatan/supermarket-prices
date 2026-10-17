@@ -155,7 +155,8 @@ export function SearchPage() {
     initialSnap.current = null;
     if (restore && restore.q === q) {
       // Came back from a product page: the results are already here, just restore the scroll
-      if (restore.scrollY > 0) setTimeout(() => window.scrollTo(0, restore.scrollY), 0);
+      // 'instant': the page scrolls smoothly otherwise, and coming back would visibly slide down to where it was
+      if (restore.scrollY > 0) setTimeout(() => window.scrollTo({ top: restore.scrollY, behavior: 'instant' as ScrollBehavior }), 0);
       return;
     }
     if (q) void doSearch(q);
@@ -180,6 +181,9 @@ export function SearchPage() {
       if (snap) writeSnapshot({ ...snap, scrollY: y });
     };
     const onScroll = () => {
+      // The page being left is still listening for a moment while the next one scrolls itself to the top:
+      // that scroll must not become the position to come back to
+      if (!/^#\/(\?|$)/.test(window.location.hash)) return;
       lastY = window.scrollY;
       if (timer) return;
       timer = setTimeout(() => { timer = null; saveScroll(lastY); }, 200);
