@@ -569,3 +569,5 @@ body { background: #FFFFFF; font-size: 14px; }
 @media (min-width: 768px) { .promo-slide { height: 230px; } .promo-photo { width: 58%; } .promo-text { width: 38%; inset-inline-start: 28px; } .promo-title { font-size: 28px; } .promo-sub { font-size: 14px; } .promo-cta { height: 38px; font-size: 14px; padding: 0 16px 0 12px; } }
 .promo-photo { transform: scale(1.04); transform-origin: 100% 50%; }   /* trims the thin dark edge the photos carry on their outer side */
 .promo-slide { background: linear-gradient(to left, #21512D 0%, #2B5E36 48%, #386A3B 100%); }   /* a little lighter green panel */
+.promo-slide { background: var(--green-600); }   /* the same green as the scan button and the add buttons, flat */
+.promo-sub { color: rgba(255, 255, 255, 0.96); }
