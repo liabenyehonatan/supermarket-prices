@@ -571,3 +571,4 @@ body { background: #FFFFFF; font-size: 14px; }
 .promo-slide { background: linear-gradient(to left, #21512D 0%, #2B5E36 48%, #386A3B 100%); }   /* a little lighter green panel */
 .promo-slide { background: var(--green-600); }   /* the same green as the scan button and the add buttons, flat */
 .promo-sub { color: rgba(255, 255, 255, 0.96); }
+.promo-slide { background: #3E8C4F; }   /* a calm, lighter green: not as bright as the buttons */
