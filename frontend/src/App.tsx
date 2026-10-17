@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useLayoutEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigationType } from 'react-router-dom';
 import { BasketProvider } from './context/BasketContext';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -24,11 +24,25 @@ if (typeof window !== 'undefined') {
   window.addEventListener('load', () => (idle ? idle(prefetch) : setTimeout(prefetch, 1500)));
 }
 
+/** A new page starts at its top. Going back to the home page is left alone: it restores its own search and scroll. */
+function ScrollToTopOnNavigate() {
+  const { pathname } = useLocation();
+  const type = useNavigationType();
+  useLayoutEffect(() => {
+    if (type === 'POP' && pathname === '/') return;
+    // 'instant': the page scrolls smoothly (html has scroll-behavior: smooth), which would play out over the new page
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+  }, [pathname, type]);
+  return null;
+}
+
 export function App() {
   return (
     <ErrorBoundary>
     <BasketProvider>
-      <HashRouter>
+      {/* startTransition: the page you are on stays until the next one (its code included) is ready, so there is no blank frame between them */}
+      <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ScrollToTopOnNavigate />
         <Header />
         <Suspense fallback={<div className="page-loading" aria-busy="true" style={{ minHeight: '60vh' }} />}>
         <Routes>
