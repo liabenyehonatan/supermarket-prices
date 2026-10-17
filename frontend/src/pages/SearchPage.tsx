@@ -1,47 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Search, X, ChevronLeft, Barcode,
-  Plus, Check, Trash2, CircleHelp,
-} from 'lucide-react';
-
-function SearchProductIcon() {
-  // Reference illustration: magnifying glass with an apple
-  return <img src="/icons/search-apple.webp" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
-}
-
-function CompareTrendIcon() {
-  // Thin line arrow trending up, drawn to match the line-art icons beside it
-  return (
-    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden
-      stroke="#4D6B39" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 37 L17 26 L25 32 L41 16" />
-      <path d="M31 16 L41 16 L41 26" />
-    </svg>
-  );
-}
-
-function BuildBasketIcon() {
-  // Reference illustration: hand dropping a carton into a basket with a plant
-  return <img src="/icons/basket-plant.webp" alt="" aria-hidden style={{ height: 56, width: 'auto', maxWidth: 'none' }} />;
-}
-
+import { Search, X, ChevronLeft, Barcode, Plus, Trash2, SearchX } from 'lucide-react';
 import { searchProducts, cheapestPricesBatch } from '../api/client';
-import { ProductImage } from '../components/ProductImage';
 import { HeroBanner } from '../components/HeroBanner';
-import { TrustLine } from '../components/TrustLine';
+import { HowItWorksTour } from '../components/HowItWorksTour';
+import { ProductCard, ProductCardSkeleton } from '../components/ProductCard';
 import { useBasketWatch } from '../lib/basketWatch';
 import { ExampleComparisons } from '../components/ExampleComparisons';
 import { DealsStrip } from '../components/DealsStrip';
 import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
-import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { money } from '../lib/safe';
 import { useChainNames, readChainFilter, saveChainFilter } from '../lib/filters';
+import { usePeekSpacing } from '../lib/usePeekSpacing';
 
 /* ── constants ────────────────────────────────────────────── */
-const PAGE_SIZE = 20;
+// Small pages load fast; the next one is fetched well before the end of the list is reached (infinite scroll)
+const PAGE_SIZE = 10;
+const SKELETON_CARDS = 4;
 
 /* ── search snapshot: going back from a product returns to the same results and scroll position ── */
 const SNAPSHOT_KEY = 'sali_search_snapshot';
@@ -80,65 +56,12 @@ const POPULAR: { label: string; q: string }[] = [
   { label: 'גבינה צהובה', q: 'גבינה' },
 ];
 
-/* ── helpers ──────────────────────────────────────────────── */
-function fmt(p: number | string) {
-  return money(p);
-}
-
-/* ── sub-components ───────────────────────────────────────── */
-function QuickAddButton({ product, small }: { product: Product; small?: boolean }) {
-  const { addItem } = useBasket();
-  const [added, setAdded] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function handleAdd(e: React.SyntheticEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    addItem({
-      barcode: product.barcode,
-      quantity: 1,
-      name: product.name,
-      brand: product.brand,
-      unit: product.unit_of_measure,
-    });
-    setAdded(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setAdded(false), 1400);
-  }
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-
-  return (
-    <button
-      type="button"
-      className={`quick-add-btn${small ? ' small' : ''}${added ? ' added' : ''}`}
-      onMouseDown={handleAdd}
-      // The add happens on mousedown (so the dropdown's blur can't swallow it). The click that follows must
-      // not reach the card around the button, or the page jumps to the product. A keyboard press produces
-      // a click with no mousedown (detail 0), so add on that one.
-      onClick={e => { e.preventDefault(); e.stopPropagation(); if (e.detail === 0) handleAdd(e); }}
-      aria-label={`הוסף ${product.name} לסל`}
-      title="הוסף לסל"
-    >
-      {added ? <Check size={small ? 14 : 16} strokeWidth={2.5} /> : <Plus size={small ? 14 : 16} strokeWidth={2.5} />}
-    </button>
-  );
-}
-
 /* ── main component ───────────────────────────────────────── */
 export function SearchPage() {
   const navigate = useNavigate();
   const chainNames = useChainNames();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSnap = useRef<SearchSnapshot | null>(readSnapshot(searchParams.get('q') ?? ''));
-  // "How it works" shows once; afterwards it is only a small link away
-  const [showHow, setShowHow] = useState(() => {
-    try { return localStorage.getItem('sali_seen_how') !== '1'; } catch { return true; }
-  });
-  function closeHow() {
-    setShowHow(false);
-    try { localStorage.setItem('sali_seen_how', '1'); } catch { /* storage blocked — card returns next visit */ }
-  }
   const { baskets, activeId, setActive, openCreate, deleteBasket } = useBasket();
   const basketRowRef = useRef<HTMLDivElement>(null);
   const watch = useBasketWatch();
@@ -161,17 +84,18 @@ export function SearchPage() {
   const [results, setResults] = useState<Product[]>(() => initialSnap.current?.results ?? []);
   const [hasMore, setHasMore] = useState(() => initialSnap.current?.hasMore ?? false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const [moreError, setMoreError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [cheapest, setCheapest] = useState<Record<string, number>>(() => initialSnap.current?.cheapest ?? {});
   // City and chain filters also live in the URL (?city= / ?supermarket=) so a
   // refresh or a shared link keeps them; sessionStorage carries them across pages.
   const [chainFilter, setChainFilter] = useState<string>(() => searchParams.get('supermarket') ?? readChainFilter());
-  const [focused, setFocused] = useState(false);
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const [dropdownMax, setDropdownMax] = useState(360);
+  const chipsRef  = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Only the newest request may change what is on screen: a slow answer for "חל" must not replace the
   // one for "חלב", and "load more" must not append to a different query.
@@ -180,7 +104,7 @@ export function SearchPage() {
   const doSearch = useCallback(async (q: string) => {
     const seq = ++searchSeq.current;
     if (!q.trim()) { setResults([]); setHasMore(false); setError(null); setLoading(false); return; }
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setMoreError(false);
     try {
       const page = await searchProducts(q.trim(), PAGE_SIZE, 0);
       if (seq !== searchSeq.current) return;
@@ -196,21 +120,27 @@ export function SearchPage() {
     }
   }, []);
 
-  async function loadMore() {
-    if (!query.trim() || loadingMore) return;
+  // The next page of the query on screen (the URL's, not what is half-typed in the field)
+  const loadMore = useCallback(async (q: string, offset: number) => {
+    if (!q || loadingMoreRef.current) return;
     const seq = searchSeq.current;
-    setLoadingMore(true);
+    loadingMoreRef.current = true;
+    setLoadingMore(true); setMoreError(false);
     try {
-      const page = await searchProducts(query.trim(), PAGE_SIZE, results.length);
+      const page = await searchProducts(q, PAGE_SIZE, offset);
       if (seq !== searchSeq.current) return;
-      setResults(prev => [...prev, ...page]);
+      setResults(prev => {
+        const seen = new Set(prev.map(p => p.barcode));
+        return [...prev, ...page.filter(p => !seen.has(p.barcode))];
+      });
       setHasMore(page.length === PAGE_SIZE);
     } catch {
-      if (seq === searchSeq.current) setError('לא הצלחנו לטעון עוד תוצאות. נסי שוב.');
+      if (seq === searchSeq.current) setMoreError(true);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     const q = searchParams.get('q') ?? '';
@@ -292,24 +222,23 @@ export function SearchPage() {
     }, { replace: true });
   }
 
-  // The dropdown is a preview; closing it reveals the full, scrollable results list
-  function showAllResults() {
-    setFocused(false);
-    inputRef.current?.blur();
-  }
-
   function clearSearch() {
-    setQuery(''); setResults([]); setHasMore(false); setError(null);
+    if (debounce.current) clearTimeout(debounce.current);
+    setQuery(''); setResults([]); setHasMore(false); setError(null); setMoreError(false);
     setSearchParams({}, { replace: true });
     inputRef.current?.focus();
   }
 
   function startSearch(q: string) {
+    if (debounce.current) clearTimeout(debounce.current);
     setQuery(q);
     setSearchParams({ q: q.trim() }, { replace: true });
   }
 
   const hasQuery = query.trim().length > 0;
+  const settledQ = (searchParams.get('q') ?? '').trim();
+  // Typed but not searched yet (the debounce), or searching: the grid shows placeholders, never "no results"
+  const pending = loading || query.trim() !== settledQ;
 
   // Ordering of the full results list.
   const [sortMode, setSortMode] = useState<'relevance' | 'price'>('relevance');
@@ -325,37 +254,28 @@ export function SearchPage() {
     return results;
   })();
 
-  // Sort: names starting with query come first
-  const sortedResults = [...results].sort((a, b) => {
-    const q = query.trim().toLowerCase();
-    const aS = a.name.toLowerCase().startsWith(q) ? 0 : 1;
-    const bS = b.name.toLowerCase().startsWith(q) ? 0 : 1;
-    return aS - bS;
-  });
+  usePeekSpacing(chipsRef, !hasQuery);
 
-  const showDropdown = focused && hasQuery && sortedResults.length > 0;
-  const showDropdownSkeleton = focused && hasQuery && loading && sortedResults.length === 0;
-
-  // Size the dropdown so it always ends above the bottom nav bar
+  // The home blocks above and below the field fold away while a search is on (and come back when it is cleared),
+  // so the field glides to the top instead of jumping. Folded blocks stay in the page, so they must not take focus.
+  const heroRef = useRef<HTMLDivElement>(null);
+  const chipsWrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!showDropdown) return;
-    const fit = () => {
-      const el = dropdownRef.current;
-      if (!el) return;
-      const nav = document.querySelector('.bottom-nav');
-      const navTop = nav && getComputedStyle(nav).display !== 'none'
-        ? nav.getBoundingClientRect().top
-        : window.innerHeight;
-      setDropdownMax(Math.max(200, navTop - el.getBoundingClientRect().top - 12));
-    };
-    fit();
-    window.addEventListener('resize', fit);
-    window.addEventListener('scroll', fit, { passive: true });
-    return () => {
-      window.removeEventListener('resize', fit);
-      window.removeEventListener('scroll', fit);
-    };
-  }, [showDropdown]);
+    for (const el of [heroRef.current, chipsWrapRef.current]) el?.toggleAttribute('inert', hasQuery);
+  }, [hasQuery]);
+
+  // Infinite scroll: the next page starts loading while the end of the list is still well below the screen
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || pending || moreError || !settledQ) return;
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) void loadMore(settledQ, results.length);
+    }, { rootMargin: '0px 0px 900px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, pending, moreError, settledQ, results.length, loadMore]);
+
+  const showSkeletonGrid = pending && results.length === 0 && !error;
 
   /* ── render ─────────────────────────────────────────────── */
   return (
@@ -363,46 +283,45 @@ export function SearchPage() {
       <div className="container home-container">
 
         {/* ── Hero ─────────────────────────────────────────── */}
-        {!hasQuery && (
-          <div className="hero-section">
-            <HeroBanner title="השוואת מחירי סופרמרקט" />
+        <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={heroRef} aria-hidden={hasQuery || undefined}>
+          <div className="home-fold-inner">
+            <div className="hero-section">
+              <HeroBanner title="השוואת מחירי סופרמרקט" />
+            </div>
           </div>
-        )}
+        </div>
 
         {/* ── Search panel ──────────────────────────────────── */}
-        <div style={{ position: 'relative' }}>
-          <div className="search-panel-box">
-            {/* Text search */}
-            {(
-              <div className="search-hero">
-                <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
-                <input
-                  ref={inputRef}
-                  type="search"
-                  className="search-hero-input"
-                  placeholder="חפשי מוצר, מותג או ברקוד"
-                  value={query}
-                  onChange={e => handleInput(e.target.value)}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => setTimeout(() => setFocused(false), 200)}
-                  autoFocus={!hasQuery}
-                  aria-label="חיפוש מוצר"
-                />
-                {hasQuery ? (
-                  <button className="search-hero-clear" onClick={clearSearch} aria-label="נקה חיפוש">
-                    <X size={14} strokeWidth={2.5} />
-                  </button>
-                ) : (
-                  <button className="search-hero-scan" onClick={() => navigate('/scan')} aria-label="סריקת ברקוד" title="סריקת ברקוד">
-                    <Barcode size={20} strokeWidth={1.8} />
-                  </button>
-                )}
-              </div>
+        <div className="search-panel-box">
+          <div className="search-hero">
+            <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
+            <input
+              ref={inputRef}
+              type="search"
+              enterKeyHint="search"
+              className="search-hero-input"
+              placeholder="חפשי מוצר, מותג או ברקוד"
+              value={query}
+              onChange={e => handleInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); if (query.trim()) startSearch(query); } }}
+              autoFocus={!hasQuery}
+              aria-label="חיפוש מוצר"
+            />
+            {hasQuery ? (
+              <button className="search-hero-clear" onClick={clearSearch} aria-label="ניקוי החיפוש">
+                <X size={14} strokeWidth={2.5} />
+              </button>
+            ) : (
+              <button className="search-hero-scan" onClick={() => navigate('/scan')} aria-label="סריקת ברקוד" title="סריקת ברקוד">
+                <Barcode size={20} strokeWidth={1.8} />
+              </button>
             )}
+          </div>
 
-            {/* Quick searches, right under the input */}
-            {!hasQuery && (
-              <div className="suggestions-row search-panel-chips">
+          {/* Quick searches, right under the input */}
+          <div className={`home-fold${hasQuery ? ' is-folded' : ''}`} ref={chipsWrapRef} aria-hidden={hasQuery || undefined}>
+            <div className="home-fold-inner">
+              <div className="suggestions-row search-panel-chips" ref={chipsRef}>
                 {POPULAR.map(({ label, q }) => (
                   <button key={q} className="suggestion-pill" onClick={() => startSearch(q)}>
                     <Search size={13} strokeWidth={2} />
@@ -410,141 +329,13 @@ export function SearchPage() {
                   </button>
                 ))}
               </div>
-            )}
-
-            {!hasQuery && <TrustLine />}
-
-            {!hasQuery && showHow && (
-              <div className="search-steps-below">
-                <button className="search-steps-close" onClick={closeHow} aria-label="הבנתי, סגור">
-                  <X size={14} strokeWidth={2.5} />
-                </button>
-            {/* How it works: three steps in order, so the flow itself carries the meaning */}
-            <div className="search-steps">
-              <div className="search-steps-label">איך זה עובד</div>
-              <ol className="search-steps-flow">
-                <li className="search-step">
-                  <SearchProductIcon />
-                  <span>מחפשים מוצר</span>
-                </li>
-                <ChevronLeft size={16} strokeWidth={2} className="search-steps-arrow" aria-hidden />
-                <li className="search-step">
-                  <BuildBasketIcon />
-                  <span>מוסיפים לסל</span>
-                </li>
-                <ChevronLeft size={16} strokeWidth={2} className="search-steps-arrow" aria-hidden />
-                <li className="search-step">
-                  <CompareTrendIcon />
-                  <span>משווים בין הרשתות</span>
-                </li>
-              </ol>
             </div>
-              </div>
-            )}
-            {!hasQuery && !showHow && (
-              <button className="how-link" onClick={() => setShowHow(true)}>
-                <CircleHelp size={15} strokeWidth={1.8} />
-                איך זה עובד?
-              </button>
-            )}
           </div>
-
-          {/* Skeleton dropdown while loading */}
-          {showDropdownSkeleton && (
-            <div style={{
-              position: 'absolute', top: '100%', left: 0, right: 0,
-              background: 'var(--surface)', border: '1.5px solid var(--line)',
-              borderRadius: 'var(--r-lg)', boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
-              zIndex: 200, overflow: 'hidden', marginTop: 4,
-            }}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
-                  borderBottom: i < 4 ? '1px solid var(--line)' : 'none',
-                }}>
-                  <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0 }} />
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div className="skeleton" style={{ height: 14, width: `${55 + (i % 3) * 15}%` }} />
-                    <div className="skeleton" style={{ height: 12, width: `${30 + (i % 2) * 15}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Autocomplete dropdown — outside search-panel-box to avoid overflow clipping */}
-          {showDropdown && (
-            <div ref={dropdownRef} style={{
-              position: 'absolute', top: '100%', left: 0, right: 0,
-              background: 'var(--surface)', border: '1.5px solid var(--line)',
-              borderRadius: 'var(--r-lg)', boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
-              zIndex: 200, overflow: 'hidden', marginTop: 4,
-              maxHeight: dropdownMax, overflowY: 'auto',
-              opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
-            }}>
-              {sortedResults.slice(0, 8).map((product, i) => {
-                const price = cheapest[product.barcode];
-                return (
-                  <div
-                    key={product.barcode}
-                    role="button"
-                    tabIndex={0}
-                    onMouseDown={() => navigate(`/product/${product.barcode}`)}
-                    onKeyDown={e => e.key === 'Enter' && navigate(`/product/${product.barcode}`)}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '10px 16px',
-                      borderBottom: i < Math.min(sortedResults.length, 8) - 1 ? '1px solid var(--line)' : 'none',
-                      border: 'none', background: 'transparent', cursor: 'pointer',
-                      textAlign: 'start', fontFamily: 'var(--font-sans)',
-                    }}
-                  >
-                    <ProductImage barcode={product.barcode} name={product.name} imageUrl={product.image_url} size={44} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {(() => {
-                        const { displayName, size, tailBrand } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
-                        return (
-                          <>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink-900)',
-                                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {displayName}
-                              {size && <span className="size-chip">{size}</span>}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--ink-500)' }}>
-                              {[product.barcode, tailBrand || cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')}
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    {price != null && (
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green-700)', flexShrink: 0 }}>
-                        {fmt(price)}
-                      </div>
-                    )}
-                    <QuickAddButton product={product} small />
-                  </div>
-                );
-              })}
-              {sortedResults.length > 8 && (
-                <button
-                  type="button"
-                  className="dropdown-show-all"
-                  onMouseDown={e => { e.preventDefault(); showAllResults(); }}
-                  onClick={showAllResults}
-                >
-                  הצג את כל התוצאות (<span dir="ltr">{sortedResults.length}{hasMore ? '+' : ''}</span>)
-                  <ChevronLeft size={14} strokeWidth={2.5} />
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
-
-        {/* ── Chains carousel ───────────────────────────────── */}
+        {/* ── Home sections ─────────────────────────────────── */}
         {!hasQuery && (
-          <>
+          <div className="home-sections">
             {shownBaskets.length > 0 && (
               <>
                 <div className="section-header home-section-head">
@@ -623,130 +414,71 @@ export function SearchPage() {
               </div>
             )}
 
-          </>
+          </div>
         )}
 
         {/* ── Results ───────────────────────────────────────── */}
-        {hasQuery && !showDropdown && !showDropdownSkeleton && (
-          <>
+        {hasQuery && (
+          <section className="results" aria-busy={pending || undefined} aria-label="תוצאות החיפוש">
             {error && (
               <div className="empty-state">
                 <div className="empty-state-icon"><Search size={28} strokeWidth={1.5} /></div>
                 <div className="empty-state-title">שגיאה בחיפוש</div>
                 <div className="empty-state-desc">{error}</div>
-                <button className="btn btn-secondary btn-sm" onClick={() => void doSearch(query)}>
+                <button className="btn btn-secondary btn-sm" onClick={() => void doSearch(settledQ || query)}>
                   נסה שוב
                 </button>
               </div>
             )}
 
-            {!loading && !error && results.length === 0 && (
+            {!pending && !error && results.length === 0 && (
               <div className="empty-state">
-                <div className="empty-state-icon"><Barcode size={28} strokeWidth={1.5} /></div>
+                <div className="empty-state-icon"><SearchX size={28} strokeWidth={1.5} /></div>
                 <div className="empty-state-title">לא נמצאו מוצרים</div>
                 <div className="empty-state-desc">נסה שם אחר, מותג אחר, או הזן ברקוד מלא</div>
               </div>
             )}
 
-            {!loading && !error && results.length > 0 && (
+            {(results.length > 0 || showSkeletonGrid) && !error && (
               <>
-                <div className="section-header" style={{ marginBottom: 12 }}>
-                  <div>
-                    <div className="section-title">{results.length} תוצאות</div>
-                    <div className="section-subtitle">
-                      לחץ על מוצר לראות מחירים בכל הרשתות
+                <div className="results-head">
+                  <h1 className="results-title">
+                    תוצאות חיפוש עבור <bdi>״{settledQ || query.trim()}״</bdi>
+                  </h1>
+                  {results.length > 1 && (
+                    <div className="sort-row" role="group" aria-label="מיון תוצאות">
+                      {([['relevance', 'רלוונטיות'], ['price', 'הכי זול']] as const).map(([id, label]) => (
+                        <button key={id} className={`sort-pill${sortMode === id ? ' on' : ''}`} aria-pressed={sortMode === id} onClick={() => setSortMode(id)}>
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                  </div>
-                  <button className="btn btn-ghost btn-sm" onClick={clearSearch}>
-                    <X size={14} strokeWidth={2.5} />
-                    נקה
-                  </button>
+                  )}
                 </div>
 
-                {results.length > 1 && (
-                  <div className="sort-row" role="group" aria-label="מיון תוצאות">
-                    {([['relevance', 'רלוונטיות'], ['price', 'הכי זול']] as const).map(([id, label]) => (
-                      <button key={id} className={`sort-pill${sortMode === id ? ' on' : ''}`} aria-pressed={sortMode === id} onClick={() => setSortMode(id)}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <div className="results-list" style={{ paddingBottom: 80 }}>
-                  {orderedResults.map(product => {
-                    const price = cheapest[product.barcode];
-                    return (
-                      <div
-                        key={product.barcode}
-                        role="button"
-                        tabIndex={0}
-                        className="product-card"
-                        onClick={() => navigate(`/product/${product.barcode}`)}
-                        onKeyDown={e => e.key === 'Enter' && navigate(`/product/${product.barcode}`)}
-                        style={{ width: '100%', textAlign: 'start', border: '1px solid var(--line)', cursor: 'pointer' }}
-                        aria-label={`${product.name}${price ? ` — הכי זול ${fmt(price)}` : ''}`}
-                      >
-                        <ProductImage barcode={product.barcode} name={product.name} imageUrl={product.image_url} size={56} />
-
-                        <div className="product-card-body">
-                          {(() => {
-                            const { displayName, size, tailBrand } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
-                            return (
-                              <>
-                                <div className="product-card-name">
-                                  {displayName}
-                                  {size && <span className="size-chip">{size}</span>}
-                                </div>
-                                <div className="product-card-meta">
-                                  {[product.barcode, tailBrand || cleanBrand(product.brand)].filter(s => s && s !== '---').join(' · ')}
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="product-card-price">
-                          {price != null ? (
-                            <>
-                              <div className="product-card-price-value tabular savings-pop">
-                                {fmt(price)}
-                              </div>
-                              <div className="product-card-price-label">
-                                הכי זול
-                              </div>
-                            </>
-                          ) : (
-                            <div className="skeleton" style={{ width: 60, height: 24 }} />
-                          )}
-                        </div>
-
-                        <QuickAddButton product={product} />
-
-                        <ChevronLeft
-                          size={18} strokeWidth={2} color="var(--ink-300)"
-                          className="product-card-chevron"
-                          style={{ flexShrink: 0 }}
-                        />
-                      </div>
-                    );
-                  })}
+                <div className={`results-grid${pending && results.length > 0 ? ' is-stale' : ''}`}>
+                  {orderedResults.map(product => (
+                    <ProductCard key={product.barcode} product={product} price={cheapest[product.barcode]} />
+                  ))}
+                  {(showSkeletonGrid || loadingMore || (hasMore && !moreError && !pending)) &&
+                    Array.from({ length: showSkeletonGrid ? PAGE_SIZE : SKELETON_CARDS }).map((_, i) => <ProductCardSkeleton key={`sk-${i}`} />)}
                 </div>
 
-                {hasMore && (
-                  <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 80 }}>
-                    <button className="btn btn-secondary" onClick={() => void loadMore()} disabled={loadingMore}>
-                      {loadingMore ? 'טוען...' : 'טען עוד תוצאות'}
-                    </button>
+                {moreError && (
+                  <div className="results-more-error" role="status">
+                    לא הצלחנו לטעון עוד תוצאות.
+                    <button className="btn btn-secondary btn-sm" onClick={() => void loadMore(settledQ, results.length)}>נסי שוב</button>
                   </div>
                 )}
+                <div ref={sentinelRef} className="results-sentinel" aria-hidden />
               </>
             )}
-          </>
+          </section>
         )}
 
       </div>
 
+      <HowItWorksTour />
     </div>
   );
 }
