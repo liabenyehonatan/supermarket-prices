@@ -35,9 +35,9 @@ export function DealsStrip({ chain }: { chain: string }) {
       <div className="deals-strip">
         {deals.map(d => (
           <DealCard key={d.deal_id} deal={d} onPick={setPicking}
-            onAdd={deal => deal.sample_products[0] && addItem({
+            onAdd={(deal, onAdded) => deal.sample_products[0] && addItem({
               barcode: deal.sample_products[0].barcode, name: deal.sample_products[0].name, brand: deal.sample_products[0].brand,
-              unit: deal.sample_products[0].unit_of_measure, quantity: deal.min_qty })} />
+              unit: deal.sample_products[0].unit_of_measure, quantity: deal.min_qty }, onAdded)} />
         ))}
       </div>
       {picking && <DealProductsSheet deal={picking} onClose={() => setPicking(null)} />}
