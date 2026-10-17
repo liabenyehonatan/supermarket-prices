@@ -11,17 +11,15 @@ interface Slide {
   to: string;
   /** a photo in public/banner */
   img: string;
-  /** the text sits straight on the photo (a light area), not on a card */
-  direct?: boolean;
 }
 
 const SLIDES: Slide[] = [
-  { id: 'compare', title: 'השוואת מחירי סופרמרקט', sub: 'כל הרשתות, במקום אחד', cta: 'חיפוש מוצר', to: 'search', img: '/banner/compare.jpg', direct: true },
+  { id: 'compare', title: 'השוואת מחירי סופרמרקטים', sub: 'כל ההשוואות במקום אחד', cta: 'השווה עכשיו', to: 'search', img: '/banner/compare.jpg' },
   { id: 'scan', title: 'סורקים ברקוד', sub: 'ורואים מיד איפה הכי זול', cta: 'לסריקה', to: '/scan', img: '/banner/scan.jpg' },
-  { id: 'deals', title: 'מבצעים שבאמת זולים', sub: 'רק כאלה שזולים מהמחיר שמצאנו', cta: 'למבצעים', to: '/promotions', img: '/banner/deals.jpg' },
+  { id: 'deals', title: 'מבצעים שבאמת זולים', sub: 'זולים מהמחיר שמצאנו', cta: 'למבצעים', to: '/promotions', img: '/banner/deals.jpg' },
 ];
 
-/** The home banner: a full-width photo with a dark fade behind the text, a line of text and a white button; swipe for the next one, dots show where you are. */
+/** The home banner: a bright photo on one side that melts into a deep green panel with white text and a white button; swipe for the next one, dots show where you are. */
 export function PromoBanner({ onSearch }: { onSearch: () => void }) {
   const navigate = useNavigate();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -52,10 +50,9 @@ export function PromoBanner({ onSearch }: { onSearch: () => void }) {
     <section className="promo" aria-roledescription="carousel" aria-label="הצעות">
       <div className="promo-track" ref={trackRef}>
         {SLIDES.map((s, i) => (
-          <div key={s.id} className={`promo-slide${s.direct ? ' is-direct' : ''}`} aria-hidden={i !== index || undefined}>
+          <div key={s.id} className="promo-slide" aria-hidden={i !== index || undefined}>
             <img className="promo-photo" src={s.img} alt="" width={970} height={381} loading="eager" decoding="async" />
-            <div className="promo-scrim" aria-hidden />
-            <div className="promo-text">
+                        <div className="promo-text">
               <h2 className="promo-title">{s.title}</h2>
               <p className="promo-sub">{s.sub}</p>
               <button
