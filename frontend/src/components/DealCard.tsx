@@ -4,11 +4,17 @@ import type { Deal } from '../api/client';
 import { ChainLogo } from './ChainLogo';
 import { ProductImage } from './ProductImage';
 import { endsText } from '../lib/dealDays';
+import { flyToBasket } from '../lib/flyToBasket';
 
 const money = (p: number | string) => `₪${Number(p).toFixed(2)}`;
 
 /** One promotion at one brand: the set price, what a unit costs, and how far under the cheapest shelf price it is. */
-export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: Deal) => void; onPick: (deal: Deal) => void }) {
+export function DealCard({ deal, onAdd, onPick }: {
+  deal: Deal;
+  /** `onAdded` runs once the item is in a basket (it starts the "thrown into the basket" animation) */
+  onAdd: (deal: Deal, onAdded: () => void) => void;
+  onPick: (deal: Deal) => void;
+}) {
   const pct = Math.round(Number(deal.saving_pct) * 100);
   const ends = endsText(deal.ends_at);
   const first = deal.sample_products[0];
@@ -61,7 +67,10 @@ export function DealCard({ deal, onAdd, onPick }: { deal: Deal; onAdd: (deal: De
 
       <div className="deal-card-actions">
         {deal.kind === 'single' && first ? (
-          <button className="btn btn-primary btn-sm" onClick={() => onAdd(deal)}>
+          <button className="btn btn-primary btn-sm" onClick={e => {
+            const card = e.currentTarget.closest('.deal-card');
+            onAdd(deal, () => flyToBasket(card?.querySelector('.deal-card-pics') ?? card));
+          }}>
             <ShoppingBasket size={14} strokeWidth={2} /> הוסיפי לסל (×{deal.min_qty})
           </button>
         ) : (

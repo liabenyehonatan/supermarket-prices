@@ -16,6 +16,7 @@ import { cleanBrand, extractProductDisplay } from '../lib/utils';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { FilterSheet } from '../components/FilterSheet';
+import { flyToBasket } from '../lib/flyToBasket';
 import { LocationPrompt } from '../components/LocationPrompt';
 
 const NEARBY_KM = 15;
@@ -103,6 +104,7 @@ export function ProductPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   // Raw coordinates (not just the city) so each geocoded store can show its distance.
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
+  const heroImageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, [barcode]);
 
@@ -134,9 +136,11 @@ export function ProductPage() {
   function handleAdd() {
     if (!data) return;
     addItem({ barcode: data.product.barcode, quantity: qty, name: data.product.name,
-              brand: data.product.brand, unit: data.product.unit_of_measure });
-    setAdded(true);
-    setTimeout(() => setAdded(false), 2200);
+              brand: data.product.brand, unit: data.product.unit_of_measure }, () => {
+      flyToBasket(heroImageRef.current);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 2200);
+    });
   }
 
   const onLocatedCity = useCallback(async (found: string) => {
@@ -188,6 +192,9 @@ export function ProductPage() {
   const headlineMax = listedPrices.length ? Math.max(...listedPrices) : Number(data?.most_expensive_price ?? 0);
   const savings     = data ? headlineMax - headlineMin : 0;
   const savingsPct  = data && headlineMax > 0 ? Math.round((savings / headlineMax) * 100) : 0;
+  // Where the cheapest price is: one chain by name, several by count
+  const cheapestChains = [...new Set(namedPrices.filter(row => Math.abs(Number(row.price) - headlineMin) < 0.005).map(row => row.chain_name))];
+  const cheapestWhere = cheapestChains.length === 1 ? `ב${cheapestChains[0]}` : cheapestChains.length > 1 ? `ב-${cheapestChains.length} רשתות` : '';
 
   return (
     <div className="page-wrapper">
@@ -204,14 +211,17 @@ export function ProductPage() {
 
         {/* ── Product hero ─────────────────────────────────── */}
         {loading && (
-          <div className="product-hero" style={{ marginBottom: 8 }}>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <div className="skeleton" style={{ width: 72, height: 72, borderRadius: 12, flexShrink: 0 }} />
+          <div className="product-hero" aria-hidden>
+            <div className="product-hero-top">
+              <div className="skeleton" style={{ width: 96, height: 96, borderRadius: 16, flexShrink: 0 }} />
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div className="skeleton" style={{ height: 20, width: '70%' }} />
+                <div className="skeleton" style={{ height: 20, width: '80%' }} />
                 <div className="skeleton" style={{ height: 14, width: '45%' }} />
-                <div className="skeleton" style={{ height: 44, width: '55%', marginTop: 6 }} />
               </div>
+            </div>
+            <div className="product-hero-stats">
+              <div className="skeleton" style={{ height: 84, borderRadius: 12 }} />
+              <div className="skeleton" style={{ height: 84, borderRadius: 12 }} />
             </div>
           </div>
         )}
@@ -228,42 +238,46 @@ export function ProductPage() {
 
         {data && !loading && (
           <>
-            {/* Product card */}
+            {/* Product card: who it is (picture, name, size, maker), then the two numbers that matter */}
             <div className="product-hero">
-              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <ProductImage barcode={data.product.barcode} name={data.product.name} imageUrl={data.product.image_url} size={112} borderRadius={16} />
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {(() => {
-                    const { displayName, size } = extractProductDisplay(data.product.name, data.product.brand, data.product.unit_of_measure);
-                    const mfr = cleanBrand(data.product.manufacturer || data.product.brand);
-                    return (
-                      <>
-                        <h1 className="product-hero-name">{displayName}{size ? `, ${size}` : ''}</h1>
+              {(() => {
+                const { displayName, size } = extractProductDisplay(data.product.name, data.product.brand, data.product.unit_of_measure);
+                const mfr = cleanBrand(data.product.manufacturer || data.product.brand);
+                return (
+                  <div className="product-hero-top">
+                    <div ref={heroImageRef}>
+                      <ProductImage barcode={data.product.barcode} name={data.product.name} imageUrl={data.product.image_url} size={96} borderRadius={16} />
+                    </div>
+                    <div className="product-hero-text">
+                      <h1 className="product-hero-name">{displayName}</h1>
+                      {(size || (mfr && mfr !== '---')) && (
                         <div className="product-hero-meta">
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-400)' }}>
-                            ({[data.product.barcode, mfr].filter(s => s && s !== '---').join(' · ')})
-                          </span>
+                          {size && <span className="size-chip">{size}</span>}
+                          {mfr && mfr !== '---' && <span>{mfr}</span>}
                         </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
-              {/* One headline price; the range and savings are supporting detail */}
-              <div className="product-hero-price-row">
-                <span className="product-hero-price-from">מ־</span>
-                <span className="product-hero-price-min tabular">{fmt(headlineMin)}</span>
+              <div className={`product-hero-stats${savings > 0.01 ? '' : ' is-single'}`}>
+                <div className="hero-stat is-cheapest">
+                  <span className="hero-stat-label">המחיר הכי זול</span>
+                  <span className="hero-stat-value tabular" dir="ltr">{fmt(headlineMin)}</span>
+                  {cheapestWhere && <span className="hero-stat-sub">{cheapestWhere}</span>}
+                </div>
+                {savings > 0.01 && (
+                  <div className="hero-stat is-saving">
+                    <span className="hero-stat-label">אפשר לחסוך עד</span>
+                    <span className="hero-stat-value tabular" dir="ltr">{fmt(savings)}</span>
+                    <span className="hero-stat-sub">{savingsPct}% פחות מהיקר ביותר</span>
+                  </div>
+                )}
               </div>
               {savings > 0.01 && (
                 <div className="product-hero-range">
-                  טווח מחירים <bdi dir="ltr">{fmt(headlineMin)} – {fmt(headlineMax)}</bdi> · {namedPrices.length} חנויות
-                </div>
-              )}
-              {savings > 0.01 && (
-                <div className="product-hero-savings">
-                  חיסכון של עד <bdi dir="ltr">{fmt(savings)}</bdi> ({savingsPct}%)
+                  טווח המחירים <bdi dir="ltr">{fmt(headlineMin)} – {fmt(headlineMax)}</bdi> ב-{namedPrices.length} חנויות
                 </div>
               )}
             </div>
@@ -271,12 +285,12 @@ export function ProductPage() {
             {/* ── Compare table ──────────────────────────────── */}
             <div className="section-header">
               <div>
-                <div className="section-title">
+                <h2 className="section-title">{nearbyMode ? 'הכי זול לידך' : 'איפה הכי זול?'}</h2>
+                <div className="section-subtitle">
                   {nearbyMode
-                    ? `${filteredPrices.length} חנויות ליד המיקום שלך`
-                    : `${filteredPrices.length}${filteredPrices.length !== namedPrices.length ? ` מתוך ${namedPrices.length}` : ''} חנויות · מחיר נוכחי`}
+                    ? `${filteredPrices.length} חנויות עד ${NEARBY_KM} ק״מ ממך, מהזול ליקר`
+                    : `${filteredPrices.length}${filteredPrices.length !== namedPrices.length ? ` מתוך ${namedPrices.length}` : ''} חנויות, מהזול ליקר`}
                 </div>
-                <div className="section-subtitle">ממוין מהזול ליקר</div>
               </div>
             </div>
 
@@ -339,7 +353,7 @@ export function ProductPage() {
               </div>
             )}
 
-            <div className="compare-table" style={{ marginBottom: 20 }}>
+            <div className="compare-table store-list" style={{ marginBottom: 20 }}>
               {shownPrices.map((row, idx) => {
                 const isCheapest = idx === 0;
                 const diff = Number(row.price) - Number(filteredPrices[0]?.price ?? row.price);
@@ -432,7 +446,7 @@ export function ProductPage() {
         {/* Loading skeleton */}
         {loading && (
           <>
-            <div className="compare-table" style={{ marginBottom: 20 }}>
+            <div className="compare-table store-list" style={{ marginBottom: 20 }}>
               {Array.from({ length: 7 }).map((_, i) => <SkeletonRow key={i} />)}
             </div>
           </>

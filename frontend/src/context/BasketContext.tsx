@@ -5,7 +5,7 @@ import type { Basket, BasketSnapshot, LocalBasketItem } from '../types';
 // the same model as an active cart in grocery apps.
 export interface Notice { text: string; actionLabel?: string; onAction?: () => void }
 export type PickerState =
-  | { mode: 'add'; item: LocalBasketItem }
+  | { mode: 'add'; item: LocalBasketItem; onAdded?: () => void }
   | { mode: 'move'; items: LocalBasketItem[]; fromId: string }
   | { mode: 'create' }
   | null;
@@ -16,8 +16,10 @@ interface BasketContextValue {
   active: Basket;
   /** Items of the active basket — the rest of the app keeps using these. */
   items: LocalBasketItem[];
-  /** Adds to the active basket; with several baskets, the first add of a visit asks which one. */
-  addItem: (item: LocalBasketItem) => void;
+  /** Adds to the active basket; with several baskets, the first add of a visit asks which one.
+   *  `onAdded` runs once the item is really in a basket (at once, or after the picker), e.g. for the "thrown into the
+   *  basket" animation; it never runs when the picker is dismissed. */
+  addItem: (item: LocalBasketItem, onAdded?: () => void) => void;
   removeItem: (barcode: string) => void;
   /** Removes several items at once; one "undo" brings them all back. */
   removeItems: (barcodes: string[]) => void;
@@ -138,11 +140,12 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     markChosen();
   }, [putInBasket, markChosen]);
 
-  const addItem = useCallback((item: LocalBasketItem) => {
+  const addItem = useCallback((item: LocalBasketItem, onAdded?: () => void) => {
     const cur = stateRef.current;
-    if (cur.baskets.length > 1 && !chosen.current) { setPicker({ mode: 'add', item }); return; }
+    if (cur.baskets.length > 1 && !chosen.current) { setPicker({ mode: 'add', item, onAdded }); return; }
     const target = cur.baskets.find(b => b.id === cur.activeId) ?? cur.baskets[0];
     addTo(target.id, item);
+    onAdded?.();
   }, [addTo]);
 
   const restoreItems = useCallback((basketId: string, entries: { item: LocalBasketItem; index: number }[]) => {
@@ -289,7 +292,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     const target = stateRef.current.baskets.find(b => b.id === id);
     if (!target || !p || p.mode === 'create') return;
     if (p.mode === 'move') moveTo(p.items, p.fromId, target.id, target.name);
-    else addTo(target.id, p.item);
+    else { addTo(target.id, p.item); p.onAdded?.(); }
   }, [picker, addTo, moveTo]);
 
   const pickNew = useCallback((name: string) => {
@@ -304,7 +307,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
       return;
     }
     const id = createBasket(name);
-    if (p && p.mode === 'add') addTo(id, p.item);
+    if (p && p.mode === 'add') { addTo(id, p.item); p.onAdded?.(); }
   }, [picker, createBasket, addTo, moveTo]);
 
   const active = state.baskets.find(b => b.id === state.activeId) ?? state.baskets[0];
