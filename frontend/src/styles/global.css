@@ -811,21 +811,29 @@ img { max-width: 100%; display: block; }
 /* ============================================================
    Skeleton
    ============================================================ */
+/* The gradient is three times the element's width with the light band in its middle third, so every placeholder,
+   narrow or wide, gets exactly one calm sweep per cycle, right to left, and they all move in step.
+   (A fixed 400px band crossed a narrow bar in a fraction of a second and each width ran out of phase: it flickered.) */
 @keyframes shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: calc(400px + 100%) 0; }
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
 }
 .skeleton {
   background: linear-gradient(
     90deg,
     var(--surface-100) 0%,
+    var(--surface-100) 38%,
     var(--surface-200) 50%,
+    var(--surface-100) 62%,
     var(--surface-100) 100%
   );
-  background-size: 400px 100%;
+  background-size: 300% 100%;
   background-repeat: no-repeat;
   border-radius: var(--r-sm);
-  animation: shimmer 1.6s linear infinite;
+  animation: shimmer 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: var(--surface-100); }
 }
 
 /* ============================================================
