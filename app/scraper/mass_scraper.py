@@ -17,6 +17,7 @@ from il_supermarket_scarper.scrapper_runner import MainScrapperRunner
 from il_supermarket_scarper.utils.file_types import FileTypesFilters
 
 from app import settings
+from app.chains import NOT_SUPERMARKETS
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,8 @@ def installed_scrapers() -> list[str]:
 
 
 def get_enabled_scrapers(skip_blocked: bool = False) -> list[str]:
-    result = [n for n in installed_scrapers() if n not in SUPERSEDED and n not in settings.SKIP_CHAINS]
+    result = [n for n in installed_scrapers()
+              if n not in SUPERSEDED and n not in NOT_SUPERMARKETS and n not in settings.SKIP_CHAINS]
     if skip_blocked:
         result = [n for n in result if n not in BLOCKED_FROM_ABROAD]
     return result
