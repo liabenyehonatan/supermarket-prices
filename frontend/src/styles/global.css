@@ -353,6 +353,11 @@ img { max-width: 100%; display: block; }
 @media (min-width: 768px) {
   .page-wrapper { padding-block-end: var(--sp-12); }
 }
+/* A page fades in when it arrives. Opacity only: a transform would make this the containing block of the fixed
+   bars inside pages (the add-to-basket bar) while it plays. */
+.page-wrapper { animation: page-enter 200ms var(--ease-standard) both; }
+@keyframes page-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .page-wrapper { animation: none; } }
 
 /* ============================================================
    Chain Badge
@@ -530,38 +535,7 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
 }
 
-/* ============================================================
-   Product Card (search result)
-   ============================================================ */
-.product-card {
-  background: var(--bg-card);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
-  padding: var(--sp-4);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  cursor: pointer;
-  transition: box-shadow var(--dur-fast) var(--ease-standard),
-              transform var(--dur-fast) var(--ease-standard);
-  border: 1px solid transparent;
-}
-.product-card:hover {
-  box-shadow: var(--shadow-md);
-  border-color: var(--line);
-}
-.product-card:active { transform: scale(0.99); }
-
-.product-card-body { flex: 1; min-width: 0; }
-.product-card-name {
-  font-size: var(--fs-15);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-900);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: var(--lh-snug);
-}
+/* Package size, a small blue pill next to a product's name (result cards, product page) */
 .size-chip {
   display: inline-block;
   margin-inline-start: 8px;
@@ -574,69 +548,6 @@ img { max-width: 100%; display: block; }
   line-height: 1.5;
   vertical-align: middle;
   white-space: nowrap;
-}
-.product-card-meta {
-  font-size: var(--fs-13);
-  color: var(--ink-500);
-  margin-top: 2px;
-}
-.product-card-price {
-  text-align: start;
-  flex-shrink: 0;
-}
-.product-card-price-value {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-bold);
-  color: var(--green-700);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-.product-card-price-label {
-  font-size: var(--fs-12);
-  color: var(--ink-400);
-  margin-top: 2px;
-  white-space: nowrap;
-}
-.product-card-chevron {
-  color: var(--ink-300);
-  flex-shrink: 0;
-}
-
-/* Narrow phones: 5 flex items (image, text, price, add button, chevron) don't all
-   fit at full size — tighten the gap and drop the purely decorative chevron
-   (the whole row is already a click target) so the name keeps real room to truncate in. */
-@media (max-width: 400px) {
-  .product-card { gap: var(--sp-2); padding: var(--sp-3); }
-  .product-card-chevron { display: none; }
-  .product-card-price-value { font-size: var(--fs-16); }
-}
-
-.quick-add-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--r-full);
-  border: 1.5px solid var(--green-600);
-  background: var(--surface-0);
-  color: var(--green-700);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background var(--dur-fast), border-color var(--dur-fast),
-              color var(--dur-fast), transform var(--dur-fast);
-}
-.quick-add-btn:hover { background: var(--orange-100); border-color: var(--orange-400); color: var(--orange-700); }
-.quick-add-btn:active { transform: scale(0.9); }
-.quick-add-btn.added {
-  background: var(--green-600);
-  border-color: var(--green-600);
-  color: #fff;
-}
-.quick-add-btn.small {
-  width: 30px;
-  height: 30px;
 }
 
 /* ============================================================
@@ -729,59 +640,89 @@ img { max-width: 100%; display: block; }
 }
 
 /* ============================================================
-   Product hero (compare page header)
+   Product page: picture stage on top, the product sheet over its lower edge
    ============================================================ */
-.product-hero {
+/* White, the same as the product pictures' own background, so a picture never looks pasted on. */
+.product-stage {
+  background: var(--surface-0);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--line);
+  padding: var(--sp-3) var(--sp-3) calc(var(--sp-6) + var(--sp-4));
+}
+.product-stage-bar { display: flex; align-items: center; justify-content: space-between; }
+.product-stage-title { font-size: var(--fs-16); font-weight: var(--fw-semibold); color: var(--ink-800); }
+.round-btn {
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-full);
+  border: 1px solid var(--line);
+  background: var(--surface-0);
+  color: var(--ink-800);
+  cursor: pointer;
+  transition: background var(--dur-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.round-btn:hover { background: var(--surface-100); }
+.round-btn:disabled { opacity: 0.4; cursor: default; }
+.product-stage-image {
+  display: flex; align-items: center; justify-content: center;
+  height: 220px; margin-top: var(--sp-2);
+}
+/* The image tile drops its own frame on the stage */
+.product-stage-image > div { box-shadow: none !important; }
+
+.product-sheet {
+  position: relative;
+  margin: calc(-1 * var(--sp-8)) 0 var(--sp-6);
   background: var(--bg-card);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-sm);
-  padding: var(--sp-6);
-  margin-bottom: var(--sp-4);
+  border: 1px solid var(--line);
+  box-shadow: 0 -6px 20px rgba(16,20,24,0.05), var(--shadow-sm);
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
 }
-.product-hero-name {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-bold);
+.product-sheet-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); min-height: 32px; }
+.product-sheet-maker {
+  font-size: var(--fs-14); color: var(--ink-400);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.product-sheet-name {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-24);
+  font-weight: var(--fw-semibold);
   color: var(--ink-900);
   line-height: var(--lh-snug);
+  text-wrap: pretty;
 }
-.product-hero-meta {
-  font-size: var(--fs-14);
-  color: var(--ink-500);
-  margin-top: var(--sp-1);
+.product-sheet-name .size-chip { font-size: var(--fs-13); vertical-align: 3px; }
+
+/* Quantity: quiet minus, filled plus */
+.product-qty { display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0; }
+.product-qty-btn {
+  position: relative;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: var(--r-sm);
+  background: var(--surface-100); color: var(--ink-800);
+  cursor: pointer;
+  transition: background var(--dur-fast), opacity var(--dur-fast);
 }
-.product-hero-price-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin-top: var(--sp-4);
-  flex-wrap: wrap;
+.product-qty-btn::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch area */
+.product-qty-btn:hover { background: var(--surface-200); }
+.product-qty-btn:disabled { opacity: 0.45; cursor: default; }
+.product-qty-btn.is-plus { background: var(--accent); color: var(--fg-on-brand); }
+.product-qty-btn.is-plus:hover { background: var(--accent-pressed); }
+.product-qty-value { min-width: 20px; text-align: center; font-size: var(--fs-16); font-weight: var(--fw-semibold); color: var(--ink-900); }
+/* The price reads like a shelf tag: one plain number, a small "less" tag beside it, the comparison in grey below */
+.product-price { margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--line); }
+.product-price-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
+.product-price-value {
+  font-size: var(--fs-28); font-weight: var(--fw-bold); line-height: 1.1; letter-spacing: -0.01em;
+  color: var(--ink-900);
 }
-.product-hero-price-min {
-  font-size: 40px;
-  font-weight: var(--fw-black);
-  color: var(--green-700);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  direction: ltr;
-  unicode-bidi: isolate;
-}
-.product-hero-price-from {
-  font-size: var(--fs-16);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-500);
-}
-.product-hero-range {
-  font-size: var(--fs-13);
-  color: var(--ink-500);
-  margin-top: var(--sp-2);
-}
-.product-hero-savings {
-  font-size: var(--fs-14);
-  font-weight: var(--fw-semibold);
-  color: var(--green-700);
-  margin-top: var(--sp-1);
-}
+.product-price-off { font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--green-700); }
+.product-price-unit { margin-inline-start: auto; font-size: var(--fs-13); color: var(--ink-400); }
+.product-price-note { margin-top: var(--sp-1); font-size: var(--fs-13); color: var(--ink-500); }
+.product-price-note s { color: var(--ink-400); }
 
 /* ============================================================
    Sticky add-to-basket bar
@@ -809,6 +750,13 @@ img { max-width: 100%; display: block; }
     width: 360px;
   }
 }
+/* Product page: the total on one side, a big add button on the other */
+.product-buy-bar { padding: var(--sp-3); gap: var(--sp-4); }
+.product-buy-total { display: flex; flex-direction: column; gap: 2px; padding-inline-start: var(--sp-2); flex-shrink: 0; }
+.product-buy-label { font-size: var(--fs-13); color: var(--ink-500); }
+.product-buy-price { font-size: var(--fs-20); font-weight: var(--fw-bold); color: var(--ink-900); line-height: 1.1; align-self: flex-start; }
+.product-buy-btn { flex: 1; min-height: 52px; gap: var(--sp-2); font-size: var(--fs-16); transition: background 0.2s; }
+
 .add-to-basket-qty {
   display: flex;
   align-items: center;
@@ -931,21 +879,29 @@ img { max-width: 100%; display: block; }
 /* ============================================================
    Skeleton
    ============================================================ */
+/* The gradient is three times the element's width with the light band in its middle third, so every placeholder,
+   narrow or wide, gets exactly one calm sweep per cycle, right to left, and they all move in step.
+   (A fixed 400px band crossed a narrow bar in a fraction of a second and each width ran out of phase: it flickered.) */
 @keyframes shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: calc(400px + 100%) 0; }
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
 }
 .skeleton {
   background: linear-gradient(
     90deg,
     var(--surface-100) 0%,
+    var(--surface-100) 38%,
     var(--surface-200) 50%,
+    var(--surface-100) 62%,
     var(--surface-100) 100%
   );
-  background-size: 400px 100%;
+  background-size: 300% 100%;
   background-repeat: no-repeat;
   border-radius: var(--r-sm);
-  animation: shimmer 1.6s linear infinite;
+  animation: shimmer 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: var(--surface-100); }
 }
 
 /* ============================================================
@@ -1096,15 +1052,6 @@ img { max-width: 100%; display: block; }
 }
 
 /* ============================================================
-   Results grid
-   ============================================================ */
-.results-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-
-/* ============================================================
    Divider
    ============================================================ */
 .divider {
@@ -1210,56 +1157,6 @@ img { max-width: 100%; display: block; }
 /* ============================================================
    Search mode tabs
    ============================================================ */
-.search-steps {
-  margin-bottom: var(--sp-4);
-}
-.search-steps-label {
-  font-size: var(--fs-12);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-500);
-  text-align: center;
-  margin-bottom: var(--sp-2);
-}
-.search-steps-flow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  gap: var(--sp-2);
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.search-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-13);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-800);
-  text-align: center;
-  min-width: 0;
-}
-.search-step {
-  width: 120px;
-  white-space: nowrap;
-}
-/* Every icon gets the same fixed box, so the labels sit on one baseline */
-.search-step img,
-.search-step svg {
-  display: block;
-  height: 56px;
-  width: 56px;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-}
-.search-steps-arrow {
-  color: var(--ink-400);
-  flex-shrink: 0;
-  /* Centre the arrow on the 40px icon row */
-  margin-top: 16px;
-}
-
 .search-tabs {
   display: flex;
   gap: var(--sp-1);
@@ -1792,17 +1689,6 @@ img { max-width: 100%; display: block; }
 }
 
 /* ============================================================
-   Result card enhanced
-   ============================================================ */
-.product-card-barcode {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-300);
-  margin-top: 2px;
-  direction: ltr;
-}
-
-/* ============================================================
    Section divider with label
    ============================================================ */
 .section-divider {
@@ -1922,29 +1808,6 @@ img { max-width: 100%; display: block; }
   margin-bottom: var(--sp-4);
 }
 
-
-/* ============================================================
-   Search dropdown — "show all results" footer
-   ============================================================ */
-.dropdown-show-all {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 11px 16px;
-  border: none;
-  border-top: 1px solid var(--line);
-  background: var(--surface-50);
-  color: var(--green-700);
-  font-family: var(--font-sans);
-  font-size: var(--fs-13);
-  font-weight: var(--fw-semibold);
-  cursor: pointer;
-  position: sticky;
-  bottom: 0;
-}
-.dropdown-show-all:hover { background: var(--orange-50); color: var(--orange-700); }
 
 /* ============================================================
    Chain carousel (home page)
@@ -2274,8 +2137,6 @@ img { max-width: 100%; display: block; }
 }
 .search-panel-chips::-webkit-scrollbar { display: none; }
 .search-panel-chips .suggestion-pill { flex-shrink: 0; white-space: nowrap; }
-.search-steps-below { margin-top: var(--sp-5); padding-top: var(--sp-4); border-top: 1px solid var(--line); }
-.search-steps-below .search-steps { margin-bottom: 0; }
 
 /* Clearer field without the green box: soft outline, stronger on focus, readable placeholder */
 .search-panel-box .search-hero-input {
@@ -2415,22 +2276,6 @@ img { max-width: 100%; display: block; }
 .location-row:disabled { opacity: 0.6; }
 .location-empty { text-align: center; color: var(--ink-400); font-size: var(--fs-14); padding: var(--sp-6) 0; }
 
-/* First-visit "how it works" card, its reopen link, and the horizontal basket-card row */
-.search-steps-below { position: relative; }
-.search-steps-close {
-  position: absolute; top: var(--sp-3); inset-inline-end: 0;
-  width: 26px; height: 26px; border: none; border-radius: 50%;
-  background: var(--surface-100); color: var(--ink-500); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
-.how-link {
-  display: flex; align-items: center; justify-content: center; gap: 5px; margin: var(--sp-3) auto 0;
-  padding: 6px 14px; border: 1px solid var(--line-strong); border-radius: var(--r-full); background: transparent;
-  font-family: var(--font-sans); font-size: var(--fs-13); font-weight: var(--fw-medium); color: var(--ink-600);
-  cursor: pointer;
-}
-.how-link svg { color: var(--green-700); }
-.how-link:hover { border-color: var(--green-700); color: var(--green-700); }
 .card-row { display: flex; gap: var(--sp-3); overflow-x: auto; margin: 0 calc(var(--sp-2) * -1) var(--sp-4); padding: var(--sp-2); padding-bottom: var(--sp-4); scrollbar-width: none; }
 .card-row::-webkit-scrollbar { display: none; }
 
@@ -2468,15 +2313,16 @@ img { max-width: 100%; display: block; }
 .compare-delta strong.up { color: var(--red-500); }
 .basket-card {
   position: relative; flex: 0 0 132px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  min-height: 84px; padding: 10px 12px; border: 1px solid transparent; border-radius: var(--r-lg);
+  min-height: 84px; padding: 10px 12px; border: 1px solid transparent; border-top-width: 3px; border-radius: var(--r-lg);
   background: var(--surface-100); cursor: pointer; font-family: var(--font-sans); text-align: start;
-  transition: transform var(--dur-base, 0.2s) var(--ease-out, ease-out), box-shadow var(--dur-base, 0.2s) var(--ease-out, ease-out);
+  transition: transform var(--dur-base, 0.2s) var(--ease-out, ease-out), box-shadow var(--dur-base, 0.2s) var(--ease-out, ease-out),
+              background var(--dur-base, 0.2s) var(--ease-out, ease-out), border-color var(--dur-base, 0.2s) var(--ease-out, ease-out);
 }
 .basket-card-name { font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--ink-700); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .basket-card-meta { font-size: var(--fs-12); color: var(--ink-500); }
 /* The active basket: white and lifted with a green top edge; the others sit back, slightly dimmed */
 .basket-card.is-active {
-  background: var(--surface-0); transform: scale(1.05); z-index: 1; border-top: 3px solid var(--green-700);
+  background: var(--surface-0); transform: scale(1.05); z-index: 1; border-top-color: var(--green-700);
   box-shadow: 0 8px 20px rgba(30, 60, 40, 0.16);
 }
 .basket-card.is-active .basket-card-name { color: var(--ink-900); }
@@ -2521,16 +2367,11 @@ img { max-width: 100%; display: block; }
 /* The whole row is the tap target, not just the basket name */
 .basket-row.basket-row-main { width: 100%; }
 
-/* Home first screen: slimmer header, shorter banner, a visible trust line */
+/* Home first screen: slimmer header, shorter banner */
 .location-chip.icon-only { padding: 0 10px; }
 @media (max-width: 767px) { .header-basket-btn { display: none; } }  /* the bottom nav already has the basket tab */
 .hero-banner { height: clamp(128px, 26vw, 170px); }
 .hero-banner-title .hero-title { font-size: var(--fs-18, 18px); }
-.trust-line {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin: var(--sp-3) 0 0; font-size: var(--fs-13); color: var(--ink-600);
-}
-.trust-line svg { color: var(--green-600); flex-shrink: 0; }
 .hero-section { padding-top: var(--sp-1, 4px); padding-bottom: var(--sp-4); }
 
 /* Home: real price-gap examples, one swipeable card per product */
@@ -2793,3 +2634,240 @@ img { max-width: 100%; display: block; }
 .deals-rules { display: flex; gap: var(--sp-2); align-items: flex-start; margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); background: var(--surface-100); border: 1px solid var(--line); border-radius: var(--r-lg); font-size: var(--fs-13); color: var(--ink-700); }
 .deals-rules svg { flex-shrink: 0; color: var(--ink-500); margin-top: 2px; }
 .deals-rules p { margin: 0; }
+
+/* ============================================================
+   Home ↔ search: the hero and the quick searches fold away while a search is on
+   ============================================================ */
+.home-fold {
+  display: grid; grid-template-rows: 1fr; opacity: 1;
+  transition: grid-template-rows 320ms var(--ease-standard), opacity 220ms var(--ease-standard);
+}
+.home-fold-inner { min-height: 0; overflow: hidden; }
+.home-fold.is-folded { grid-template-rows: 0fr; opacity: 0; }
+.home-sections, .results { animation: fade-in 260ms var(--ease-standard); }
+@media (prefers-reduced-motion: reduce) {
+  .home-fold { transition: none; }
+  .home-sections, .results { animation: none; }
+}
+
+/* The browser's own clear button would be a second X next to ours */
+.search-hero-input::-webkit-search-cancel-button,
+.search-hero-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+
+/* Quick searches (RTL, so the far edge is the left one): it fades, and usePeekSpacing tunes the padding so the edge cuts a pill near its middle */
+.search-panel-chips {
+  padding-inline-end: var(--sp-6);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px);
+          mask-image: linear-gradient(to right, transparent 0, #000 16px);
+}
+.search-panel-chips .suggestion-pill { padding-inline: calc(var(--sp-4) + var(--peek-shift, 0px)); }
+
+/* ============================================================
+   Search results: a grid of product cards
+   ============================================================ */
+.results-head { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-1) 0 var(--sp-3); }
+.results-title { margin: 0; font-size: var(--fs-20); font-weight: var(--fw-bold); line-height: var(--lh-snug); color: var(--ink-900); text-align: start; }
+.results-head .sort-row { margin-bottom: 0; }
+.results-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3);
+  transition: opacity var(--dur-base) var(--ease-standard);
+}
+.results-grid.is-stale { opacity: 0.55; }
+@media (min-width: 560px) { .results-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 768px) { .results-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.results-sentinel { height: 1px; }
+.results-more-error {
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-3); flex-wrap: wrap;
+  margin-top: var(--sp-4); font-size: var(--fs-14); color: var(--ink-600);
+}
+.results { padding-bottom: var(--sp-8); }
+
+.result-card {
+  position: relative; display: flex; flex-direction: column; min-width: 0;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: box-shadow var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.result-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.result-card:active { transform: scale(0.985); }
+.result-card.is-skeleton { cursor: default; box-shadow: none; transform: none; }
+/* The picture gets as much of the frame as it can: chain photos often carry a marketing panel beside the pack */
+.result-card-media { aspect-ratio: 5 / 4; padding: var(--sp-2) var(--sp-2) 0; background: #FFFFFF; }
+.result-card.is-skeleton .result-card-media { padding: var(--sp-2) var(--sp-2) 0; }
+.result-card-media > div { box-shadow: none !important; }   /* ProductImage draws a tile outline; the card has its own */
+
+.result-card-body { flex: 1; display: flex; flex-direction: column; padding: 10px var(--sp-3) var(--sp-3); }
+.result-card-name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  line-height: 1.3;
+  font-size: var(--fs-14); font-weight: var(--fw-semibold); color: var(--ink-900); text-decoration: none;
+}
+.result-card-name:focus-visible { outline: none; }
+.result-card:has(.result-card-name:focus-visible) { box-shadow: var(--shadow-focus); }
+.result-card-meta { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 6px; font-size: var(--fs-12); color: var(--ink-500); }
+.result-card-meta .size-chip { margin-inline-start: 0; flex-shrink: 0; }
+.result-card-brand { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Foot: where it is cheapest, the price and its unit price on the reading side; the add button across from them */
+.result-card-foot { margin-top: auto; padding-top: var(--sp-3); }
+.result-card-price-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-2); }
+.result-card-pricing { flex: 1; min-width: 0; }
+.result-card-where { display: flex; align-items: center; gap: 5px; min-width: 0; margin-bottom: 6px; font-size: var(--fs-12); color: var(--ink-600); }
+.result-card-logos { display: flex; flex-shrink: 0; }
+.result-card-logos > * { box-shadow: 0 0 0 1.5px var(--bg-card); }
+.result-card-logos > * + * { margin-inline-start: -7px; }
+.result-card-where-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-card-price {
+  font-size: var(--fs-18); font-weight: var(--fw-bold); line-height: 1.1; letter-spacing: -0.01em; color: var(--green-700);
+}
+.result-card-unit { margin-top: 3px; font-size: var(--fs-12); color: var(--ink-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-card-noprice { font-size: var(--fs-12); color: var(--ink-400); }
+
+/* Add: an outlined circle; filled with the count once the product is in the active basket */
+.result-card-add {
+  position: relative; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--green-600); background: var(--surface-0); color: var(--green-700);
+  font-family: var(--font-sans); font-size: var(--fs-12); font-weight: var(--fw-bold);
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
+}
+.result-card-add::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch target */
+.result-card-add:hover { background: var(--green-50); }
+.result-card-add:active { transform: scale(0.9); }
+.result-card-add.in-basket, .result-card-add.is-added { background: var(--green-600); border-color: var(--green-600); color: #fff; }
+.result-card-add.is-added { animation: pop-in var(--dur-base) var(--ease-spring); }
+
+/* ============================================================
+   First-visit tour ("how it works")
+   ============================================================ */
+.tour { position: fixed; inset: 0; z-index: 2500; }
+.tour-catcher { position: fixed; inset: 0; }
+.tour-shade { position: fixed; inset: 0; background: rgba(16, 20, 24, 0.55); animation: fade-in 200ms ease-out; }
+.tour-hole {
+  position: fixed; border-radius: var(--r-xl); pointer-events: none;
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 9999px rgba(16, 20, 24, 0.55);
+  transition: top 300ms var(--ease-standard), left 300ms var(--ease-standard), width 300ms var(--ease-standard), height 300ms var(--ease-standard);
+  animation: fade-in 200ms ease-out;
+}
+.tour-card {
+  position: fixed; inset-inline: var(--sp-4); max-width: 380px; margin-inline: auto;
+  padding: var(--sp-4); background: var(--surface-0); border-radius: var(--r-xl); box-shadow: var(--shadow-xl);
+  animation: tour-in 260ms var(--ease-standard);
+}
+.tour-card:focus { outline: none; }
+.tour-close {
+  position: absolute; top: var(--sp-3); inset-inline-end: var(--sp-3); width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%;
+  background: var(--surface-100); color: var(--ink-500); cursor: pointer;
+}
+.tour-step-count { font-size: var(--fs-12); font-weight: var(--fw-semibold); color: var(--green-700); margin-bottom: var(--sp-2); }
+.tour-body { display: flex; align-items: center; gap: var(--sp-3); animation: tour-step 240ms var(--ease-standard); }
+.tour-art { flex-shrink: 0; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+.tour-art img, .tour-art svg { width: 56px; height: 56px; object-fit: contain; mix-blend-mode: multiply; }
+.tour-title { margin: 0 0 2px; font-size: var(--fs-16); font-weight: var(--fw-bold); color: var(--ink-900); }
+.tour-text { margin: 0; font-size: var(--fs-14); line-height: var(--lh-normal); color: var(--ink-600); }
+.tour-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-4); }
+.tour-dots { display: flex; gap: 6px; }
+.tour-dots span { width: 6px; height: 6px; border-radius: 99px; background: var(--ink-200); transition: width var(--dur-base), background var(--dur-base); }
+.tour-dots span.on { width: 18px; background: var(--green-600); }
+.tour-actions { display: flex; gap: var(--sp-2); }
+@keyframes tour-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes tour-step { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .tour-hole { transition: none; }
+  .tour-card, .tour-body, .tour-shade, .tour-hole { animation: none; }
+}
+
+/* ============================================================
+   "Added to basket": the picture is thrown into the basket, which bounces
+   ============================================================ */
+.fly-ghost {
+  position: fixed; top: 0; left: 0; z-index: 3000; pointer-events: none;
+  border-radius: 50%; overflow: hidden; background: #FFFFFF;
+  box-shadow: 0 6px 18px rgba(16, 20, 24, 0.22), 0 0 0 2px var(--green-600);
+  will-change: transform, opacity;
+}
+.fly-ghost img { width: 100%; height: 100%; padding: 5px; object-fit: contain; }
+.fly-ghost-dot { background: var(--green-600); }
+.basket-bump { animation: basket-bump 520ms var(--ease-spring); }
+@keyframes basket-bump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); }
+  65% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+/* ============================================================
+   Product page: the stores as one list (rows separated by a hairline, no gaps), cheapest on top
+   ============================================================ */
+.store-list {
+  gap: 0; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xs); overflow: hidden;
+}
+.store-list:empty { display: none; }
+.store-list > .store-row, .store-list > .compare-row {
+  border: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--line);
+}
+.store-list > :last-child { border-bottom: 0; }
+.store-list > .store-row.cheapest { background: var(--mint); border-bottom-color: var(--mint-line); }
+.store-list > .store-row:not(.cheapest):hover { background-color: var(--surface-50); }
+
+/* ============================================================
+   Header search: a button once the page's own field is out of sight, opening a field across the header
+   ============================================================ */
+/* Outlined like the location chip beside it: same height, border and hover */
+.header-search-toggle {
+  position: relative; flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--line-strong); background: transparent; color: var(--ink-700);
+  cursor: pointer; animation: header-search-in 220ms var(--ease-standard);
+  transition: border-color var(--dur-fast), color var(--dur-fast);
+}
+.header-search-toggle::after { content: ''; position: absolute; inset: -4px; }   /* 44px touch target */
+.header-search-toggle:hover { border-color: #2E5A40; color: #2E5A40; }
+/* On other pages wide screens have the header's search field already */
+@media (min-width: 481px) { .header-search-toggle.is-compact-only { display: none; } }
+@keyframes header-search-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+
+.header-search-pop {
+  position: absolute; inset: 0; z-index: 2;
+  padding: var(--safe-top) calc(var(--safe-right) + var(--sp-4)) 0 calc(var(--safe-left) + var(--sp-4));
+  display: flex; align-items: center; gap: var(--sp-3);
+  background: var(--surface-0); border-bottom: 1px solid var(--line);
+}
+@media (min-width: 768px) {
+  .header-search-pop { padding-inline: calc(max(0px, (100% - var(--container)) / 2) + var(--sp-8)); }
+}
+.header-search-field { position: relative; flex: 1; min-width: 0; max-width: 640px; margin-inline: auto; }
+.header-search-field-icon { position: absolute; inset-inline-start: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-400); pointer-events: none; }
+.header-search-field-input {
+  width: 100%; height: 44px; padding-inline: 42px 40px;
+  border: 1.5px solid var(--green-600); border-radius: var(--r-full); background: var(--surface-0);
+  box-shadow: 0 0 0 3px var(--green-100);
+  font-family: var(--font-sans); font-size: var(--fs-16); color: var(--ink-900);
+}
+.header-search-field-input:focus { outline: none; }
+.header-search-field-input::placeholder { color: var(--ink-500); }
+.header-search-field-input::-webkit-search-cancel-button,
+.header-search-field-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+.header-search-field-clear {
+  position: absolute; inset-inline-end: 8px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-100); color: var(--ink-500); cursor: pointer;
+}
+.header-search-cancel {
+  flex-shrink: 0; padding: 8px 2px; border: none; background: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-15); font-weight: var(--fw-semibold); color: var(--green-700);
+}
+@media (prefers-reduced-motion: reduce) { .header-search-toggle { animation: none; } }
+
+/* Phones: a smaller hint in the search fields. Only the placeholder: the typed text stays 16px, below which
+   iOS zooms the page in when the field is focused. */
+@media (max-width: 480px) {
+  .search-hero-input::placeholder,
+  .header-search-field-input::placeholder { font-size: var(--fs-14); }
+}

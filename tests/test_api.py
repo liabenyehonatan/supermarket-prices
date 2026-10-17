@@ -769,3 +769,47 @@ async def test_a_promotion_without_an_end_date_has_no_end_in_the_basket(client, 
     await session.execute(update(Promotion).values(end_date=None))
     await session.commit()
     assert _by_chain(await _basket(client, 3))["רשת ב"]["item_prices"][0]["promo"]["ends_at"] is None
+
+
+async def test_price_summary_names_every_chain_at_the_cheapest_price_with_its_unit_price(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    shufersal = Chain(chain_id="7290027600007", name="שופרסל")
+    victory = Chain(chain_id="7290696200003", name="ויקטורי")
+    yohananof = Chain(chain_id="7290803800003", name="יוחננוף")
+    session.add_all([shufersal, victory, yohananof])
+    await session.flush()
+    s1 = Store(chain_id=shufersal.id, store_id="1", name="שופרסל דיל")
+    s2 = Store(chain_id=shufersal.id, store_id="2", name="שופרסל שלי")
+    v1 = Store(chain_id=victory.id, store_id="1", name="ויקטורי")
+    y1 = Store(chain_id=yohananof.id, store_id="1", name="יוחננוף")
+    wholesale = Store(chain_id=yohananof.id, store_id="2", name="יוחננוף סיטונאות")
+    bread = Product(barcode="7290000000201", name="לחם 750 גרם", unit_of_measure="100 גרם")
+    eggs = Product(barcode="7290000000202", name="ביצים 12", unit_of_measure="יחידות")
+    session.add_all([s1, s2, v1, y1, wholesale, bread, eggs])
+    await session.flush()
+    now = datetime(2026, 10, 17)
+    p = lambda prod, store, price, unit=None, current=True: Price(
+        product_id=prod.id, store_id=store.id, price=price, unit_price=unit, price_updated_at=now, is_current=current)
+    session.add_all([
+        p(bread, s1, "15.30", "2.04"), p(bread, s2, "15.30", "2.04"),   # two stores, one chain, at the cheapest
+        p(bread, v1, "15.30", "2.04"), p(bread, y1, "17.90", "2.39"),
+        p(bread, wholesale, "9.00", "1.20"),                           # wholesale is never the cheapest
+        p(bread, y1, "1.00", "0.13", current=False),                   # nor an old price
+        p(eggs, y1, "20.20", "20.20"),
+    ])
+    await session.commit()
+
+    r = await client.post("/api/v1/products/price-summary-batch",
+                          json={"barcodes": ["7290000000201", "7290000000202", "7290000000999"]})
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"7290000000201", "7290000000202"}             # unknown barcodes are left out
+    assert float(body["7290000000201"]["price"]) == 15.30
+    assert body["7290000000201"]["chains"] == ["ויקטורי", "שופרסל"]     # each chain once
+    assert float(body["7290000000201"]["unit_price"]) == 2.04 and body["7290000000201"]["unit"] == "100 גרם"
+    assert body["7290000000202"]["chains"] == ["יוחננוף"]
+
+    too_many = await client.post("/api/v1/products/price-summary-batch", json={"barcodes": ["1"] * 101})
+    assert too_many.status_code == 422
