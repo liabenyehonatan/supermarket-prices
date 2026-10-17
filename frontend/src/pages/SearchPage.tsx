@@ -13,6 +13,7 @@ import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { useChainNames, readChainFilter, saveChainFilter } from '../lib/filters';
 import { usePeekSpacing } from '../lib/usePeekSpacing';
+import { setMainSearchHidden } from '../lib/mainSearchVisibility';
 
 /* ── constants ────────────────────────────────────────────── */
 // Small pages load fast; the next one is fetched well before the end of the list is reached (infinite scroll)
@@ -96,6 +97,7 @@ export function SearchPage() {
   const inputRef  = useRef<HTMLInputElement>(null);
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chipsRef  = useRef<HTMLDivElement>(null);
+  const panelRef  = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Only the newest request may change what is on screen: a slow answer for "חל" must not replace the
@@ -266,6 +268,16 @@ export function SearchPage() {
 
   usePeekSpacing(chipsRef, !hasQuery);
 
+  // Tell the header when the search field has gone up under it, so it can offer its own search button
+  useEffect(() => {
+    const el = panelRef.current?.querySelector('.search-hero');
+    if (!el) return;
+    const headerH = document.querySelector<HTMLElement>('.site-header')?.offsetHeight ?? 64;
+    const io = new IntersectionObserver(([e]) => setMainSearchHidden(!e.isIntersecting), { rootMargin: `-${headerH}px 0px 0px 0px` });
+    io.observe(el);
+    return () => { io.disconnect(); setMainSearchHidden(false); };
+  }, []);
+
   // The home blocks above and below the field fold away while a search is on (and come back when it is cleared),
   // so the field glides to the top instead of jumping. Folded blocks stay in the page, so they must not take focus.
   const heroRef = useRef<HTMLDivElement>(null);
@@ -302,7 +314,7 @@ export function SearchPage() {
         </div>
 
         {/* ── Search panel ──────────────────────────────────── */}
-        <div className="search-panel-box">
+        <div className="search-panel-box" ref={panelRef}>
           <div className="search-hero">
             <Search className="search-hero-icon" size={22} strokeWidth={1.8} />
             <input
