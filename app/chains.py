@@ -8,6 +8,10 @@ from sqlalchemy import case
 
 from app.db.models import Chain, Store
 
+# Publishers that are not supermarkets (scraper names). Never scraped and never parsed, whatever SKIP_CHAINS says.
+# H. Cohen is a wholesaler (decided 2026-10-17); its data was removed with app/pipeline/remove_chain.py.
+NOT_SUPERMARKETS = {"HET_COHEN", "HET_COHEN_NEW_SOURCE"}
+
 MIXED_CHAIN = "יינות ביתן / קרפור"
 BITAN = "יינות ביתן"
 CARREFOUR = "קרפור"
