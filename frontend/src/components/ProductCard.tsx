@@ -49,8 +49,8 @@ export function ProductCard({ product, price }: { product: Product; price: numbe
         aria-label={inBasket ? `${product.name}: ${inBasket} בסל. הוספת עוד אחד` : `הוספת ${product.name} לסל`}
       >
         {justAdded
-          ? <Check size={18} strokeWidth={2.5} />
-          : inBasket ? <span className="tabular">{inBasket}</span> : <Plus size={18} strokeWidth={2.5} />}
+          ? <Check size={14} strokeWidth={2.5} />
+          : inBasket ? <span className="tabular">{inBasket}</span> : <Plus size={14} strokeWidth={2.5} />}
       </button>
 
       <div className="result-card-body">
