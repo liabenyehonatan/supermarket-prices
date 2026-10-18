@@ -1,10 +1,12 @@
 # app/api/routes.py
 
 import logging
+import random
 import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, List, Literal, Optional
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -57,6 +59,12 @@ router = APIRouter(prefix="/api/v1")
 # another chain), so they are never compared across chains.
 MIN_BARCODE_LEN = 7
 MAX_SEARCH_WORDS = 6
+
+
+def _rotation_seed() -> int:
+    """A number that changes once a day (Israel's date). The home page picks its examples and deals with it, so a
+    returning visitor sees a different selection each day, and everybody sees the same one on the same day."""
+    return datetime.now(ZoneInfo("Asia/Jerusalem")).date().toordinal()
 
 
 def _real_barcode():
@@ -575,7 +583,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 # ─── Endpoint: Example comparisons (home page) ───────────────────────────────
 
 _EXAMPLES_TTL_SECONDS = 3600
-_examples_cache: tuple[float, list[ExampleComparison]] | None = None
+_examples_cache: tuple[int, float, list[ExampleComparison]] | None = None   # (day's seed, when, answer)
 
 
 @router.get(
@@ -594,24 +602,28 @@ async def example_comparisons(
     """
     global _examples_cache
     now = time.monotonic()
-    if _examples_cache and now - _examples_cache[0] < _EXAMPLES_TTL_SECONDS:
-        return _examples_cache[1][:limit]
+    seed = _rotation_seed()
+    if _examples_cache and _examples_cache[0] == seed and now - _examples_cache[1] < _EXAMPLES_TTL_SECONDS:
+        return _examples_cache[2][:limit]
 
     # Straight from the precomputed view (refreshed after every cycle): widely stocked products that
     # already have a picture. Short codes are chain-internal item numbers, and a spread above 8x is
     # almost always a placeholder price (a coupon at 0.01), so neither makes a trustworthy example.
     candidates = (await db.execute(text(
         """
-        SELECT v.product_id, v.store_count AS n, v.min_price AS lo, v.max_price AS hi
+        SELECT v.product_id, v.store_count AS n, v.min_price AS lo, v.max_price AS hi, p.image_url
           FROM product_store_counts v JOIN products p ON p.id = v.product_id
          WHERE v.store_count >= 20 AND p.image_url IS NOT NULL AND length(p.barcode) >= 7
            AND v.min_price >= 0.5 AND v.max_price - v.min_price >= 0.5
            AND v.max_price / v.min_price BETWEEN 1.1 AND 8
          ORDER BY v.store_count DESC
-         LIMIT 80
+         LIMIT 200
         """
     ))).all()
-    picked = list(candidates)
+    # Only products whose picture we really can show (an example without one is never listed), in an order that
+    # is the same all day and different the next: the day's number seeds the shuffle.
+    picked = [c for c in candidates if is_allowed_image_url(c.image_url)]
+    random.Random(seed).shuffle(picked)
 
     async def extreme(product_id: int, ascending: bool):
         order = Price.price.asc() if ascending else Price.price.desc()
@@ -650,9 +662,10 @@ async def example_comparisons(
             priciest_price=pricey[0],
             priciest_chain=pricey[1],
             stores_count=c.n,
+            image_url=c.image_url,
         ))
 
-    _examples_cache = (now, results)
+    _examples_cache = (seed, now, results)
     return results[:limit]
 
 
@@ -887,8 +900,11 @@ _DEALS_FILTER = (
 )
 
 
-def _deals_where(chain, city, kind, ending) -> tuple[str, dict]:
+def _deals_where(chain, city, kind, ending, pictured=False) -> tuple[str, dict]:
     where, params = [_DEALS_FILTER], {"lo": MIN_DEAL_SAVING, "hi": MAX_DEAL_SAVING}
+    if pictured:
+        # at least one of the products a card would show (the first twelve) has a picture
+        where.append("EXISTS (SELECT 1 FROM products pp WHERE pp.id = ANY(product_ids[1:12]) AND pp.image_url IS NOT NULL)")
     if chain and chain.strip():
         where.append("brand = :chain")
         params["chain"] = chain.strip()
@@ -931,18 +947,21 @@ async def list_deals(
     kind: Optional[Literal["single", "group"]] = Query(None),
     sort: Literal["best", "ending"] = Query("best"),
     diverse: bool = Query(False, description="At most two per brand, for the home strip"),
+    pictured: bool = Query(False, description="Only promotions with a product picture to show"),
+    daily: bool = Query(False, description="Home strip: today's selection out of the best promotions, changing each day (implies diverse)"),
     limit: int = Query(24, ge=1, le=60),
     offset: int = Query(0, ge=0, le=1000),
     db: AsyncSession = Depends(get_db),
 ):
-    where, params = _deals_where(chain, city, kind, ending=sort == "ending")
+    where, params = _deals_where(chain, city, kind, ending=sort == "ending", pictured=pictured)
+    diverse = diverse or daily
     # With a city filter the card counts the stores of that city, not all the stores of the promotion.
     stores_expr = ("cardinality(ARRAY(SELECT unnest(store_ids) INTERSECT SELECT id FROM stores WHERE city ILIKE :city))"
                    if "city" in params else "stores")
     # Deals compared with other brands come first; every order ends with deal_id so ties page deterministically.
     order = ("vs_market DESC, ends_at ASC, saving_pct DESC, deal_id" if sort == "ending"
              else "vs_market DESC, saving_pct DESC, stores DESC, deal_id")
-    fetch = limit * 3 if diverse else limit
+    fetch = limit * 10 if daily else limit * 3 if diverse else limit
     rows = (await db.execute(text(
         f"""
         SELECT deal_id, brand, description, min_qty, price, unit_price, ref_price, saving_pct, vs_market,
@@ -956,9 +975,14 @@ async def list_deals(
             if per_brand.get(r.brand, 0) < 2:
                 per_brand[r.brand] = per_brand.get(r.brand, 0) + 1
                 kept.append(r)
-        rows = kept[:limit]
+        if daily:
+            # Today's pick out of the best ones: the same for everybody all day, different tomorrow, in rank order
+            chosen = random.Random(_rotation_seed()).sample(kept, min(limit, len(kept)))
+            rows = sorted(chosen, key=kept.index)
+        else:
+            rows = kept[:limit]
     total = (await db.execute(text(f"SELECT count(*) FROM promo_deals WHERE {where}"), params)).scalar_one()
-    facet_where, facet_params = _deals_where(None, city, kind, ending=sort == "ending")
+    facet_where, facet_params = _deals_where(None, city, kind, ending=sort == "ending", pictured=pictured)
     facets = (await db.execute(text(
         f"SELECT brand, count(*) AS n FROM promo_deals WHERE {facet_where} GROUP BY brand ORDER BY n DESC, brand"),
         facet_params)).all()

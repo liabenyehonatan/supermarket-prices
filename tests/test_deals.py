@@ -243,6 +243,71 @@ async def test_the_diverse_list_takes_at_most_two_deals_per_brand(client, sessio
     assert len(everything["deals"]) == 5 and len(diverse["deals"]) == 2
 
 
+async def add_deal(session, store_ids, n, *, image):
+    """One more product on promotion ("3 for 9", shelf 5.00) in the given stores, with or without a picture."""
+    local = NOW_IL()
+    product = Product(barcode=f"72900000007{n:02d}", name=f"מוצר {n}", image_url="https://res.cloudinary.com/p.png" if image else None)
+    session.add(product)
+    await session.flush()
+    for sid in store_ids:
+        session.add(Price(product_id=product.id, store_id=sid, price="5.00", price_updated_at=datetime(2026, 10, 12), is_current=True))
+        session.add(Promotion(product_id=product.id, store_id=sid, promotion_id=f"d{n}", description="3 ב-9",
+                              min_qty=3, discounted_price="9.00", basket_eligible=True, price_is_total=True, is_active=True,
+                              start_date=local - timedelta(days=1), end_date=local + timedelta(days=4)))
+
+
+async def many_deals(session, count, *, pictured_from=0):
+    """`count` deals of chain A; those numbered `pictured_from` and up have a picture, the first ones have none."""
+    await make_world(session)
+    chain = (await session.execute(text("select id from chains where name = 'רשת א'"))).scalar_one()
+    store_ids = [r[0] for r in (await session.execute(text("select id from stores where chain_id = :c"), {"c": chain})).all()]
+    for n in range(count):
+        await add_deal(session, store_ids, n, image=n >= pictured_from)
+    await session.commit()
+    await maintenance.refresh_popularity()
+    await maintenance.refresh_deals()
+
+
+async def test_pictured_only_leaves_out_deals_without_a_product_picture(client, session):
+    await many_deals(session, 3, pictured_from=2)                   # two deals without a picture, one with (plus make_world's)
+    everything = (await client.get("/api/v1/deals", params={"limit": 20})).json()
+    only = (await client.get("/api/v1/deals", params={"limit": 20, "pictured": "true"})).json()
+    assert everything["total"] == 4 and only["total"] == 2
+    assert all(any(p["image_url"] for p in d["sample_products"]) for d in only["deals"])
+
+
+async def test_the_daily_selection_is_stable_within_a_day_and_changes_with_the_day(client, session, monkeypatch):
+    from app.api import routes
+
+    # chain A can show only two per brand, so spread the deals over several brands
+    await make_world(session)
+    local = NOW_IL()
+    for b in range(12):
+        chain = Chain(chain_id=f"9{b}", name=f"מותג {b}")
+        session.add(chain)
+        await session.flush()
+        store = Store(chain_id=chain.id, store_id="1", name=f"סניף {b}", city="חיפה")
+        session.add(store)
+        await session.flush()
+        for n in range(2):
+            await add_deal(session, [store.id], b * 10 + n, image=True)
+        await session.commit()
+        await session.execute(update(Store).where(Store.id == store.id).values(last_promo_at=func.now()))
+        await session.commit()
+    await maintenance.refresh_popularity()
+    await maintenance.refresh_deals()
+
+    async def today(seed):
+        monkeypatch.setattr(routes, "_rotation_seed", lambda: seed)
+        r = await client.get("/api/v1/deals", params={"limit": 6, "daily": "true", "pictured": "true"})
+        return [d["deal_id"] for d in r.json()["deals"]]
+
+    monday, monday_again, tuesday = await today(100), await today(100), await today(101)
+    assert len(monday) == 6 and monday == monday_again          # the same all day
+    assert monday != tuesday                                    # a different pick the next day
+    assert len(set(monday)) == 6
+
+
 async def test_ending_sort_lists_the_soonest_first_and_pages(client, session):
     await make_world(session)
     body = (await client.get("/api/v1/deals", params={"sort": "ending", "limit": 1, "offset": 0})).json()
