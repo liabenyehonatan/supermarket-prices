@@ -3,12 +3,13 @@ import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 
 /** Horizontal chain picker: a row of round logos, with arrows that appear while there is more to see. */
-export function ChainCarousel({ chains: allChains, selected, onSelect, style, counts }: {
+export function ChainCarousel({ chains: allChains, selected, onSelect, style, counts, withSearch = true }: {
   chains: string[];
   counts?: Record<string, number>;     // an optional number under each logo (e.g. how many deals the chain has)
   selected: string;
   onSelect: (name: string) => void;
   style?: CSSProperties;
+  withSearch?: boolean;                // the "find a chain" field above the logos (a page with its own search leaves it out)
 }) {
   const [query, setQuery] = useState('');
   const chains = query.trim() ? allChains.filter(name => name.includes(query.trim())) : allChains;
@@ -52,7 +53,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
 
   return (
     <>
-    {allChains.length > 8 && (
+    {withSearch && allChains.length > 8 && (
       <label className="chain-search" style={style}>
         <Search size={15} strokeWidth={2} aria-hidden />
         <input

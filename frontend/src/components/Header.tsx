@@ -15,9 +15,11 @@ export function Header() {
   const { totalItems } = useBasket();
 
   const isOnSearch = location.pathname === '/';
+  // The promotions page has its own search box (for promotions): a second one, for products, would only confuse
+  const onDeals = location.pathname === '/promotions';
   const mainSearchHidden = useMainSearchHidden();
   // On the home page the button appears once the page's own field is out of sight; elsewhere it is always there
-  const showSearchButton = !isOnSearch || mainSearchHidden;
+  const showSearchButton = !onDeals && (!isOnSearch || mainSearchHidden);
   const [searchOrigin, setSearchOrigin] = useState<DOMRect | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
@@ -62,7 +64,7 @@ export function Header() {
           <NavLink to="/scan" className={({ isActive }) => `header-nav-link${isActive ? ' active' : ''}`}>סריקת ברקוד</NavLink>
         </nav>
 
-        {!isOnSearch && (
+        {!isOnSearch && !onDeals && (
           <div className="header-search">
             <Search className="header-search-icon" size={16} strokeWidth={2} />
             <input
