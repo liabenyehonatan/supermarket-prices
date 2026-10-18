@@ -179,7 +179,7 @@ export function DealsPage() {
             type="search"
             value={typed}
             onChange={e => setTyped(e.target.value)}
-            placeholder="חפשו מבצע: עוגיות, חומוס, שמפו…"
+            placeholder="חפשו מבצע, מוצר או רשת: עוגיות, חומוס…"
             aria-label="חיפוש במבצעים"
             enterKeyHint="search"
             autoComplete="off"
@@ -199,6 +199,7 @@ export function DealsPage() {
             counts={chainCounts}
             selected={chain}
             onSelect={name => setChain(chain === name ? '' : name)}
+            withSearch={false}
             style={{ marginBottom: 12 }}
           />
         )}
