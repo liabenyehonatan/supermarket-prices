@@ -5,7 +5,7 @@ import { ProductImage } from './ProductImage';
 import { ChainLogo } from './ChainLogo';
 import { useBasket } from '../context/BasketContext';
 import { extractProductDisplay } from '../lib/utils';
-import { brandForCard, unitPriceLabel } from '../lib/productMeta';
+import { brandForCard, sizeUnitPrice, unitPriceLabel } from '../lib/productMeta';
 import { money } from '../lib/safe';
 import { flyToBasket } from '../lib/flyToBasket';
 import type { PriceSummary } from '../api/client';
@@ -48,7 +48,10 @@ export function ProductCard({ product, summary }: {
   const inBasket = items.find(i => i.barcode === product.barcode)?.quantity ?? 0;
   const { displayName, size, tailBrand } = extractProductDisplay(product.name, product.brand, product.unit_of_measure);
   const brand = brandForCard(product.name, tailBrand || product.brand);
-  const perUnit = summary ? unitPriceLabel(summary.price, summary.unit_price, summary.unit) : null;
+  // Worked out from the pack size where it can be read; the chain's own unit price only when it cannot
+  const perUnit = summary
+    ? sizeUnitPrice(summary.price, product.name, product.brand, product.unit_of_measure) ?? unitPriceLabel(summary.price, summary.unit_price, summary.unit)
+    : null;
   const open = () => navigate(`/product/${product.barcode}`);
 
   function add(e: React.MouseEvent) {
