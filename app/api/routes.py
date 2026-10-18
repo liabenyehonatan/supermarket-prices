@@ -962,7 +962,7 @@ async def list_deals(
     pictured: bool = Query(False, description="Only promotions with a product picture to show"),
     daily: bool = Query(False, description="Home strip: today's selection out of the best promotions, changing each day (implies diverse)"),
     limit: int = Query(24, ge=1, le=60),
-    offset: int = Query(0, ge=0, le=1000),
+    offset: int = Query(0, ge=0, le=10000),
     db: AsyncSession = Depends(get_db),
 ):
     where, params = _deals_where(chain, city, kind, ending=sort == "ending", pictured=pictured)
