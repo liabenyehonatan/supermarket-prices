@@ -916,11 +916,12 @@ def _deals_where(chain, city, kind, ending, pictured=False, q=None) -> tuple[str
     if pictured:
         # at least one of the products a card would show (the first twelve) has a picture
         where.append(_HAS_PICTURE)
-    # Every word must be in the promotion's own text or in the name of one of the products a card shows (the first
-    # twelve): "עוגיות" finds "ש.ר. עוגיות יין 3 ב10" as well as a promotion on a product named "עוגיות שוקולד".
+    # Every word must be in the promotion's own text, the brand's name or the name of one of the products a card shows
+    # (the first twelve): "עוגיות" finds "ש.ר. עוגיות יין 3 ב10" as well as a promotion on a product named "עוגיות
+    # שוקולד", and "שופרסל" finds that brand's promotions.
     for n, word in enumerate(_deal_search_words(q)):
         where.append(
-            f"(description ILIKE :w{n} OR EXISTS (SELECT 1 FROM products ps "
+            f"(description ILIKE :w{n} OR brand ILIKE :w{n} OR EXISTS (SELECT 1 FROM products ps "
             f"WHERE ps.id = ANY(product_ids[1:12]) AND ps.name ILIKE :w{n}))")
         params[f"w{n}"] = f"%{word}%"
     if chain and chain.strip():

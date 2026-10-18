@@ -319,6 +319,8 @@ async def test_search_finds_a_deal_by_its_text_or_a_product_name_and_needs_every
     assert await found("שוקולד עוגיות") == (1, 1, [1])              # every word, in any order
     assert await found("מבצע מיוחד") == (1, 1, [1])                 # by the promotion's own text
     assert await found("עוגיות מיוחד") == (1, 1, [1])               # one word in each
+    assert await found("רשת עוגיות") == (1, 1, [1])                 # the brand's name counts too ("רשת א" is the brand)
+    assert await found("רשת גמלאים") == (0, 0, [])                  # a brand name that is not there finds nothing
     assert await found("עוגיות גבינה") == (0, 0, [])                # a word that is nowhere: nothing, and no brand counts
     assert await found("") == (1, 1, [1])                           # no search: everything
     assert await found("ע") == (1, 1, [1])                          # one letter is not a word (like the product search)
