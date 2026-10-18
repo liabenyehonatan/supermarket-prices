@@ -26,20 +26,21 @@ export function DealCard({ deal, onAdd, onPick }: {
   const [justAdded, setJustAdded] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  // Only real pictures: a row of identical placeholder baskets says nothing and crowds the card
+  // Only real pictures in a group (a row of identical placeholder baskets crowds the card); one placeholder if there are none
   const pictured = deal.sample_products.filter(p => p.image_url).slice(0, deal.kind === 'group' ? 3 : 1);
   const single = deal.kind === 'single' && first;
   return (
     <article className="deal-card">
       <div className="deal-card-media" ref={mediaRef}>
         <span className="deal-saving-pill tabular" aria-label={`זול ב-${pct}%`}><bdi dir="ltr">-{pct}%</bdi></span>
-        {pictured.length > 0 && (
-          <div className={`deal-card-pics${pictured.length > 1 ? ' is-group' : ''}`}>
-            {pictured.map(p => (
-              <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={pictured.length > 1 ? 52 : '100%'} borderRadius={0} />
-            ))}
-          </div>
-        )}
+        {/* A blank box looks like a picture that did not load: without one, the same placeholder as everywhere else */}
+        <div className={`deal-card-pics${pictured.length > 1 ? ' is-group' : ''}`}>
+          {pictured.length > 0
+            ? pictured.map(p => (
+                <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={pictured.length > 1 ? 52 : '100%'} borderRadius={0} />
+              ))
+            : <ProductImage barcode={first?.barcode ?? ''} name={first?.name ?? deal.description} noPicture size="100%" borderRadius={0} />}
+        </div>
       </div>
 
       <div className="deal-card-body">
