@@ -139,7 +139,10 @@ async def search_products(
         rows = result.all()
         products = [r[0] for r in rows]
 
-        if not products and offset == 0:
+        # A name made of one or two repeated letters ("קקקקקקקק") is a keyboard smash, not a typo: matching it
+        # loosely only returns unrelated products, so such a query gets no fuzzy fallback.
+        meaningful = len(set("".join(words))) >= 3
+        if not products and offset == 0 and meaningful:
             # Fuzzy fallback (first page only — later pages would just append noise) via pg_trgm — handles typos like "גבימה" → "גבינה"
             # `<%` can use the trigram index (word_similarity(...) > x cannot and scanned every product);
             # the threshold is set for this transaction only.

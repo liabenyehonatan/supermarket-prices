@@ -39,7 +39,7 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
 
         <div className="filter-sheet-label">עיר</div>
         <div className="filter-sheet-city">
-          <CityPicker value={city} cities={cities} onChange={onCity} placeholder="חפשי עיר..." />
+          <CityPicker value={city} cities={cities} onChange={onCity} placeholder="חפשו עיר..." />
           <button className="filter-sheet-locate" onClick={onLocate} disabled={locating}>
             <Navigation size={15} strokeWidth={2} />
             {locating ? 'מאתר...' : 'המיקום שלי'}
@@ -53,7 +53,7 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
             type="search"
             value={chainQuery}
             onChange={e => setChainQuery(e.target.value)}
-            placeholder="חפשי רשת..."
+            placeholder="חפשו רשת..."
             aria-label="חיפוש רשת"
           />
         </label>
@@ -73,7 +73,7 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
           ))}
         </div>
 
-        <button className="btn btn-primary btn-full filter-sheet-done" onClick={onClose}>הצג תוצאות</button>
+        <button className="btn btn-primary btn-full filter-sheet-done" onClick={onClose}>הציגו תוצאות</button>
       </div>
     </div>,
     document.body,

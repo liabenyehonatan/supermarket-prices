@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ErrorState } from '../components/ErrorState';
 import { Search, X, ChevronLeft, ChevronRight, Barcode, Plus, Trash2, SearchX } from 'lucide-react';
 import { searchProducts, priceSummaryBatch, type PriceSummary } from '../api/client';
 import { PromoBanner } from '../components/PromoBanner';
@@ -116,7 +117,7 @@ export function SearchPage() {
       setHasMore(page.length === PAGE_SIZE);
     } catch {
       if (seq !== searchSeq.current) return;
-      setError('לא הצלחנו לטעון את התוצאות כרגע. נסי שוב בעוד רגע.');
+      setError('לא הצלחנו לטעון את התוצאות כרגע. נסו שוב בעוד רגע.');
       setResults([]);
       setHasMore(false);
     } finally {
@@ -184,7 +185,7 @@ export function SearchPage() {
     const onScroll = () => {
       // The page being left is still listening for a moment while the next one scrolls itself to the top:
       // that scroll must not become the position to come back to
-      if (!/^#\/(\?|$)/.test(window.location.hash)) return;
+      if (window.location.pathname !== '/') return;
       lastY = window.scrollY;
       if (timer) return;
       timer = setTimeout(() => { timer = null; saveScroll(lastY); }, 200);
@@ -319,7 +320,7 @@ export function SearchPage() {
           <div className="home-fold-inner">
             <div className="greeting">
               <h1 className="greeting-title">מה נקנה היום? <span aria-hidden>👋</span></h1>
-              <p className="greeting-sub">חפשי מוצר וראי איפה הכי זול</p>
+              <p className="greeting-sub">חפשו מוצר וראו איפה הכי זול</p>
             </div>
           </div>
         </div>
@@ -339,7 +340,7 @@ export function SearchPage() {
               type="search"
               enterKeyHint="search"
               className="search-hero-input"
-              placeholder="חפשי מוצר, מותג או ברקוד"
+              placeholder="חפשו מוצר, מותג או ברקוד"
               value={query}
               onChange={e => handleInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); if (query.trim()) startSearch(query); } }}
@@ -442,7 +443,7 @@ export function SearchPage() {
               <div>
                 <div className="section-title">מחירים לפי רשת</div>
                 <div className="section-subtitle">
-                  {chainFilter ? 'מציגים מחירים רק מהרשת שבחרת' : 'לחצי על רשת כדי לראות מחירים רק ממנה'}
+                  {chainFilter ? 'מציגים מחירים רק מהרשת שבחרת' : 'לחצו על רשת כדי לראות מחירים רק ממנה'}
                 </div>
               </div>
             </div>
@@ -457,7 +458,7 @@ export function SearchPage() {
                 <span>מחירים רק מ<strong>{chainFilter}</strong> בכל האפליקציה</span>
                 <button onClick={() => selectChain('')}>
                   <X size={13} strokeWidth={2.5} />
-                  הצג את כל הרשתות
+                  הציגו את כל הרשתות
                 </button>
               </div>
             )}
@@ -471,22 +472,22 @@ export function SearchPage() {
         {/* ── Results ───────────────────────────────────────── */}
         {hasQuery && (
           <section className="results" aria-busy={pending || undefined} aria-label="תוצאות החיפוש">
-            {error && (
-              <div className="empty-state">
-                <div className="empty-state-icon"><Search size={28} strokeWidth={1.5} /></div>
-                <div className="empty-state-title">שגיאה בחיפוש</div>
-                <div className="empty-state-desc">{error}</div>
-                <button className="btn btn-secondary btn-sm" onClick={() => void doSearch(settledQ || query)}>
-                  נסה שוב
-                </button>
-              </div>
-            )}
+            {error && <ErrorState title="שגיאה בחיפוש" text={error} onRetry={() => void doSearch(settledQ || query)} />}
 
             {!pending && !error && results.length === 0 && (
               <div className="empty-state">
                 <div className="empty-state-icon"><SearchX size={28} strokeWidth={1.5} /></div>
-                <div className="empty-state-title">לא נמצאו מוצרים</div>
-                <div className="empty-state-desc">נסה שם אחר, מותג אחר, או הזן ברקוד מלא</div>
+                {(settledQ || query).trim().length < 2 ? (
+                  <>
+                    <div className="empty-state-title">הקלידו עוד אות או שתיים</div>
+                    <div className="empty-state-desc">כדי לחפש צריך לפחות שני תווים, או ברקוד מלא</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="empty-state-title">לא נמצאו מוצרים</div>
+                    <div className="empty-state-desc">נסו שם אחר, מותג אחר, או הזינו ברקוד מלא</div>
+                  </>
+                )}
               </div>
             )}
 
@@ -518,7 +519,7 @@ export function SearchPage() {
                 {moreError && (
                   <div className="results-more-error" role="status">
                     לא הצלחנו לטעון עוד תוצאות.
-                    <button className="btn btn-secondary btn-sm" onClick={() => void loadMore(settledQ, results.length)}>נסי שוב</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => void loadMore(settledQ, results.length)}>נסו שוב</button>
                   </div>
                 )}
                 <div ref={sentinelRef} className="results-sentinel" aria-hidden />

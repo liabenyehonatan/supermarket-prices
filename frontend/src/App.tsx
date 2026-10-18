@@ -1,5 +1,5 @@
 import { lazy, Suspense, useLayoutEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigationType } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigationType } from 'react-router-dom';
 import { BasketProvider } from './context/BasketContext';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -42,7 +42,7 @@ export function App() {
     <ErrorBoundary>
     <BasketProvider>
       {/* startTransition: the page you are on stays until the next one (its code included) is ready, so there is no blank frame between them */}
-      <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ScrollToTopOnNavigate />
         <Header />
         <Suspense fallback={<div className="page-loading" aria-busy="true" style={{ minHeight: '60vh' }} />}>
@@ -60,7 +60,7 @@ export function App() {
         <SiteFooter />
         <BottomNav />
         <BasketOverlays />
-      </HashRouter>
+      </BrowserRouter>
     </BasketProvider>
     </ErrorBoundary>
   );
