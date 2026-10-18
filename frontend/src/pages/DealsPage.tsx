@@ -2,7 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigationType } from 'react-router-dom';
 import { fetchDeals, type Deal } from '../api/client';
 import { useBasket } from '../context/BasketContext';
-import { X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { ChainCarousel } from '../components/ChainCarousel';
 import { DealCard } from '../components/DealCard';
 import { DealProductsSheet } from '../components/DealProductsSheet';
@@ -17,7 +17,7 @@ const PAGE = 24;
 const hasPicture = (d: Deal) => d.sample_products.some(p => p.image_url);
 const INTRO_KEY = 'sali_deals_intro_seen';
 
-const filterKey = (f: { chain: string; city: string; sort: string; kind: string }) => `${f.chain}|${f.city}|${f.sort}|${f.kind}`;
+const filterKey = (f: { chain: string; city: string; sort: string; kind: string; q: string }) => `${f.chain}|${f.city}|${f.sort}|${f.kind}|${f.q}`;
 
 export function DealsPage() {
   useDocumentTitle('מבצעים | סלי');
@@ -29,10 +29,17 @@ export function DealsPage() {
   const initial = useRef(navigationType === 'POP' ? readDealsSnapshot(readCityFilter()) : null);
   // The filters the saved cards belong to: while they are unchanged nothing is fetched (it must survive React's dev
   // double-run of effects, so it is not a one-shot flag); any real fetch clears it.
-  const restoredFor = useRef<string | null>(initial.current && filterKey(initial.current));
+  const restoredFor = useRef<string | null>(initial.current && filterKey({ ...initial.current, q: initial.current.q ?? '' }));
   const [chain, setChain] = useState(initial.current?.chain ?? '');
   const [sort, setSort] = useState<'best' | 'ending'>(initial.current?.sort ?? 'best');
   const [kind, setKind] = useState<'' | 'single' | 'group'>(initial.current?.kind ?? '');
+  // What is typed in the search box, and (a moment after the typing stops) the words the list is searched for
+  const [typed, setTyped] = useState(initial.current?.q ?? '');
+  const [q, setQ] = useState(initial.current?.q ?? '');
+  useEffect(() => {
+    const t = setTimeout(() => setQ(typed.trim()), 350);
+    return () => clearTimeout(t);
+  }, [typed]);
   const [deals, setDeals] = useState<Deal[]>(initial.current?.deals ?? []);
   const [total, setTotal] = useState(initial.current?.total ?? 0);
   const [chains, setChains] = useState<{ name: string; count: number }[]>(initial.current?.chains ?? []);
@@ -49,8 +56,8 @@ export function DealsPage() {
   useEffect(() => { if (introOpen) markSeen(INTRO_KEY); }, [introOpen]);
   const generation = useRef(0);          // bumped by every filter change: an answer for an older filter is dropped
   const scrollY = useRef(initial.current?.scrollY ?? 0);
-  const latest = useRef({ chain, sort, kind, city, deals, total, chains });
-  latest.current = { chain, sort, kind, city, deals, total, chains };
+  const latest = useRef({ chain, sort, kind, city, q, deals, total, chains });
+  latest.current = { chain, sort, kind, city, q, deals, total, chains };
 
   useEffect(() => onCityFilterChange(setCity), []);
 
@@ -61,7 +68,7 @@ export function DealsPage() {
   }, []);
 
   useEffect(() => {
-    if (restoredFor.current === filterKey({ chain, city, sort, kind })) return;      // the saved view is already on screen
+    if (restoredFor.current === filterKey({ chain, city, sort, kind, q })) return;      // the saved view is already on screen
     restoredFor.current = null;
     let live = true;
     generation.current += 1;
@@ -69,19 +76,19 @@ export function DealsPage() {
     setLoadingMore(false);
     setLoadFailed(false);
     setMoreFailed(false);
-    fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE })
+    fetchDeals({ chain, city, sort, kind: kind || undefined, q: q || undefined, limit: PAGE })
       .then(r => { if (live) { fetched.current = r.deals.length; setDeals(r.deals); setTotal(r.total); setChains(r.chains); } })
       .catch(() => { if (live) { setDeals([]); setTotal(0); setLoadFailed(true); } })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [chain, city, sort, kind, attempt]);
+  }, [chain, city, sort, kind, q, attempt]);
 
   // Keep the view for "back": the data whenever it changes, the scroll position from scroll events (read at leave time
   // it would be mid-animation, or already clamped by the shorter page that replaces this one).
   useEffect(() => {
     if (loading) return;
     writeDealsSnapshot({ ...latest.current, scrollY: scrollY.current });
-  }, [loading, chain, sort, kind, city, deals, total, chains]);
+  }, [loading, chain, sort, kind, city, q, deals, total, chains]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -111,7 +118,7 @@ export function DealsPage() {
     setLoadingMore(true);
     setMoreFailed(false);
     try {
-      const r = await fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE, offset: fetched.current });
+      const r = await fetchDeals({ chain, city, sort, kind: kind || undefined, q: q || undefined, limit: PAGE, offset: fetched.current });
       if (gen !== generation.current) return;          // the filter changed meanwhile: this page belongs to the old one
       fetched.current += r.deals.length;
       setDeals(prev => {
@@ -157,20 +164,44 @@ export function DealsPage() {
           <div>
             <div className="section-title">מבצעים</div>
             <div className="section-subtitle">
-              {total} מבצעים בתוקף{city ? ` בסניפי ${city}` : ''}, מדורגים לפי כמה הם זולים מהמחיר הזול שמצאנו ברשתות
+              {q
+                ? <>{total} מבצעים נמצאו עבור <bdi>״{q}״</bdi>{city ? ` בסניפי ${city}` : ''}</>
+                : <>{total} מבצעים בתוקף{city ? ` בסניפי ${city}` : ''}, מדורגים לפי כמה הם זולים מהמחיר הזול שמצאנו ברשתות</>}
             </div>
           </div>
         </div>
 
         {introOpen && <DealsRulesBox />}
 
-        <ChainCarousel
-          chains={chainNames}
-          counts={chainCounts}
-          selected={chain}
-          onSelect={name => setChain(chain === name ? '' : name)}
-          style={{ marginBottom: 12 }}
-        />
+        <label className="chain-search deals-search">
+          <Search size={17} strokeWidth={2} aria-hidden />
+          <input
+            type="search"
+            value={typed}
+            onChange={e => setTyped(e.target.value)}
+            placeholder="חפשו מבצע: עוגיות, חומוס, שמפו…"
+            aria-label="חיפוש במבצעים"
+            enterKeyHint="search"
+            autoComplete="off"
+            maxLength={60}
+          />
+          {typed && (
+            <button type="button" className="deals-search-clear" aria-label="ניקוי החיפוש" onClick={() => { setTyped(''); setQ(''); }}>
+              <X size={15} strokeWidth={2.5} />
+            </button>
+          )}
+        </label>
+
+        {/* No brand has a deal for these filters: nothing to pick from (its own "no brand found" line would be misleading) */}
+        {chainNames.length > 0 && (
+          <ChainCarousel
+            chains={chainNames}
+            counts={chainCounts}
+            selected={chain}
+            onSelect={name => setChain(chain === name ? '' : name)}
+            style={{ marginBottom: 12 }}
+          />
+        )}
         {chain && (
           <div className="chain-active-note" role="status">
             <span>מבצעים רק מ<strong>{chain}</strong></span>
@@ -189,7 +220,15 @@ export function DealsPage() {
         )}
         {!loading && !loadFailed && deals.length === 0 && (
           <div className="empty-state" style={{ padding: '32px 0' }}>
-            <div className="empty-state-title">אין כרגע מבצעים שמתאימים לסינון</div>
+            {q ? (
+              <>
+                <div className="empty-state-title">לא נמצאו מבצעים עבור <bdi>״{q}״</bdi></div>
+                <div className="empty-state-desc">נסו מילה אחרת (למשל שם של מוצר או סוג מוצר), או הסירו חלק מהסינון</div>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setTyped(''); setQ(''); }}>ניקוי החיפוש</button>
+              </>
+            ) : (
+              <div className="empty-state-title">אין כרגע מבצעים שמתאימים לסינון</div>
+            )}
           </div>
         )}
         <div className="deals-grid">
