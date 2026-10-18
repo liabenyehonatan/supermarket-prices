@@ -1,4 +1,4 @@
-import { cleanBrand, fixProductName } from './utils';
+import { cleanBrand, extractProductDisplay, fixProductName } from './utils';
 import { money } from './safe';
 
 // Small decisions about what a product card says beside the price.
@@ -26,6 +26,40 @@ export function unitPriceLabel(price: unknown, unitPrice: unknown, unit?: string
   if (!word) return null;
   const qty = m[1] && Number(m[1]) !== 1 ? m[1] : '';
   return { price: money(u), per: qty ? `ל-${qty} ${word}` : `ל${word}` };
+}
+
+const SIZE_PARTS = /^(\d+(?:[.,]\d+)?)(?:\s*[×*x]\s*(\d+(?:[.,]\d+)?))?\s*(גרם|ק"ג|ק״ג|קילוגרם|ליטר|מ"ל|מ״ל|מיליליטר|יחידות|יחידה)$/;
+
+/**
+ * The price per 100 g / per kg, per 100 ml / per litre, or per item, worked out from the pack's own size ("250 גרם",
+ * "6×1.5 ליטר", "12 יחידות") and the price, so every product with a readable size gets one in the same units
+ * (the chains' own unit prices are missing for many products, and odd for some). Null when the size cannot be read,
+ * when the pack is exactly one kilo / litre / item (nothing new to say), or when the result looks implausible.
+ */
+export function sizeUnitPrice(price: unknown, name?: string | null, brand?: string | null, unit?: string | null): { price: string; per: string } | null {
+  const p = Number(price);
+  if (!Number.isFinite(p) || p <= 0 || !name) return null;
+  const { size } = extractProductDisplay(name, brand, unit);
+  const m = fixProductName(size).trim().match(SIZE_PARTS);
+  if (!m) return null;
+  const amount = Number(m[1].replace(',', '.')) * (m[2] ? Number(m[2].replace(',', '.')) : 1);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const word = m[3];
+  let value: number, per: string;
+  if (/^(גרם|ק)/.test(word) || word === 'קילוגרם') {
+    const grams = /^(ק"ג|ק״ג|קילוגרם)$/.test(word) ? amount * 1000 : amount;
+    if (grams < 5 || grams > 50000) return null;
+    if (grams >= 1000) { value = p / (grams / 1000); per = 'לק״ג'; } else { value = (p / grams) * 100; per = 'ל-100 גרם'; }
+  } else if (/^(ליטר|מ"ל|מ״ל|מיליליטר)$/.test(word)) {
+    const ml = word === 'ליטר' ? amount * 1000 : amount;
+    if (ml < 5 || ml > 50000) return null;
+    if (ml >= 1000) { value = p / (ml / 1000); per = 'לליטר'; } else { value = (p / ml) * 100; per = 'ל-100 מ״ל'; }
+  } else {
+    if (amount < 2 || amount > 1000) return null;                 // a single item: the price is the unit price
+    value = p / amount; per = 'ליחידה';
+  }
+  if (value < 0.01 || Math.abs(value - p) < 0.005) return null;
+  return { price: money(value), per };
 }
 
 // Words that describe the kind of company, not its name ("מאפיית אנג'ל" is Angel)
