@@ -106,7 +106,9 @@ services:
   worker:
     logging: *logging
     <<: *backend
-    command: python -m app.worker
+    # nice: while it runs (about two hours, twice a day) the worker takes every CPU the site leaves free but gives way to
+    # the API and the database, so visitors are not kept waiting by the update
+    command: nice -n 15 python -m app.worker
     stop_grace_period: 3m        # lets the current file finish loading on `docker stop`
     shm_size: 1gb                # headless Chromium for the scrapers that need it
     environment:

@@ -40,6 +40,22 @@ async def test_data_health_is_503_until_an_ingest_succeeded(client, session):
     assert r.status_code == 200 and r.json()["status"] == "ok"
 
 
+async def test_a_database_timeout_is_a_busy_503_not_a_500(client, monkeypatch):
+    from sqlalchemy.exc import DBAPIError
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.api import routes
+
+    async def too_slow(self, *a, **k):
+        raise DBAPIError("SELECT 1", {}, Exception("canceling statement due to statement timeout"))
+
+    routes._stats_cache = None
+    monkeypatch.setattr(AsyncSession, "execute", too_slow)
+    r = await client.get("/api/v1/stats")
+    assert r.status_code == 503 and r.headers["retry-after"] == "5"
+    assert "busy" in r.json()["detail"]
+    routes._stats_cache = None
+
+
 async def test_task_endpoints_are_gone(client):
     for method, path in [("POST", "/api/v1/tasks/scrape"), ("POST", "/api/v1/tasks/parse"),
                          ("POST", "/api/v1/tasks/scrape-and-parse"), ("GET", "/api/v1/tasks/abc")]:
