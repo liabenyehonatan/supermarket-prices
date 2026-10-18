@@ -59,6 +59,12 @@ DB_PGBOUNCER = _bool("DB_PGBOUNCER", False)
 # Comma-separated list of allowed browser origins. Behind the bundled nginx the
 # frontend and API share an origin, so this is only needed when they do not.
 FRONTEND_URLS = _list("FRONTEND_URL")
+# The site's public address (https://example.com). When set, canonical links, the sitemap and link previews use it
+# whatever address a request came in on (IP, www, domain); when empty they follow the request.
+SITE_URL = _env("SITE_URL").rstrip("/")
+# Where the API fetches the built page shell (index.html) to put each page's own title, description,
+# canonical link and structured data into it.
+SEO_SHELL_URL = _env("SEO_SHELL_URL") or "http://frontend:80/index.html"
 DEV_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",

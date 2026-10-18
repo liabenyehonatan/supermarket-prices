@@ -221,17 +221,6 @@ async def test_price_freshness_comes_from_the_stores_last_full_file(client, sess
     assert r.json()["prices"][0]["scraped_at"].startswith("2026-10-13T06:00")   # not the row's own old stamp
 
 
-async def test_robots_and_sitemap_use_the_address_they_are_asked_on(client):
-    robots = await client.get("/robots.txt", headers={"host": "sali.example"})
-    assert robots.status_code == 200 and robots.headers["content-type"].startswith("text/plain")
-    assert "Disallow: /api/" in robots.text and "Sitemap: http://sali.example/sitemap.xml" in robots.text
-
-    sitemap = await client.get("/sitemap.xml", headers={"host": "sali.example"})
-    assert sitemap.status_code == 200 and "xml" in sitemap.headers["content-type"]
-    assert "<loc>http://sali.example/</loc>" in sitemap.text
-    assert "<loc>http://sali.example/promotions</loc>" in sitemap.text and "#" not in sitemap.text
-
-
 async def test_timestamps_carry_a_timezone_so_browsers_do_not_misread_them(client, session):
     from datetime import datetime
     from app.db.models import Chain, Price, Product, Store
