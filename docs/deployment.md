@@ -257,3 +257,24 @@ To turn them off set `SCRAPE_PROMOS=false`. Rows already loaded stay and keep be
 ## Settings reference
 
 See `.env.example` and `app/settings.py` for every variable and its default.
+
+
+## Automatic deploy
+
+Every push to `main` that passes CI is deployed by `.github/workflows/deploy.yml`, which runs `deploy/deploy.sh` on the
+server over SSH: `git merge --ff-only`, rebuild `api` and/or `frontend` only when their files changed (the `api`
+start runs the migrations first), restart nginx, then check `/health` and that a page has its `<title>`. The worker is
+never restarted by it (it may be mid-cycle); restart it by hand with `docker compose up -d --build worker` when
+no cycle is running and its code changed. A failed check turns the Actions run red and prints the previous commit.
+
+One-time setup (the owner does this; no secret goes into the repository or into chat):
+
+1. On your computer: `ssh-keygen -t ed25519 -f ~/.ssh/sali_deploy -N "" -C github-deploy`
+2. Append `~/.ssh/sali_deploy.pub` to `~/.ssh/authorized_keys` on the server.
+3. `ssh-keyscan -t ed25519 <server address>` prints the server's line for `DEPLOY_KNOWN_HOSTS`.
+4. GitHub > Settings > Secrets and variables > Actions > New repository secret: `DEPLOY_HOST`, `DEPLOY_USER` (ubuntu),
+   `DEPLOY_SSH_KEY` (the whole content of `~/.ssh/sali_deploy`), `DEPLOY_KNOWN_HOSTS`.
+5. Run it once from the Actions tab (Deploy > Run workflow) and watch it.
+
+Manual deploy stays possible: `ssh` in and `bash deploy/deploy.sh`. To stop automatic deploys, disable the Deploy
+workflow in the Actions tab.
