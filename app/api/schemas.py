@@ -51,6 +51,7 @@ class ExampleComparison(BaseModel):
     priciest_price: Decimal
     priciest_chain: str
     stores_count: int
+    image_url: Optional[str] = None
 
 
 class UnitPriceInfo(BaseModel):
