@@ -72,7 +72,7 @@ export function ProductCard({ product, summary }: {
         {/* The name is the link (keyboard, screen readers, open in a new tab); the card's own click covers the rest */}
         <a
           className="result-card-name"
-          href={`#/product/${product.barcode}`}
+          href={`/product/${product.barcode}`}
           onClick={e => {
             e.stopPropagation();
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;   // let the browser open it in a new tab

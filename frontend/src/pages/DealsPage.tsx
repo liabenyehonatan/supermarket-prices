@@ -7,6 +7,7 @@ import { ChainCarousel } from '../components/ChainCarousel';
 import { DealCard } from '../components/DealCard';
 import { DealProductsSheet } from '../components/DealProductsSheet';
 import { DealsRulesBox } from '../components/DealsRulesBox';
+import { ErrorState } from '../components/ErrorState';
 import { readDealsSnapshot, writeDealsSnapshot } from '../lib/dealsSnapshot';
 import { hasSeen, markSeen } from '../lib/firstVisit';
 import { onCityFilterChange, readCityFilter } from '../lib/filters';
@@ -36,6 +37,8 @@ export function DealsPage() {
   const [chains, setChains] = useState<{ name: string; count: number }[]>(initial.current?.chains ?? []);
   const [loading, setLoading] = useState(initial.current === null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);   // bumped by "try again" to ask for the same list once more
   const [picking, setPicking] = useState<Deal | null>(null);
   // The explanation is for the first visit only: it is on screen with the page, so the visit marks it as seen.
   const [introOpen] = useState(() => !hasSeen(INTRO_KEY));
@@ -60,12 +63,13 @@ export function DealsPage() {
     generation.current += 1;
     setLoading(true);
     setLoadingMore(false);
+    setLoadFailed(false);
     fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE })
       .then(r => { if (live) { setDeals(r.deals); setTotal(r.total); setChains(r.chains); } })
-      .catch(() => { if (live) { setDeals([]); setTotal(0); } })
+      .catch(() => { if (live) { setDeals([]); setTotal(0); setLoadFailed(true); } })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [chain, city, sort, kind]);
+  }, [chain, city, sort, kind, attempt]);
 
   // Keep the view for "back": the data whenever it changes, the scroll position from scroll events (read at leave time
   // it would be mid-animation, or already clamped by the shorter page that replaces this one).
@@ -141,7 +145,7 @@ export function DealsPage() {
         {chain && (
           <div className="chain-active-note" role="status">
             <span>מבצעים רק מ<strong>{chain}</strong></span>
-            <button onClick={() => setChain('')}><X size={13} strokeWidth={2.5} />הצג את כל הרשתות</button>
+            <button onClick={() => setChain('')}><X size={13} strokeWidth={2.5} />הציגו את כל הרשתות</button>
           </div>
         )}
         <div className="filter-bar deals-filters" role="group" aria-label="מיון וסוג">
@@ -151,7 +155,10 @@ export function DealsPage() {
           <button className={`filter-chip${kind === 'group' ? ' active' : ''}`} onClick={() => setKind(kind === 'group' ? '' : 'group')}>קבוצת מוצרים</button>
         </div>
 
-        {!loading && deals.length === 0 && (
+        {!loading && loadFailed && (
+          <ErrorState text="לא הצלחנו לטעון את המבצעים כרגע. נסו שוב בעוד רגע." onRetry={() => { restoredFor.current = null; setAttempt(n => n + 1); }} compact />
+        )}
+        {!loading && !loadFailed && deals.length === 0 && (
           <div className="empty-state" style={{ padding: '32px 0' }}>
             <div className="empty-state-title">אין כרגע מבצעים שמתאימים לסינון</div>
           </div>

@@ -51,8 +51,8 @@ export function cameraSupportProblem(): CameraProblem | null {
 }
 
 export const CAMERA_MESSAGES: Record<CameraProblem, string> = {
-  insecure: 'הסריקה דורשת חיבור מאובטח (https). פתחי את האתר בכתובת https',
+  insecure: 'הסריקה דורשת חיבור מאובטח (https). פתחו את האתר בכתובת https',
   unsupported: 'הדפדפן לא תומך בגישה למצלמה',
-  denied: 'אין הרשאה למצלמה — אשרי גישה למצלמה בהגדרות הדפדפן (או המכשיר) ונסי שוב',
+  denied: 'אין הרשאה למצלמה — אשרו גישה למצלמה בהגדרות הדפדפן (או המכשיר) ונסו שוב',
   unavailable: 'לא הצלחנו לגשת למצלמה',
 };

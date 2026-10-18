@@ -181,9 +181,10 @@ public IP (a registered domain, or a free subdomain such as DuckDNS), and ports 
 COMPOSE_PROFILES=https
 DOMAIN=sali.example.com
 NGINX_BIND=127.0.0.1:8080      # nginx stops listening publicly; only Caddy does
+SITE_URL=https://sali.example.com   # link previews and the canonical link
 ```
 
-then `docker compose up -d`. Keep the `caddy_data` volume: it holds the certificates, and Let's Encrypt limits how
+then `docker compose up -d` (the frontend reads `SITE_URL` when it starts; nginx must be restarted too, `docker compose restart nginx`). To also serve the `www.` spelling, add its DNS record and uncomment the `www` block in `deploy/caddy/Caddyfile`. Keep the `caddy_data` volume: it holds the certificates, and Let's Encrypt limits how
 often a new one can be issued. Alternatively put Cloudflare in front (free, also CDN and DDoS protection).
 
 ### Oracle: ports 80 and 443 reachable but nothing answers

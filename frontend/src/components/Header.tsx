@@ -68,7 +68,7 @@ export function Header() {
             <input
               type="search"
               className="header-search-input"
-              placeholder="חפש מוצר..."
+              placeholder="חפשו מוצר..."
               onClick={e => openSearch(e.currentTarget)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSearch(e.currentTarget); } }}
               readOnly

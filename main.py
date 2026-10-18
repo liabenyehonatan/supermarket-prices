@@ -106,12 +106,17 @@ async def robots_txt(request: Request):
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap_xml(request: Request):
     base = str(request.base_url).rstrip("/")
-    # Product pages join this list once they have real addresses (today the app uses #/ routes,
-    # which search engines treat as the home page).
+    # The pages that are the same for everybody. Product pages are not listed: there are 240 thousand of
+    # them and they are reached by searching, which is how people (and crawlers following links) find them.
+    pages = [("/", "daily", "1.0"), ("/promotions", "daily", "0.8"), ("/about", "monthly", "0.3")]
+    urls = "".join(
+        f"  <url><loc>{base}{path}</loc><changefreq>{freq}</changefreq><priority>{prio}</priority></url>\n"
+        for path, freq, prio in pages
+    )
     body = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"  <url><loc>{base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n"
+        f"{urls}"
         "</urlset>\n"
     )
     return Response(body, media_type="application/xml")

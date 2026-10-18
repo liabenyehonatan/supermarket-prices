@@ -6,7 +6,7 @@ import { MapPin, X, ChevronDown, Check } from 'lucide-react';
  * of every city — type to narrow it down, or just scroll and tap.
  * `onChange` fires only when a city is picked or cleared, never per keystroke.
  */
-export function CityPicker({ value, cities, onChange, placeholder = 'בחרי או הקלידי עיר...', autoFocus, className = '' }: {
+export function CityPicker({ value, cities, onChange, placeholder = 'בחרו או הקלידו עיר...', autoFocus, className = '' }: {
   value: string;
   cities: string[];
   onChange: (city: string) => void;
@@ -108,14 +108,14 @@ export function CityPicker({ value, cities, onChange, placeholder = 'בחרי א
         aria-label="עיר לסינון"
       />
       {value ? (
-        <button className="city-picker-btn" onClick={() => pick('')} aria-label="נקה עיר">
+        <button className="city-picker-btn" onClick={() => pick('')} aria-label="ניקוי עיר">
           <X size={13} strokeWidth={2.5} />
         </button>
       ) : (
         <button
           className="city-picker-btn"
           onClick={() => (open ? close() : setOpen(true))}
-          aria-label="הצג את כל הערים"
+          aria-label="הציגו את כל הערים"
         >
           <ChevronDown size={15} strokeWidth={2.5} />
         </button>
