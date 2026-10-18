@@ -276,6 +276,34 @@ async def test_pictured_only_leaves_out_deals_without_a_product_picture(client, 
     assert all(any(p["image_url"] for p in d["sample_products"]) for d in only["deals"])
 
 
+async def test_deals_with_a_picture_come_first_then_the_rest_and_paging_keeps_that_order(client, session):
+    await make_world(session)                                       # one deal with a picture, 25% under the market
+    chain = (await session.execute(text("select id from chains where name = 'רשת א'"))).scalar_one()
+    store_ids = [r[0] for r in (await session.execute(text("select id from stores where chain_id = :c"), {"c": chain})).all()]
+    for n in range(6):                                              # 0-2 without a picture, 3-5 with one
+        await add_deal(session, store_ids, n, image=n >= 3)
+    await session.commit()
+    no_picture = (await session.execute(text("select id from products where image_url is null"))).scalars().all()
+    await session.execute(update(Promotion).where(Promotion.product_id.in_(no_picture)).values(discounted_price="6.00"))
+    await session.commit()                                          # the ones without a picture are the better deals (cheaper per unit)
+    await maintenance.refresh_popularity()
+    await maintenance.refresh_deals()
+
+    async def order(sort, **extra):
+        got = []
+        for offset in range(0, 7, 2):                               # three pages of two
+            body = (await client.get("/api/v1/deals", params={"sort": sort, "limit": 2, "offset": offset, **extra})).json()
+            got += [any(p["image_url"] for p in d["sample_products"]) for d in body["deals"]]
+        return got
+
+    for sort in ("best", "ending"):
+        got = await order(sort)
+        assert got == [True] * 4 + [False] * 3, (sort, got)         # four with a picture first, then the three without
+    best = (await client.get("/api/v1/deals", params={"limit": 10})).json()["deals"]
+    savings = [float(d["saving_pct"]) for d in best]
+    assert len(savings) == 7 and max(savings[:4]) < min(savings[4:])    # the picture beats the size of the saving
+
+
 async def test_pictured_looks_at_every_product_a_card_can_show_and_follows_the_city_filter(client, session):
     product, stores = await make_world(session)                      # one deal: the product has a picture
     await session.execute(update(Product).where(Product.id == product.id).values(image_url=None))
@@ -409,7 +437,7 @@ async def test_deals_sold_elsewhere_rank_before_deals_only_one_brand_sells(clien
     chain_b = (await session.execute(text("select id from chains where name = 'רשת ב'"))).scalar_one()
     store_b = (await session.execute(text("select id from stores where chain_id = :c"), {"c": chain_b})).scalar_one()
     store_a = (await session.execute(text("select id from stores where name = 'סניף א1'"))).scalar_one()
-    other = Product(barcode="7290000000777", name="נמכר גם ברשת אחרת")
+    other = Product(barcode="7290000000777", name="נמכר גם ברשת אחרת", image_url="https://img.example/o.png")   # a picture too: only the market comparison decides
     session.add(other)
     await session.flush()
     for sid, shelf in ((store_a, "5.00"), (store_b, "4.90")):
