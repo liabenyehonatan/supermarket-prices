@@ -304,6 +304,42 @@ async def test_deals_with_a_picture_come_first_then_the_rest_and_paging_keeps_th
     assert len(savings) == 7 and max(savings[:4]) < min(savings[4:])    # the picture beats the size of the saving
 
 
+async def test_search_finds_a_deal_by_its_text_or_a_product_name_and_needs_every_word(client, session):
+    product, stores = await make_world(session)                     # the product is named "מוצר", the deal reads "3 ב-9.00"
+    await session.execute(update(Product).where(Product.id == product.id).values(name="עוגיות שוקולד צ'יפס"))
+    await session.execute(update(Promotion).where(Promotion.product_id == product.id).values(description="מבצע מיוחד 3 ב9"))
+    await session.commit()
+    await maintenance.refresh_deals()
+
+    async def found(q, **extra):
+        body = (await client.get("/api/v1/deals", params={"q": q, **extra})).json()
+        return len(body["deals"]), body["total"], [c["count"] for c in body["chains"]]
+
+    assert await found("עוגיות") == (1, 1, [1])                     # by the product's name
+    assert await found("שוקולד עוגיות") == (1, 1, [1])              # every word, in any order
+    assert await found("מבצע מיוחד") == (1, 1, [1])                 # by the promotion's own text
+    assert await found("עוגיות מיוחד") == (1, 1, [1])               # one word in each
+    assert await found("רשת עוגיות") == (1, 1, [1])                 # the brand's name counts too ("רשת א" is the brand)
+    assert await found("רשת גמלאים") == (0, 0, [])                  # a brand name that is not there finds nothing
+    assert await found("עוגיות גבינה") == (0, 0, [])                # a word that is nowhere: nothing, and no brand counts
+    assert await found("") == (1, 1, [1])                           # no search: everything
+    assert await found("ע") == (1, 1, [1])                          # one letter is not a word (like the product search)
+    assert await found("עוגיות", chain="רשת ב") == (0, 0, [1])  # the other filters still apply (the brand list keeps showing every brand)
+
+
+async def test_search_cannot_use_like_wildcards(client, session):
+    await make_world(session)
+    for q in ("%%", "__", "\\\\", "% _ %"):
+        body = (await client.get("/api/v1/deals", params={"q": q})).json()
+        assert body["total"] == 1, q                                # nothing usable in it: the same as no search
+    # "%" only separates words: a wildcard would need שוקולד before עוגיות, but the name has them the other way round
+    product = (await session.execute(text("select id from products limit 1"))).scalar_one()
+    await session.execute(update(Product).where(Product.id == product).values(name="עוגיות שוקולד"))
+    await session.commit()
+    await maintenance.refresh_deals()
+    assert (await client.get("/api/v1/deals", params={"q": "שוקולד%עוגיות"})).json()["total"] == 1
+
+
 async def test_pictured_looks_at_every_product_a_card_can_show_and_follows_the_city_filter(client, session):
     product, stores = await make_world(session)                      # one deal: the product has a picture
     await session.execute(update(Product).where(Product.id == product.id).values(image_url=None))
