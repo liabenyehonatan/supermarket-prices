@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigationType } from 'react-router-dom';
 import { fetchDeals, type Deal } from '../api/client';
 import { useBasket } from '../context/BasketContext';
@@ -14,6 +14,7 @@ import { onCityFilterChange, readCityFilter } from '../lib/filters';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const PAGE = 24;
+const hasPicture = (d: Deal) => d.sample_products.some(p => p.image_url);
 const INTRO_KEY = 'sali_deals_intro_seen';
 
 const filterKey = (f: { chain: string; city: string; sort: string; kind: string }) => `${f.chain}|${f.city}|${f.sort}|${f.kind}`;
@@ -38,6 +39,9 @@ export function DealsPage() {
   const [loading, setLoading] = useState(initial.current === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);   // a later page could not be loaded: the button below offers another try
+  const fetched = useRef(initial.current?.deals.length ?? 0);   // how many the server has handed over so far (the next page starts there)
+  const sentinel = useRef<HTMLDivElement>(null);
   const [attempt, setAttempt] = useState(0);   // bumped by "try again" to ask for the same list once more
   const [picking, setPicking] = useState<Deal | null>(null);
   // The explanation is for the first visit only: it is on screen with the page, so the visit marks it as seen.
@@ -64,8 +68,9 @@ export function DealsPage() {
     setLoading(true);
     setLoadingMore(false);
     setLoadFailed(false);
+    setMoreFailed(false);
     fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE })
-      .then(r => { if (live) { setDeals(r.deals); setTotal(r.total); setChains(r.chains); } })
+      .then(r => { if (live) { fetched.current = r.deals.length; setDeals(r.deals); setTotal(r.total); setChains(r.chains); } })
       .catch(() => { if (live) { setDeals([]); setTotal(0); setLoadFailed(true); } })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
@@ -82,6 +87,9 @@ export function DealsPage() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const save = () => writeDealsSnapshot({ ...latest.current, scrollY: scrollY.current });
     const onScroll = () => {
+      // The page being left is still listening for a moment while the next one scrolls itself to the top:
+      // that scroll must not become the position to come back to
+      if (window.location.pathname !== '/promotions') return;
       scrollY.current = window.scrollY;
       if (!timer) timer = setTimeout(() => { timer = null; save(); }, 200);
     };
@@ -101,20 +109,41 @@ export function DealsPage() {
     if (loadingMore) return;
     const gen = generation.current;
     setLoadingMore(true);
+    setMoreFailed(false);
     try {
-      const r = await fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE, offset: deals.length });
+      const r = await fetchDeals({ chain, city, sort, kind: kind || undefined, limit: PAGE, offset: fetched.current });
       if (gen !== generation.current) return;          // the filter changed meanwhile: this page belongs to the old one
+      fetched.current += r.deals.length;
       setDeals(prev => {
         const seen = new Set(prev.map(d => d.deal_id));
         return [...prev, ...r.deals.filter(d => !seen.has(d.deal_id))];
       });
-      setTotal(r.total);
+      // An empty page means the list is at its end (the count can be a little ahead of what can be listed)
+      setTotal(r.deals.length === 0 ? fetched.current : r.total);
     } catch {
-      /* keep what is shown; the button stays so the person can try again */
+      if (gen === generation.current) setMoreFailed(true);   // keep what is shown; the button offers another try
     } finally {
       if (gen === generation.current) setLoadingMore(false);
     }
   }
+
+  // The next page loads by itself when the end of the list comes within reach of the scrolling (no button to press).
+  // Without IntersectionObserver the button below is all there is.
+  const hasMore = !loading && deals.length > 0 && fetched.current < total;
+  const moreRef = useRef(more);
+  moreRef.current = more;
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !hasMore || loadingMore || moreFailed || typeof IntersectionObserver === 'undefined') return;
+    const watcher = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) void moreRef.current();
+    }, { rootMargin: '900px 0px' });
+    watcher.observe(node);
+    return () => watcher.disconnect();
+  }, [hasMore, loadingMore, moreFailed, deals.length]);
+  // The first deal without a picture, when pictured ones came before it: where the small heading goes
+  const firstUnpictured = deals.findIndex(d => !hasPicture(d));
+  const showDivider = firstUnpictured > 0;
 
   const add = (deal: Deal, onAdded: () => void) => deal.sample_products[0] && addItem({
     barcode: deal.sample_products[0].barcode, name: deal.sample_products[0].name, brand: deal.sample_products[0].brand,
@@ -164,11 +193,23 @@ export function DealsPage() {
           </div>
         )}
         <div className="deals-grid">
-          {deals.map(d => <DealCard key={d.deal_id} deal={d} onPick={setPicking} onAdd={add} />)}
+          {deals.map((d, i) => (
+            <Fragment key={d.deal_id}>
+              {showDivider && i === firstUnpictured && (
+                <h2 className="deals-divider">מבצעים בלי תמונה</h2>
+              )}
+              <DealCard deal={d} onPick={setPicking} onAdd={add} />
+            </Fragment>
+          ))}
         </div>
-        {deals.length < total && (
-          <button className="btn btn-secondary btn-full deals-more" disabled={loadingMore} onClick={() => void more()}>{loadingMore ? 'טוענים…' : 'עוד מבצעים'}</button>
-        )}
+        <div ref={sentinel} aria-hidden style={{ height: 1 }} />
+        {hasMore && (loadingMore
+          ? <p className="deals-loading" role="status">טוענים עוד מבצעים…</p>
+          : (moreFailed || typeof IntersectionObserver === 'undefined') && (
+              <button className="btn btn-secondary btn-full deals-more" onClick={() => void more()}>
+                {moreFailed ? 'לא הצלחנו לטעון, נסו שוב' : 'עוד מבצעים'}
+              </button>
+            ))}
         <p className="deals-footnote">
           המחיר ליחידה מחושב מהמבצע ומושווה למחיר המדף הזול ביותר שמצאנו. מבצעי מועדון וקופונים לא מוצגים.
         </p>
