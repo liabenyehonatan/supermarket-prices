@@ -1,44 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchExamples, compareProduct, type ExampleComparison } from '../api/client';
+import { fetchExamples, type ExampleComparison } from '../api/client';
 import { ProductImage } from './ProductImage';
 import { ChainLogo } from './ChainLogo';
 import { extractProductDisplay } from '../lib/utils';
 
-/** Hand-picked products with good photos; they come first, the automatic picks fill the rest. */
-const FEATURED_BARCODES = ['4011800628512', '7290012522581', '7290109352916'];
-
-async function loadFeatured(barcode: string): Promise<ExampleComparison | null> {
-  try {
-    const r = await compareProduct(barcode);
-    const prices = r.prices;
-    if (prices.length < 2) return null;
-    const lo = prices.reduce((a, b) => (Number(b.price) < Number(a.price) ? b : a));
-    const hi = prices.reduce((a, b) => (Number(b.price) > Number(a.price) ? b : a));
-    if (Number(hi.price) <= Number(lo.price)) return null;
-    return {
-      barcode: r.product.barcode, name: r.product.name, brand: r.product.brand, unit_of_measure: r.product.unit_of_measure,
-      cheapest_price: lo.price, cheapest_chain: lo.chain_name,
-      priciest_price: hi.price, priciest_chain: hi.chain_name, stores_count: prices.length,
-    };
-  } catch { return null; }
-}
-
 const money = (p: number | string) => `₪${Number(p).toFixed(2)}`;
 
-/** Real products with a real price gap, so a first-time visitor sees what the app is for. */
+/** Real products with a real price gap, so a first-time visitor sees what the app is for; the selection changes daily. */
 export function ExampleComparisons() {
   const navigate = useNavigate();
   const [items, setItems] = useState<ExampleComparison[]>([]);
+  // The server picks the day's examples (different each day, always with a picture)
   useEffect(() => {
-    Promise.all([
-      Promise.all(FEATURED_BARCODES.map(loadFeatured)),
-      fetchExamples(5).catch(() => [] as ExampleComparison[]),
-    ]).then(([featured, auto]) => {
-      const picked = featured.filter((x): x is ExampleComparison => !!x);
-      const taken = new Set(picked.map(x => x.barcode));
-      setItems([...picked, ...auto.filter(x => !taken.has(x.barcode))].slice(0, 5));
-    });
+    fetchExamples(5).then(setItems).catch(() => setItems([]));
   }, []);
   if (!items.length) return null;
 
@@ -67,7 +42,7 @@ export function ExampleComparisons() {
           return (
             <button key={x.barcode} className="example-card" onClick={() => navigate(`/product/${x.barcode}`)}>
               <span className="example-card-top">
-                <ProductImage barcode={x.barcode} name={x.name} size={96} borderRadius={14} />
+                <ProductImage barcode={x.barcode} name={x.name} imageUrl={x.image_url ?? undefined} size={96} borderRadius={14} />
                 <span className="example-name">{displayName}</span>
               </span>
               <span className="example-save-row">
