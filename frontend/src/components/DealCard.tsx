@@ -26,20 +26,21 @@ export function DealCard({ deal, onAdd, onPick }: {
   const [justAdded, setJustAdded] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  // Only real pictures: a row of identical placeholder baskets says nothing and crowds the card
+  // Only real pictures in a group (a row of identical placeholder baskets crowds the card); one placeholder if there are none
   const pictured = deal.sample_products.filter(p => p.image_url).slice(0, deal.kind === 'group' ? 3 : 1);
   const single = deal.kind === 'single' && first;
   return (
     <article className="deal-card">
       <div className="deal-card-media" ref={mediaRef}>
         <span className="deal-saving-pill tabular" aria-label={`זול ב-${pct}%`}><bdi dir="ltr">-{pct}%</bdi></span>
-        {pictured.length > 0 && (
-          <div className={`deal-card-pics${pictured.length > 1 ? ' is-group' : ''}`}>
-            {pictured.map(p => (
-              <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={pictured.length > 1 ? 52 : '100%'} borderRadius={0} />
-            ))}
-          </div>
-        )}
+        {/* A blank box looks like a picture that did not load: without one, the same placeholder as everywhere else */}
+        <div className={`deal-card-pics${pictured.length > 1 ? ' is-group' : ''}`}>
+          {pictured.length > 0
+            ? pictured.map(p => (
+                <ProductImage key={p.barcode} barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={pictured.length > 1 ? 52 : '100%'} borderRadius={0} />
+              ))
+            : <ProductImage barcode={first?.barcode ?? ''} name={first?.name ?? deal.description} noPicture size="100%" borderRadius={0} />}
+        </div>
       </div>
 
       <div className="deal-card-body">
@@ -58,21 +59,27 @@ export function DealCard({ deal, onAdd, onPick }: {
             : <button type="button" className="deal-card-link" onClick={() => onPick(deal)} title={first?.name ?? deal.description}
                 tabIndex={-1} aria-hidden="true">{first?.name ?? deal.description}</button>   /* keyboard and screen readers use the "בחירה" button */}
         </div>
-        {deal.kind === 'group' && (
-          <div className="deal-card-more">{deal.products === 2 ? 'ועוד מוצר אחד לבחירה' : `ועוד ${deal.products - 1} מוצרים לבחירה`}</div>
-        )}
+        {/* Always one line, empty for a single product, so the rows below sit at the same height on every card */}
+        <div className="deal-card-more" aria-hidden={deal.kind !== 'group' || undefined}>
+          {deal.kind === 'group'
+            ? (deal.products === 2 ? 'ועוד מוצר אחד לבחירה' : `ועוד ${deal.products - 1} מוצרים לבחירה`)
+            : '\u00a0'}
+        </div>
 
         <div className="deal-card-where">
           <ChainLogo name={deal.brand} size={16} />
           <span className="deal-card-brand">{deal.brand}</span>
         </div>
-        <div className="deal-card-saving">
-          {deal.vs_market
-            ? <>הזול ביותר שמצאנו: <bdi>{money(deal.ref_price)}</bdi></>
-            : <>על המדף ברשת: <bdi>{money(deal.ref_price)}</bdi></>}
+        {/* Room for all three lines on every card (the last two are not always there) */}
+        <div className="deal-card-meta">
+          <div className="deal-card-saving">
+            {deal.vs_market
+              ? <>הזול ביותר שמצאנו: <bdi>{money(deal.ref_price)}</bdi></>
+              : <>על המדף ברשת: <bdi>{money(deal.ref_price)}</bdi></>}
+          </div>
+          {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
+          {ends && <div className="deal-card-ends">{ends}</div>}
         </div>
-        {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
-        {ends && <div className="deal-card-ends">{ends}</div>}
 
         {single ? (
           <button
