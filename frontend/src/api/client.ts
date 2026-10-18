@@ -102,6 +102,7 @@ export interface DealsResponse { total: number; deals: Deal[]; chains: { name: s
 export function fetchDeals(p: {
   chain?: string; city?: string; kind?: 'single' | 'group'; sort?: 'best' | 'ending'; diverse?: boolean;
   /** only promotions with a product picture */ pictured?: boolean;
+  /** words that must all be in the promotion's text or a product name */ q?: string;
   /** today's selection out of the best promotions (changes each day; implies diverse) */ daily?: boolean;
   limit?: number; offset?: number;
 } = {}): Promise<DealsResponse> {
@@ -112,6 +113,7 @@ export function fetchDeals(p: {
   if (p.sort) q.set('sort', p.sort);
   if (p.diverse) q.set('diverse', 'true');
   if (p.pictured) q.set('pictured', 'true');
+  if (p.q) q.set('q', p.q);
   if (p.daily) q.set('daily', 'true');
   if (p.limit) q.set('limit', String(p.limit));
   if (p.offset) q.set('offset', String(p.offset));
