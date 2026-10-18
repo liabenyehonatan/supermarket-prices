@@ -902,11 +902,28 @@ _DEALS_FILTER = (
 )
 
 
-def _deals_where(chain, city, kind, ending, pictured=False) -> tuple[str, dict]:
+MAX_DEAL_SEARCH_WORDS = 5
+
+
+def _deal_search_words(q: Optional[str]) -> list[str]:
+    """The words of a promotions search: at least two letters each, a handful at most (like the product search)."""
+    cleaned = ((q or "").replace("\\", " ").replace("%", " ").replace("_", " ")).split()   # no LIKE wildcards from the visitor
+    return [w for w in cleaned if len(w) >= 2][:MAX_DEAL_SEARCH_WORDS]
+
+
+def _deals_where(chain, city, kind, ending, pictured=False, q=None) -> tuple[str, dict]:
     where, params = [_DEALS_FILTER], {"lo": MIN_DEAL_SAVING, "hi": MAX_DEAL_SAVING}
     if pictured:
         # at least one of the products a card would show (the first twelve) has a picture
         where.append(_HAS_PICTURE)
+    # Every word must be in the promotion's own text, the brand's name or the name of one of the products a card shows
+    # (the first twelve): "עוגיות" finds "ש.ר. עוגיות יין 3 ב10" as well as a promotion on a product named "עוגיות
+    # שוקולד", and "שופרסל" finds that brand's promotions.
+    for n, word in enumerate(_deal_search_words(q)):
+        where.append(
+            f"(description ILIKE :w{n} OR brand ILIKE :w{n} OR EXISTS (SELECT 1 FROM products ps "
+            f"WHERE ps.id = ANY(product_ids[1:12]) AND ps.name ILIKE :w{n}))")
+        params[f"w{n}"] = f"%{word}%"
     if chain and chain.strip():
         where.append("brand = :chain")
         params["chain"] = chain.strip()
@@ -960,12 +977,13 @@ async def list_deals(
     sort: Literal["best", "ending"] = Query("best"),
     diverse: bool = Query(False, description="At most two per brand, for the home strip"),
     pictured: bool = Query(False, description="Only promotions with a product picture to show"),
+    q: Optional[str] = Query(None, max_length=60, description="Words that must all appear in the promotion's text or a product name"),
     daily: bool = Query(False, description="Home strip: today's selection out of the best promotions, changing each day (implies diverse)"),
     limit: int = Query(24, ge=1, le=60),
     offset: int = Query(0, ge=0, le=10000),
     db: AsyncSession = Depends(get_db),
 ):
-    where, params = _deals_where(chain, city, kind, ending=sort == "ending", pictured=pictured)
+    where, params = _deals_where(chain, city, kind, ending=sort == "ending", pictured=pictured, q=q)
     diverse = diverse or daily
     # With a city filter the card counts the stores of that city, not all the stores of the promotion.
     stores_expr = ("cardinality(ARRAY(SELECT unnest(store_ids) INTERSECT SELECT id FROM stores WHERE city ILIKE :city))"
@@ -1001,7 +1019,7 @@ async def list_deals(
             rules=DealRules(min_saving=MIN_DEAL_SAVING, max_saving=MAX_DEAL_SAVING, min_reference_price=MIN_REFERENCE_PRICE),
         )
     total = (await db.execute(text(f"SELECT count(*) FROM promo_deals WHERE {where}"), params)).scalar_one()
-    facet_where, facet_params = _deals_where(None, city, kind, ending=sort == "ending", pictured=pictured)
+    facet_where, facet_params = _deals_where(None, city, kind, ending=sort == "ending", pictured=pictured, q=q)
     facets = (await db.execute(text(
         f"SELECT brand, count(*) AS n FROM promo_deals WHERE {facet_where} GROUP BY brand ORDER BY n DESC, brand"),
         facet_params)).all()

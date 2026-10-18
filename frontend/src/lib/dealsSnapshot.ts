@@ -14,6 +14,7 @@ export interface DealsSnapshot {
   sort: 'best' | 'ending';
   kind: '' | 'single' | 'group';
   city: string;
+  q?: string;                      // the search words (snapshots saved before the search existed have none)
   deals: Deal[];
   total: number;
   chains: { name: string; count: number }[];
