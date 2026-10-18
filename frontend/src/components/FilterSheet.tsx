@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { Navigation, X, Check, Search } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 import { CityPicker } from './CityPicker';
-import { useChainNames } from '../lib/filters';
+import { useCityChains } from '../lib/filters';
 
 /** Bottom sheet for the product page: city, chain and "use my location" in one place. */
 export function FilterSheet({ city, cities, chain, locating, onCity, onChain, onLocate, onClose }: {
@@ -19,8 +19,13 @@ export function FilterSheet({ city, cities, chain, locating, onCity, onChain, on
 }) {
   const trapRef = useFocusTrap();
   const [chainQuery, setChainQuery] = useState('');
-  const chainNames = useChainNames();
+  const { names: chainNames, ready: chainsReady } = useCityChains(city);
   const visibleChains = chainNames.filter(name => name.includes(chainQuery.trim()));
+
+  // A city narrows the chains to the ones with a store there: a chosen chain that has none in it is let go
+  useEffect(() => {
+    if (chainsReady && chain && !chainNames.includes(chain)) onChain('');
+  }, [chainsReady, chain, chainNames, onChain]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

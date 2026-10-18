@@ -255,7 +255,10 @@ body { background: #FFFFFF; font-size: 14px; }
 .chain-carousel-item.selected .chain-logo-name { color: var(--green-700); font-weight: var(--fw-semibold); }
 .chain-carousel-item.dimmed > * { opacity: 0.45; }
 .chain-carousel-arrow { border: 0; box-shadow: var(--shadow-card); width: 30px; height: 30px; }
-.chain-search { background: var(--surface-100); box-shadow: none; border: 0; border-radius: 12px; height: 38px; }
+.chain-search { background: var(--surface-100); box-shadow: none; border: 0; border-radius: 12px; height: 38px; margin-bottom: 16px; }
+.filter-sheet .chain-search { height: 46px; margin-bottom: 12px; }
+.filter-sheet .chain-search input { font-size: 16px; }
+.filter-sheet .city-picker input { height: 46px; font-size: 16px; }
 .chain-search:focus-within { box-shadow: 0 0 0 1.5px var(--green-600); }
 .chain-active-note { background: var(--green-50); border-radius: 12px; color: var(--green-700); }
 
@@ -282,13 +285,13 @@ body { background: #FFFFFF; font-size: 14px; }
 @media (hover: hover) {
   .deal-card:hover { box-shadow: var(--shadow-card-hover); border: 0; }
 }
-.deal-card-media { position: relative; aspect-ratio: 1 / 0.85; padding: 12px 12px 0; display: flex; align-items: center; justify-content: center;
+.deal-card-media { position: relative; aspect-ratio: 1 / 0.6; padding: 10px 12px 0; display: flex; align-items: center; justify-content: center;
   overflow: hidden; }   /* the box keeps its shape whatever the picture's own size (it used to grow with a tall one) */
 .deal-saving-pill { position: absolute; top: 10px; inset-inline-start: 10px; z-index: 1; padding: 2px 8px; font-size: 10.5px; font-weight: var(--fw-bold); border-radius: 7px; }
 .deal-card-pics { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 4px; }
 .deal-card-pics > div { width: 100% !important; height: 100% !important; box-shadow: none !important; }
 .deal-card-pics.is-group > div { width: 52px !important; height: 52px !important; }
-.deal-card-body { padding: 6px 11px 11px; }
+.deal-card-body { padding: 4px 11px 10px; }
 .deal-card-offer-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; position: relative; z-index: 1; }
 .deal-card-offer-col { min-width: 0; display: flex; flex-direction: column; }
 .deal-card-offer { font-size: 16px; font-weight: var(--fw-bold); color: var(--ink-900); letter-spacing: -0.01em; white-space: nowrap; }
@@ -506,7 +509,7 @@ body { background: #FFFFFF; font-size: 14px; }
 .card-add.in-basket { background: var(--green-50); color: var(--green-700); box-shadow: inset 0 0 0 1.5px var(--green-600); }
 .card-add.is-added { background: var(--green-700); color: #fff; box-shadow: none; animation: pop-in var(--dur-base) var(--ease-spring); }
 /* The price, then the price per unit under it: the same two lines on every card, however long the numbers are */
-.deal-card-offer-row { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 0; min-height: 40px; }
+.deal-card-offer-row { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 0; min-height: 34px; }
 .deal-card { display: flex; flex-direction: column; }
 .deal-card-body { flex: 1; display: flex; flex-direction: column; }
 .deal-card-body > .card-add { margin-top: auto; }
