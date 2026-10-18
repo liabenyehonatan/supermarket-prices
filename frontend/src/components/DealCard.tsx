@@ -58,21 +58,27 @@ export function DealCard({ deal, onAdd, onPick }: {
             : <button type="button" className="deal-card-link" onClick={() => onPick(deal)} title={first?.name ?? deal.description}
                 tabIndex={-1} aria-hidden="true">{first?.name ?? deal.description}</button>   /* keyboard and screen readers use the "בחירה" button */}
         </div>
-        {deal.kind === 'group' && (
-          <div className="deal-card-more">{deal.products === 2 ? 'ועוד מוצר אחד לבחירה' : `ועוד ${deal.products - 1} מוצרים לבחירה`}</div>
-        )}
+        {/* Always one line, empty for a single product, so the rows below sit at the same height on every card */}
+        <div className="deal-card-more" aria-hidden={deal.kind !== 'group' || undefined}>
+          {deal.kind === 'group'
+            ? (deal.products === 2 ? 'ועוד מוצר אחד לבחירה' : `ועוד ${deal.products - 1} מוצרים לבחירה`)
+            : '\u00a0'}
+        </div>
 
         <div className="deal-card-where">
           <ChainLogo name={deal.brand} size={16} />
           <span className="deal-card-brand">{deal.brand}</span>
         </div>
-        <div className="deal-card-saving">
-          {deal.vs_market
-            ? <>הזול ביותר שמצאנו: <bdi>{money(deal.ref_price)}</bdi></>
-            : <>על המדף ברשת: <bdi>{money(deal.ref_price)}</bdi></>}
+        {/* Room for all three lines on every card (the last two are not always there) */}
+        <div className="deal-card-meta">
+          <div className="deal-card-saving">
+            {deal.vs_market
+              ? <>הזול ביותר שמצאנו: <bdi>{money(deal.ref_price)}</bdi></>
+              : <>על המדף ברשת: <bdi>{money(deal.ref_price)}</bdi></>}
+          </div>
+          {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
+          {ends && <div className="deal-card-ends">{ends}</div>}
         </div>
-        {deal.max_qty ? <div className="deal-card-note">המבצע עד {deal.max_qty} יחידות</div> : null}
-        {ends && <div className="deal-card-ends">{ends}</div>}
 
         {single ? (
           <button
