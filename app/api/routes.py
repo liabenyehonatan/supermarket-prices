@@ -616,7 +616,7 @@ async def example_comparisons(
          WHERE v.store_count >= 20 AND p.image_url IS NOT NULL AND length(p.barcode) >= 7
            AND v.min_price >= 0.5 AND v.max_price - v.min_price >= 0.5
            AND v.max_price / v.min_price BETWEEN 1.1 AND 8
-         ORDER BY v.store_count DESC
+         ORDER BY v.store_count DESC, v.product_id        -- ties in a fixed order: the day's shuffle must start from the same list
          LIMIT 200
         """
     ))).all()
@@ -940,6 +940,16 @@ async def _sample_products(db: AsyncSession, rows) -> dict[str, list[DealProduct
     return samples
 
 
+def _deal_models(rows, samples) -> list[Deal]:
+    return [
+        Deal(deal_id=r.deal_id, brand=r.brand, description=r.description, kind="single" if r.products == 1 else "group",
+             min_qty=r.min_qty, price=r.price, unit_price=r.unit_price, ref_price=r.ref_price, saving_pct=r.saving_pct,
+             vs_market=r.vs_market, stores=r.stores, products=r.products, max_qty=r.max_qty, ends_at=r.ends_at,
+             sample_products=samples.get(r.deal_id, []))
+        for r in rows
+    ]
+
+
 @router.get("/deals", response_model=DealsResponse, summary="Promotions across brands, cheapest versus the market first")
 async def list_deals(
     chain: Optional[str] = Query(None, max_length=60, description="Only this brand (exact name)"),
@@ -961,39 +971,36 @@ async def list_deals(
     # Deals compared with other brands come first; every order ends with deal_id so ties page deterministically.
     order = ("vs_market DESC, ends_at ASC, saving_pct DESC, deal_id" if sort == "ending"
              else "vs_market DESC, saving_pct DESC, stores DESC, deal_id")
-    fetch = limit * 10 if daily else limit * 3 if diverse else limit
-    rows = (await db.execute(text(
-        f"""
-        SELECT deal_id, brand, description, min_qty, price, unit_price, ref_price, saving_pct, vs_market,
-               {stores_expr} AS stores, products, max_qty, ends_at, product_ids[1:12] AS sample_ids
-          FROM promo_deals WHERE {where} ORDER BY {order} LIMIT :fetch OFFSET :offset
-        """), {**params, "fetch": fetch, "offset": offset})).all()
+    columns = (f"deal_id, brand, description, min_qty, price, unit_price, ref_price, saving_pct, vs_market, "
+               f"{stores_expr} AS stores, products, max_qty, ends_at, product_ids[1:12] AS sample_ids")
+    if daily:
+        offset = 0                               # today's selection has no pages
     if diverse:
-        per_brand: dict[str, int] = {}
-        kept = []
-        for r in rows:
-            if per_brand.get(r.brand, 0) < 2:
-                per_brand[r.brand] = per_brand.get(r.brand, 0) + 1
-                kept.append(r)
-        if daily:
-            # Today's pick out of the best ones: the same for everybody all day, different tomorrow, in rank order
-            chosen = random.Random(_rotation_seed()).sample(kept, min(limit, len(kept)))
-            rows = sorted(chosen, key=kept.index)
-        else:
-            rows = kept[:limit]
+        # At most two per brand, counted in SQL (so a few big brands cannot crowd the rest out of the list)
+        fetch = limit * 5 if daily else limit
+        query = (f"SELECT * FROM (SELECT {columns}, ROW_NUMBER() OVER (PARTITION BY brand ORDER BY {order}) AS rn "
+                 f"FROM promo_deals WHERE {where}) t WHERE rn <= 2 ORDER BY {order} LIMIT :fetch OFFSET :offset")
+    else:
+        fetch = limit
+        query = f"SELECT {columns} FROM promo_deals WHERE {where} ORDER BY {order} LIMIT :fetch OFFSET :offset"
+    rows = (await db.execute(text(query), {**params, "fetch": fetch, "offset": offset})).all()
+    if daily:
+        # Today's pick out of the best ones: the same for everybody all day, different tomorrow, in rank order
+        chosen = random.Random(_rotation_seed()).sample(rows, min(limit, len(rows)))
+        rows = sorted(chosen, key=rows.index)
+        # The strip needs neither the count nor the brand list, and the picture check is dearest in those two queries
+        samples = await _sample_products(db, rows)
+        return DealsResponse(
+            total=len(rows), deals=_deal_models(rows, samples), chains=[],
+            rules=DealRules(min_saving=MIN_DEAL_SAVING, max_saving=MAX_DEAL_SAVING, min_reference_price=MIN_REFERENCE_PRICE),
+        )
     total = (await db.execute(text(f"SELECT count(*) FROM promo_deals WHERE {where}"), params)).scalar_one()
     facet_where, facet_params = _deals_where(None, city, kind, ending=sort == "ending", pictured=pictured)
     facets = (await db.execute(text(
         f"SELECT brand, count(*) AS n FROM promo_deals WHERE {facet_where} GROUP BY brand ORDER BY n DESC, brand"),
         facet_params)).all()
     samples = await _sample_products(db, rows)
-    deals = [
-        Deal(deal_id=r.deal_id, brand=r.brand, description=r.description, kind="single" if r.products == 1 else "group",
-             min_qty=r.min_qty, price=r.price, unit_price=r.unit_price, ref_price=r.ref_price, saving_pct=r.saving_pct,
-             vs_market=r.vs_market, stores=r.stores, products=r.products, max_qty=r.max_qty, ends_at=r.ends_at,
-             sample_products=samples.get(r.deal_id, []))
-        for r in rows
-    ]
+    deals = _deal_models(rows, samples)
     return DealsResponse(
         total=total, deals=deals, chains=[DealFacet(name=b, count=n) for b, n in facets],
         rules=DealRules(min_saving=MIN_DEAL_SAVING, max_saving=MAX_DEAL_SAVING, min_reference_price=MIN_REFERENCE_PRICE),

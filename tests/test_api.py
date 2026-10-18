@@ -267,10 +267,11 @@ async def test_examples_rotate_daily_and_always_have_a_picture(client, session, 
     products = [Product(barcode=f"72900000001{i:02d}", name=f"{n} משפחתי", image_url=f"https://res.cloudinary.com/{i}.png")
                 for i, n in enumerate(names)]
     no_picture = Product(barcode="7290000000999", name="ללא תמונה")
-    session.add_all(products + [no_picture])
+    wrong_host = Product(barcode="7290000000998", name="תמונה ממקור לא מאושר", image_url="https://evil.example/x.png")
+    session.add_all(products + [no_picture, wrong_host])
     await session.flush()
     now = datetime(2026, 10, 12)
-    for prod in products + [no_picture]:
+    for prod in products + [no_picture, wrong_host]:
         for i, st in enumerate(stores):
             session.add(Price(product_id=prod.id, store_id=st.id, price=5 + (i % 4), price_updated_at=now, is_current=True))
     await session.commit()
@@ -281,12 +282,17 @@ async def test_examples_rotate_daily_and_always_have_a_picture(client, session, 
         r = await client.get("/api/v1/products/examples?limit=4")
         return [e["barcode"] for e in r.json()], r.json()
 
+    seen = set()
     day1, body = await on_day(1)
+    routes._examples_cache = None                  # another worker, or a later hour: the answer is computed afresh
     again, _ = await on_day(1)
-    day2, _ = await on_day(2)
-    assert day1 == again and len(day1) == 4        # the same all day (the cache answers)
+    day2, more = await on_day(2)
+    assert day1 == again and len(day1) == 4        # the same all day, whoever computes it
     assert day1 != day2                            # a different selection the next day
-    assert "7290000000999" not in day1 + day2      # never a product without a picture
+    for _ in range(10):                            # whatever the day, never a product without a usable picture
+        routes._examples_cache = None
+        seen.update((await on_day(_ + 3))[0])
+    assert not seen & {"7290000000999", "7290000000998"} and len(seen) > 4
     assert all(e["image_url"].startswith("https://res.cloudinary.com/") for e in body)
     routes._examples_cache = None
 
