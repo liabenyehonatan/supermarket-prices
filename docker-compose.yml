@@ -87,6 +87,7 @@ services:
       DB_POOL_SIZE: "5"
       DB_MAX_OVERFLOW: "5"
       FRONTEND_URL: ${FRONTEND_URL:-}
+      SITE_URL: ${SITE_URL:-}         # canonical links and sitemaps use it whatever address a request came in on
       MAX_DATA_AGE_HOURS: ${MAX_DATA_AGE_HOURS:-36}
     depends_on:
       migrate:

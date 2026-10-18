@@ -20,7 +20,8 @@ const INTRO_KEY = 'sali_deals_intro_seen';
 const filterKey = (f: { chain: string; city: string; sort: string; kind: string; q: string }) => `${f.chain}|${f.city}|${f.sort}|${f.kind}|${f.q}`;
 
 export function DealsPage() {
-  useDocumentTitle('מבצעים | סלי');
+  useDocumentTitle('מבצעים בסופרמרקטים — הכי משתלם מול השוק | סלי',
+    'המבצעים המשתלמים ביותר בסופרמרקטים בישראל, מושווים למחיר הזול ביותר בשוק. סינון לפי רשת ועיר.');
   const { addItem } = useBasket();
   const [city, setCity] = useState(readCityFilter);
   // Coming back (browser back or the page's back button, a POP) from a product page: the saved view (filters, cards
