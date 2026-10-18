@@ -23,8 +23,8 @@ export function BasketOverlays() {
 
   return (
     <>
-      {/* Heard, not seen: a screen reader says what was added (the new key makes a repeat be said again) */}
-      {announcement && <div key={announcement.id} className="sr-only" role="status">{announcement.text}</div>}
+      {/* Heard, not seen: a screen reader says what was added. The region is always on the page, only its text changes. */}
+      <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
       {notice && (
         <div className="undo-toast" role="status" onClick={dismissNotice}>
           <span>{notice.text}</span>

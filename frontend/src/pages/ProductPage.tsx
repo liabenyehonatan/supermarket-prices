@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowRight, MapPin, Truck, Plus, Minus, Share2, ShoppingBasket,
   Check, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
@@ -85,6 +85,7 @@ const MAX_QTY = 99;      // the API's limit per basket line
 export function ProductPage() {
   const { barcode } = useParams<{ barcode: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { addItem, updateQty, items } = useBasket();
   const [data, setData]   = useState<ProductCompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,7 +152,8 @@ export function ProductPage() {
   }
 
   function goBack() {
-    if (window.history.length > 1) navigate(-1); else navigate('/');
+    // 'default' is the first page of this visit (a shared link): going back there would leave the site
+    if (location.key !== 'default') navigate(-1); else navigate('/');
   }
 
   function handleAdd() {

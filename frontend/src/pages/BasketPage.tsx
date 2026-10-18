@@ -657,7 +657,7 @@ export function BasketPage() {
               ? 'משווה מחירים...'
               : <>
                   <CartPercentIcon />
-                  השווה מחירים
+                  השוו מחירים
                   <span className="compare-bar-count">
                     {items.length === totalItems
                       ? `${totalItems} מוצרים`

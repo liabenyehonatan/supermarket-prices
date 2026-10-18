@@ -70,7 +70,7 @@ cd frontend && npm ci && npm run dev                      # app on :3000, proxie
 Tests (create and drop a throw-away database, `sm_pytest`):
 
 ```bash
-venv/bin/python -m pytest        # 346 tests: parsing, loading, promotions, API, migrations, worker
+venv/bin/python -m pytest        # 347 tests: parsing, loading, promotions, API, migrations, worker
 cd frontend && npm run build     # type-check + production build
 ```
 
