@@ -35,14 +35,14 @@ export function DealProductsSheet({ deal, onClose }: { deal: Deal; onClose: () =
           <strong>{deal.min_qty} ב-₪{Number(deal.price).toFixed(2)} · {deal.brand}</strong>
           <button className="location-sheet-close" onClick={onClose} aria-label="סגירה"><X size={20} /></button>
         </div>
-        <div className="deal-sheet-hint">הוסיפי {deal.min_qty} מוצרים כלשהם מהרשימה, ובסל נחשב להם את מחיר המבצע.</div>
+        <div className="deal-sheet-hint">הוסיפו {deal.min_qty} מוצרים כלשהם מהרשימה, ובסל נחשב להם את מחיר המבצע.</div>
         <div className="deal-sheet-list">
           {products === null && <div className="deal-sheet-hint">טוענים…</div>}
           {products?.map(p => (
             <div key={p.barcode} className="deal-sheet-row">
               <ProductImage barcode={p.barcode} name={p.name} imageUrl={p.image_url} size={40} />
               <div className="deal-sheet-name">{p.name}</div>
-              <button className="btn btn-secondary btn-sm" onClick={e => add(p, e.currentTarget.closest('.deal-sheet-row'))} aria-label={`הוסיפי ${p.name} לסל`}>
+              <button className="btn btn-secondary btn-sm" onClick={e => add(p, e.currentTarget.closest('.deal-sheet-row'))} aria-label={`הוסיפו ${p.name} לסל`}>
                 {added.has(p.barcode) ? <Check size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
               </button>
             </div>

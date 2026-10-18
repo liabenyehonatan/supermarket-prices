@@ -51,8 +51,6 @@ Environment: requires a `.env` file with `DATABASE_URL` (async PostgreSQL URL, e
 - `universal_parser.py`: field-name helpers, chain and store upserts.
 - **Price history strategy**: each price row has `is_current`; the database allows exactly one current row per `(store, product)` (partial unique index). On a price change the old row is set `is_current=False` and a new row is inserted. A file with an older `price_updated_at` than the stored one is ignored. A full file closes products it no longer lists, unless it lists under half of what we hold (truncated-file guard).
 
-**Legacy, not used by the worker:** `app/scraper/scraper_service.py` (Playwright, Shufersal), `app/scraper/victory_scraper.py` and `app/parser/parser_service.py` (GZ files, own per-row upserts). They predate the multi-chain pipeline and do not use the ledger or the bulk loader; don't run them against a production database.
-
 ### Product pictures (`app/images.py`, `app/pipeline/images.py`)
 Two sources, asked in the worker after each cycle: Shufersal's catalogue (`fill_images`, `image_checked_at`), then Open Food Facts for what Shufersal did not carry (`fill_images_off`, `off_checked_at`, `OFF_IMAGE_FILL_MINUTES`). OFF is asked two requests at a time, paced (about 20 a minute: four at a time, ~60 a minute, was answered with 429 although their stated limit is ~100), products of the promotions section first, real GTINs only. A failed lookup is never recorded as "no picture". Pictures are served only from allowed hosts (`is_allowed_image_url`, and the CSP in `nginx/nginx.conf`); OFF's are CC BY-SA, credited on the About page.
 

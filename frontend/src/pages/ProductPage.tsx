@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowRight, MapPin, Truck, Plus, Minus, Share2, ShoppingBasket,
   Check, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
@@ -80,15 +80,17 @@ function SkeletonRow() {
   );
 }
 
+const MAX_QTY = 99;      // the API's limit per basket line
+
 export function ProductPage() {
   const { barcode } = useParams<{ barcode: string }>();
   const navigate = useNavigate();
-  const { addItem, items } = useBasket();
+  const location = useLocation();
+  const { addItem, updateQty, items } = useBasket();
   const [data, setData]   = useState<ProductCompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty]     = useState(1);
-  const [added, setAdded] = useState(false);
   const [cityFilter, setCityFilter] = useState(readCityFilter);
   useEffect(() => onCityFilterChange(setCityFilter), []);  // header chip
   const [cities, setCities] = useState<string[]>([]);
@@ -117,7 +119,7 @@ export function ProductPage() {
     setLoading(true); setError(null);
     compareProduct(code)
       .then(result => { if (isCurrent()) setData(result); })
-      .catch(() => { if (isCurrent()) setError('לא הצלחנו לטעון את המוצר כרגע. נסי שוב בעוד רגע.'); })
+      .catch(() => { if (isCurrent()) setError('לא הצלחנו לטעון את המוצר כרגע. נסו שוב בעוד רגע.'); })
       .finally(() => { if (isCurrent()) setLoading(false); });
   }, []);
 
@@ -129,10 +131,14 @@ export function ProductPage() {
     return () => { current = false; };
   }, [barcode, load]);
 
-  useEffect(() => {
-    const ex = items.find(i => i.barcode === barcode);
-    if (ex) setQty(ex.quantity);
-  }, [items, barcode]);
+  // Once the product is in the basket the stepper edits the basket's own quantity; before that, `qty` is
+  // how many the next "add" puts in. (Mixing the two added the whole quantity again on every tap.)
+  const inBasket = items.find(i => i.barcode === barcode);
+  const shownQty = inBasket ? inBasket.quantity : qty;
+  const changeQty = (next: number) => {
+    const clamped = Math.min(MAX_QTY, Math.max(1, next));
+    if (inBasket) updateQty(inBasket.barcode, clamped); else setQty(clamped);
+  };
 
   // The phone's own share sheet where there is one; otherwise copy the link.
   function handleShare() {
@@ -146,7 +152,8 @@ export function ProductPage() {
   }
 
   function goBack() {
-    if (window.history.length > 1) navigate(-1); else navigate('/');
+    // 'default' is the first page of this visit (a shared link): going back there would leave the site
+    if (location.key !== 'default') navigate(-1); else navigate('/');
   }
 
   function handleAdd() {
@@ -154,8 +161,6 @@ export function ProductPage() {
     addItem({ barcode: data.product.barcode, quantity: qty, name: data.product.name,
               brand: data.product.brand, unit: data.product.unit_of_measure }, () => {
       flyToBasket(heroImageRef.current);
-      setAdded(true);
-      setTimeout(() => setAdded(false), 2200);
     });
   }
 
@@ -253,7 +258,7 @@ export function ProductPage() {
             <div className="empty-state-title">שגיאה בטעינה</div>
             <div className="empty-state-desc">{error}</div>
             <button className="btn btn-secondary btn-sm" onClick={() => barcode && load(barcode, () => true)}>
-              נסה שוב
+              נסו שוב
             </button>
           </div>
         )}
@@ -270,11 +275,11 @@ export function ProductPage() {
                     <div className="product-sheet-top">
                       <span className="product-sheet-maker">{mfr && mfr !== '---' ? mfr : ''}</span>
                       <div className="product-qty" role="group" aria-label="כמות">
-                        <button className="product-qty-btn" onClick={() => setQty(q => Math.max(1, q - 1))} aria-label="הורד כמות" disabled={qty <= 1}>
+                        <button className="product-qty-btn" onClick={() => changeQty(shownQty - 1)} aria-label="הפחתת כמות" disabled={shownQty <= 1}>
                           <Minus size={14} strokeWidth={2.5} />
                         </button>
-                        <span className="product-qty-value tabular">{qty}</span>
-                        <button className="product-qty-btn is-plus" onClick={() => setQty(q => q + 1)} aria-label="הגדל כמות">
+                        <span className="product-qty-value tabular">{shownQty}</span>
+                        <button className="product-qty-btn is-plus" onClick={() => changeQty(shownQty + 1)} aria-label="הגדלת כמות" disabled={shownQty >= MAX_QTY}>
                           <Plus size={14} strokeWidth={2.5} />
                         </button>
                       </div>
@@ -336,7 +341,7 @@ export function ProductPage() {
                 <button
                   className="filter-chip-clear"
                   onClick={() => { setCityFilter(''); setChainFilter(''); saveCityFilter(''); saveChainFilter(''); }}
-                  aria-label="נקי סינון"
+                  aria-label="ניקוי סינון"
                 >
                   <X size={15} strokeWidth={2.5} />
                 </button>
@@ -358,15 +363,15 @@ export function ProductPage() {
                       ? `אין חנויות ב${cityFilter}`
                       : `אין חנויות ${chainFilter} עם מוצר זה`}
                 </div>
-                <div className="empty-state-desc">נסי לשנות את הסינון</div>
+                <div className="empty-state-desc">נסו לשנות את הסינון</div>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
                   {cityFilter && (
                     <button className="btn btn-secondary btn-sm" onClick={() => { setCityFilter(''); saveCityFilter(''); }}>
-                      הסר סינון עיר
+                      הסירו סינון עיר
                     </button>
                   )}
                   <button className="btn btn-secondary btn-sm" onClick={() => { setCityFilter(''); setChainFilter(''); saveCityFilter(''); saveChainFilter(''); }}>
-                    הצג את כל החנויות
+                    הציגו את כל החנויות
                   </button>
                 </div>
               </div>
@@ -442,13 +447,13 @@ export function ProductPage() {
 
             {filteredPrices.length > visibleCount && (
               <button className="btn btn-secondary btn-full" style={{ marginBottom: 20 }} onClick={() => setVisibleCount(c => c + STORES_PAGE)}>
-                הצג עוד {Math.min(STORES_PAGE, filteredPrices.length - visibleCount)} חנויות · נותרו {filteredPrices.length - visibleCount}
+                הציגו עוד {Math.min(STORES_PAGE, filteredPrices.length - visibleCount)} חנויות · נותרו {filteredPrices.length - visibleCount}
               </button>
             )}
 
             {nearbyMode && (
               <button className="btn btn-secondary btn-full" style={{ marginBottom: 20 }} onClick={() => setShowAll(true)}>
-                הצג את כל {matchingPrices.length} החנויות
+                הציגו את כל {matchingPrices.length} החנויות
               </button>
             )}
             {nearbyActive && nearbyPrices.length > 0 && showAll && (
@@ -477,17 +482,18 @@ export function ProductPage() {
       {data && (
         <div className="add-to-basket-bar product-buy-bar">
           <div className="product-buy-total">
-            <span className="product-buy-label">{qty > 1 ? `${qty} יח׳, החל מ-` : 'החל מ-'}</span>
-            <span className="product-buy-price tabular" dir="ltr">{fmt(Number(data.cheapest_price) * qty)}</span>
+            <span className="product-buy-label">{shownQty > 1 ? `${shownQty} יח׳, החל מ-` : 'החל מ-'}</span>
+            <span className="product-buy-price tabular" dir="ltr">{fmt(Number(data.cheapest_price) * shownQty)}</span>
           </div>
-          <button
-            className={`btn btn-full ${added ? 'btn-secondary' : 'btn-primary'} product-buy-btn`}
-            onClick={handleAdd}
-          >
-            {added
-              ? <><Check size={18} strokeWidth={2.5} /> נוסף לסל</>
-              : <><ShoppingBasket size={18} strokeWidth={2} /> הוסף לסל</>}
-          </button>
+          {inBasket ? (
+            <button className="btn btn-full btn-secondary product-buy-btn" onClick={() => navigate('/basket')}>
+              <Check size={18} strokeWidth={2.5} /> בסל · עברו לסל
+            </button>
+          ) : (
+            <button className="btn btn-full btn-primary product-buy-btn" onClick={handleAdd}>
+              <ShoppingBasket size={18} strokeWidth={2} /> הוסיפו לסל
+            </button>
+          )}
         </div>
       )}
 
