@@ -5,6 +5,9 @@ import type { Deal } from '../api/client';
 
 const KEY = 'sali_deals_snapshot';
 const MAX_AGE_MS = 15 * 60 * 1000;
+// The list keeps loading as the page is scrolled, so it can be thousands of cards long: only the first ones are kept
+// (a few hundred bytes each, saved on every scroll pause); going back reloads the rest as the person scrolls again.
+const MAX_SAVED_DEALS = 120;
 
 export interface DealsSnapshot {
   chain: string;
@@ -33,7 +36,7 @@ export function readDealsSnapshot(city: string): DealsSnapshot | null {
 
 export function writeDealsSnapshot(snap: Omit<DealsSnapshot, 'at'>) {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify({ ...snap, at: Date.now() }));
+    sessionStorage.setItem(KEY, JSON.stringify({ ...snap, deals: snap.deals.slice(0, MAX_SAVED_DEALS), at: Date.now() }));
   } catch {
     // storage full or blocked: going back just reloads the list
   }
