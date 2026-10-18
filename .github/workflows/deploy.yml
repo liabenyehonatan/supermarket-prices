@@ -1,0 +1,55 @@
+# Deploys main to the server after CI has passed on it: the server pulls the commit and rebuilds what changed
+# (deploy/deploy.sh). Needs these repository secrets (Settings > Secrets and variables > Actions):
+#   DEPLOY_HOST        the server's address
+#   DEPLOY_USER        the SSH user (ubuntu)
+#   DEPLOY_SSH_KEY     the PRIVATE key of a key pair made only for this (its public half is in the server's
+#                      ~/.ssh/authorized_keys)
+#   DEPLOY_KNOWN_HOSTS the server's line from `ssh-keyscan -t ed25519 <host>` (so the connection is to that server)
+# Without them the job stops with a clear message and nothing else is affected.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer one waits for the running one instead of cutting it off.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # CI must have passed on a push to main (a manual run is allowed from the Actions tab)
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check the secrets exist
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          for v in HOST KEY KNOWN; do
+            [ -n "${!v}" ] || { echo "::error::deploy secret for $v is not set (see the top of .github/workflows/deploy.yml)"; exit 1; }
+          done
+
+      - name: Deploy over SSH
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.DEPLOY_USER || 'ubuntu' }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+            "$USER_NAME@$HOST" "cd ~/supermarket-prices && bash deploy/deploy.sh $SHA"
