@@ -85,7 +85,7 @@ export function fetchUnitPrices(barcodes: string[]): Promise<Record<string, Unit
 export interface ExampleComparison {
   barcode: string; name: string; brand?: string; unit_of_measure?: string;
   cheapest_price: number | string; cheapest_chain: string;
-  priciest_price: number | string; priciest_chain: string; stores_count: number;
+  priciest_price: number | string; priciest_chain: string; stores_count: number; image_url?: string | null;
 }
 
 export interface DealProduct { barcode: string; name: string; brand?: string; image_url?: string; unit_of_measure?: string }
@@ -100,7 +100,10 @@ export interface DealRules { min_saving: number | string; max_saving: number | s
 export interface DealsResponse { total: number; deals: Deal[]; chains: { name: string; count: number }[]; rules: DealRules }
 
 export function fetchDeals(p: {
-  chain?: string; city?: string; kind?: 'single' | 'group'; sort?: 'best' | 'ending'; diverse?: boolean; limit?: number; offset?: number;
+  chain?: string; city?: string; kind?: 'single' | 'group'; sort?: 'best' | 'ending'; diverse?: boolean;
+  /** only promotions with a product picture */ pictured?: boolean;
+  /** today's selection out of the best promotions (changes each day; implies diverse) */ daily?: boolean;
+  limit?: number; offset?: number;
 } = {}): Promise<DealsResponse> {
   const q = new URLSearchParams();
   if (p.chain) q.set('chain', p.chain);
@@ -108,6 +111,8 @@ export function fetchDeals(p: {
   if (p.kind) q.set('kind', p.kind);
   if (p.sort) q.set('sort', p.sort);
   if (p.diverse) q.set('diverse', 'true');
+  if (p.pictured) q.set('pictured', 'true');
+  if (p.daily) q.set('daily', 'true');
   if (p.limit) q.set('limit', String(p.limit));
   if (p.offset) q.set('offset', String(p.offset));
   return request<DealsResponse>(`/api/v1/deals?${q.toString()}`);
