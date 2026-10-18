@@ -251,6 +251,52 @@ async def test_examples_come_from_the_view_and_skip_placeholder_prices(client, s
     routes._examples_cache = None
 
 
+async def test_examples_rotate_daily_and_always_have_a_picture(client, session, monkeypatch):
+    from datetime import datetime
+    from app.api import routes
+    from app.db.models import Chain, Price, Product, Store
+    from app.pipeline import maintenance
+
+    chain = Chain(chain_id="1", name="רשת")
+    other = Chain(chain_id="2", name="אחרת")
+    session.add_all([chain, other])
+    await session.flush()
+    stores = [Store(chain_id=(chain if i % 2 else other).id, store_id=str(i), name=f"s{i}") for i in range(24)]
+    session.add_all(stores)
+    names = ["גבינה", "חלב", "לחם", "אורז", "שמן", "קפה", "תה", "סוכר", "קמח", "פסטה", "טחינה", "חומוס"]
+    products = [Product(barcode=f"72900000001{i:02d}", name=f"{n} משפחתי", image_url=f"https://res.cloudinary.com/{i}.png")
+                for i, n in enumerate(names)]
+    no_picture = Product(barcode="7290000000999", name="ללא תמונה")
+    wrong_host = Product(barcode="7290000000998", name="תמונה ממקור לא מאושר", image_url="https://evil.example/x.png")
+    session.add_all(products + [no_picture, wrong_host])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    for prod in products + [no_picture, wrong_host]:
+        for i, st in enumerate(stores):
+            session.add(Price(product_id=prod.id, store_id=st.id, price=5 + (i % 4), price_updated_at=now, is_current=True))
+    await session.commit()
+    await maintenance.refresh_popularity()
+
+    async def on_day(seed):
+        monkeypatch.setattr(routes, "_rotation_seed", lambda: seed)
+        r = await client.get("/api/v1/products/examples?limit=4")
+        return [e["barcode"] for e in r.json()], r.json()
+
+    seen = set()
+    day1, body = await on_day(1)
+    routes._examples_cache = None                  # another worker, or a later hour: the answer is computed afresh
+    again, _ = await on_day(1)
+    day2, more = await on_day(2)
+    assert day1 == again and len(day1) == 4        # the same all day, whoever computes it
+    assert day1 != day2                            # a different selection the next day
+    for _ in range(10):                            # whatever the day, never a product without a usable picture
+        routes._examples_cache = None
+        seen.update((await on_day(_ + 3))[0])
+    assert not seen & {"7290000000999", "7290000000998"} and len(seen) > 4
+    assert all(e["image_url"].startswith("https://res.cloudinary.com/") for e in body)
+    routes._examples_cache = None
+
+
 async def test_nearest_city_comes_from_our_own_stores(client, session):
     from app.db.models import Chain, Store
 

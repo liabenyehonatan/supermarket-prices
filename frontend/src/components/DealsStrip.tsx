@@ -6,7 +6,8 @@ import { onCityFilterChange, readCityFilter } from '../lib/filters';
 import { DealCard } from './DealCard';
 import { DealProductsSheet } from './DealProductsSheet';
 
-/** The home-page strip: a few of the best promotions, two per brand at most. Absent when there are none. */
+/** The home-page strip: today's pick of the best promotions (a different one each day), two per brand at most,
+ *  and only ones with a picture. Absent when there are none. */
 export function DealsStrip({ chain }: { chain: string }) {
   const { addItem } = useBasket();
   const [city, setCity] = useState(readCityFilter);
@@ -16,7 +17,7 @@ export function DealsStrip({ chain }: { chain: string }) {
   useEffect(() => onCityFilterChange(setCity), []);
   useEffect(() => {
     let live = true;
-    fetchDeals({ chain, city, diverse: true, limit: 8 })
+    fetchDeals({ chain, city, daily: true, pictured: true, limit: 8 })
       .then(r => { if (live) setDeals(r.deals); })
       .catch(() => { if (live) setDeals([]); });
     return () => { live = false; };
