@@ -895,6 +895,8 @@ MIN_DEAL_SAVING = Decimal("0.10")     # under 10% is not worth a card
 MAX_DEAL_SAVING = Decimal("0.60")     # over 60% is almost always a pack price read as a unit price
 MIN_REFERENCE_PRICE = Decimal("0.50")  # the cheapest price must be at least this: pennies are placeholders (the view uses the same 0.5)
 DEAL_SAMPLES = 4
+# A promotion with a picture to show (one of the first twelve products a card draws from has one)
+_HAS_PICTURE = "EXISTS (SELECT 1 FROM products pp WHERE pp.id = ANY(product_ids[1:12]) AND pp.image_url IS NOT NULL)"
 _DEALS_FILTER = (
     "saving_pct BETWEEN :lo AND :hi AND (ends_at IS NULL OR ends_at >= (now() AT TIME ZONE 'Asia/Jerusalem'))"
 )
@@ -904,7 +906,7 @@ def _deals_where(chain, city, kind, ending, pictured=False) -> tuple[str, dict]:
     where, params = [_DEALS_FILTER], {"lo": MIN_DEAL_SAVING, "hi": MAX_DEAL_SAVING}
     if pictured:
         # at least one of the products a card would show (the first twelve) has a picture
-        where.append("EXISTS (SELECT 1 FROM products pp WHERE pp.id = ANY(product_ids[1:12]) AND pp.image_url IS NOT NULL)")
+        where.append(_HAS_PICTURE)
     if chain and chain.strip():
         where.append("brand = :chain")
         params["chain"] = chain.strip()
@@ -968,17 +970,21 @@ async def list_deals(
     # With a city filter the card counts the stores of that city, not all the stores of the promotion.
     stores_expr = ("cardinality(ARRAY(SELECT unnest(store_ids) INTERSECT SELECT id FROM stores WHERE city ILIKE :city))"
                    if "city" in params else "stores")
-    # Deals compared with other brands come first; every order ends with deal_id so ties page deterministically.
-    order = ("vs_market DESC, ends_at ASC, saving_pct DESC, deal_id" if sort == "ending"
-             else "vs_market DESC, saving_pct DESC, stores DESC, deal_id")
+    # Promotions with a picture come first, in the usual order, then the ones without. Deals compared with other
+    # brands come first within each; every order ends with deal_id so ties page deterministically.
+    rank = ("vs_market DESC, ends_at ASC, saving_pct DESC, deal_id" if sort == "ending"
+            else "vs_market DESC, saving_pct DESC, stores DESC, deal_id")
+    order = f"has_picture DESC, {rank}"                        # by the column the query selects
+    window_order = f"{_HAS_PICTURE} DESC, {rank}"             # inside a window the column is not usable yet
     columns = (f"deal_id, brand, description, min_qty, price, unit_price, ref_price, saving_pct, vs_market, "
-               f"{stores_expr} AS stores, products, max_qty, ends_at, product_ids[1:12] AS sample_ids")
+               f"{stores_expr} AS stores, products, max_qty, ends_at, product_ids[1:12] AS sample_ids, "
+               f"{_HAS_PICTURE} AS has_picture")
     if daily:
         offset = 0                               # today's selection has no pages
     if diverse:
         # At most two per brand, counted in SQL (so a few big brands cannot crowd the rest out of the list)
         fetch = limit * 5 if daily else limit
-        query = (f"SELECT * FROM (SELECT {columns}, ROW_NUMBER() OVER (PARTITION BY brand ORDER BY {order}) AS rn "
+        query = (f"SELECT * FROM (SELECT {columns}, ROW_NUMBER() OVER (PARTITION BY brand ORDER BY {window_order}) AS rn "
                  f"FROM promo_deals WHERE {where}) t WHERE rn <= 2 ORDER BY {order} LIMIT :fetch OFFSET :offset")
     else:
         fetch = limit

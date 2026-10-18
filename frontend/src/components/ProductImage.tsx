@@ -6,6 +6,7 @@ export function ProductImage({
   imageUrl,
   size = 56,
   borderRadius = 12, // --r-md: the same tile radius everywhere
+  noPicture = false,
 }: {
   barcode: string;
   name: string;
@@ -14,6 +15,8 @@ export function ProductImage({
   /** Pixels, or a CSS length such as '100%' to fill the parent (the search result cards). */
   size?: number | string;
   borderRadius?: number;
+  /** The product is known to have no picture: show the placeholder at once, without asking for one. */
+  noPicture?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -24,7 +27,7 @@ export function ProductImage({
 
   return (
     <div style={{ ...sharedStyle, position: 'relative', background: '#FFFFFF', overflow: 'hidden' }}>
-      {!failed && (
+      {!failed && !noPicture && (
         <img
           src={imageUrl || `/api/v1/products/${barcode}/image`}
           alt={name}
@@ -41,7 +44,7 @@ export function ProductImage({
           }}
         />
       )}
-      {(!loaded || failed) && (
+      {(!loaded || failed || noPicture) && (
         <div style={{
           width: '100%', height: '100%',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
