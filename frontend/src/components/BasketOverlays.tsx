@@ -7,7 +7,7 @@ import { useBasket } from '../context/BasketContext';
 /** App-root UI for baskets: the bottom notice and the "which basket?" picker. */
 export function BasketOverlays() {
   const trapRef = useFocusTrap();
-  const { notice, dismissNotice, picker, closePicker, baskets, activeId, pickBasket, pickNew } = useBasket();
+  const { notice, dismissNotice, announcement, picker, closePicker, baskets, activeId, pickBasket, pickNew } = useBasket();
   const [name, setName] = useState('');
   const [naming, setNaming] = useState(false);
 
@@ -23,6 +23,8 @@ export function BasketOverlays() {
 
   return (
     <>
+      {/* Heard, not seen: a screen reader says what was added. The region is always on the page, only its text changes. */}
+      <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
       {notice && (
         <div className="undo-toast" role="status" onClick={dismissNotice}>
           <span>{notice.text}</span>
@@ -38,7 +40,7 @@ export function BasketOverlays() {
             <div className="sheet-grab"><span className="sheet-handle" /></div>
             <div className="location-sheet-head">
               <strong>{title}</strong>
-              <button className="location-sheet-close" onClick={closePicker} aria-label="סגור"><X size={18} strokeWidth={2.5} /></button>
+              <button className="location-sheet-close" onClick={closePicker} aria-label="סגירה"><X size={18} strokeWidth={2.5} /></button>
             </div>
             <div className="location-list">
               {picker.mode !== 'create' && baskets.filter(b => picker.mode !== 'move' || b.id !== picker.fromId).map(b => {

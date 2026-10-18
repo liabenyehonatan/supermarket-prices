@@ -4,6 +4,7 @@ import { MapPin, MapPinOff, X } from 'lucide-react';
 import { fetchCities } from '../api/client';
 import { CityPicker } from './CityPicker';
 import type { LocationProblem } from '../lib/location';
+import { useFocusTrap } from '../lib/useFocusTrap';
 
 const COPY: Record<LocationProblem, { title: string; body: string }> = {
   ask: {
@@ -45,6 +46,7 @@ export function LocationPrompt({ problem, onRetry, onConfirm, onPickCity, sugges
   onClose: () => void;
 }) {
   const [cities, setCities] = useState<string[]>([]);
+  const trapRef = useFocusTrap();
   useEffect(() => {
     if (problem && cities.length === 0) fetchCities().then(setCities).catch(() => {});
   }, [problem, cities.length]);
@@ -69,9 +71,11 @@ export function LocationPrompt({ problem, onRetry, onConfirm, onPickCity, sugges
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="location-prompt-title"
+        tabIndex={-1}
+        ref={trapRef}
         onClick={e => e.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose} aria-label="סגור">
+        <button className="modal-close" onClick={onClose} aria-label="סגירה">
           <X size={18} strokeWidth={2} />
         </button>
         <div className="modal-icon">
@@ -93,7 +97,7 @@ export function LocationPrompt({ problem, onRetry, onConfirm, onPickCity, sugges
           ) : problem !== 'unsupported' && (
             <button className="btn btn-primary btn-full" onClick={onRetry}>נסו שוב</button>
           )}
-          <button className="btn btn-secondary btn-full" onClick={onClose}>{isAsk ? 'לא עכשיו' : 'סגור'}</button>
+          <button className="btn btn-secondary btn-full" onClick={onClose}>{isAsk ? 'לא עכשיו' : 'סגירה'}</button>
         </div>
       </div>
     </div>,

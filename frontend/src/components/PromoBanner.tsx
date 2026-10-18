@@ -14,7 +14,7 @@ interface Slide {
 }
 
 const SLIDES: Slide[] = [
-  { id: 'compare', title: 'השוואת מחירי סופרמרקטים', sub: 'כל ההשוואות במקום אחד', cta: 'השווה עכשיו', to: 'search', img: '/banner/basket.jpg' },
+  { id: 'compare', title: 'השוואת מחירי סופרמרקטים', sub: 'כל ההשוואות במקום אחד', cta: 'השוו עכשיו', to: 'search', img: '/banner/basket.jpg' },
   { id: 'scan', title: 'סורקים ברקוד', sub: 'ורואים מיד איפה הכי זול', cta: 'לסריקה', to: '/scan', img: '/banner/scan.jpg' },
   { id: 'deals', title: 'מבצעים שבאמת זולים', sub: 'זולים מהמחיר שמצאנו', cta: 'למבצעים', to: '/promotions', img: '/banner/veggies-wood.jpg' },
 ];

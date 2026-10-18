@@ -16,4 +16,7 @@ RUN npm run build
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Runs before nginx starts (the image's entrypoint executes every script in this folder)
+COPY docker-entrypoint-site-url.sh /docker-entrypoint.d/40-site-url.sh
+RUN chmod +x /docker-entrypoint.d/40-site-url.sh
 EXPOSE 80

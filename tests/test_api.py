@@ -193,6 +193,7 @@ async def test_robots_and_sitemap_use_the_address_they_are_asked_on(client):
     sitemap = await client.get("/sitemap.xml", headers={"host": "sali.example"})
     assert sitemap.status_code == 200 and "xml" in sitemap.headers["content-type"]
     assert "<loc>http://sali.example/</loc>" in sitemap.text
+    assert "<loc>http://sali.example/promotions</loc>" in sitemap.text and "#" not in sitemap.text
 
 
 async def test_timestamps_carry_a_timezone_so_browsers_do_not_misread_them(client, session):
@@ -368,6 +369,19 @@ async def test_fuzzy_search_still_forgives_a_typo(client, session):
     await session.commit()
     r = await client.get("/api/v1/products/search", params={"q": "גבימה"})
     assert [p["barcode"] for p in r.json()] == ["7290000000113"]
+
+
+async def test_keyboard_smash_gets_no_fuzzy_matches(client, session):
+    from app.db.models import Product
+
+    session.add(Product(barcode="7290000000124", name="ממרח קקאו אגוזי לוז 350 גרם"))
+    await session.commit()
+    # one letter repeated is not a typo of anything: loosely matching it only returned "cacao" products
+    smash = await client.get("/api/v1/products/search", params={"q": "קקקקקקקק"})
+    assert smash.status_code == 200 and smash.json() == []
+    # a real typo of the same word still finds it
+    typo = await client.get("/api/v1/products/search", params={"q": "קקאוו"})
+    assert [p["barcode"] for p in typo.json()] == ["7290000000124"]
 
 
 async def test_basket_limit_keeps_the_best_stores_and_reports_the_totals(client, session):
