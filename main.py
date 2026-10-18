@@ -1,9 +1,12 @@
 # main.py
 
-from fastapi import Depends, FastAPI
+import logging
+
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, TimeoutError as PoolTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import settings
@@ -29,6 +32,15 @@ app.add_middleware(
 
 # Register our routes
 app.include_router(router)
+
+
+@app.exception_handler(DBAPIError)
+@app.exception_handler(PoolTimeoutError)
+async def database_busy(request: Request, exc: Exception):
+    """The database took too long (a statement over its time limit, or no connection free): the same answer for
+    every such case, a "busy, try again" 503, instead of a stack trace and a 500. The page asks again a moment later."""
+    logging.getLogger(__name__).warning("database busy on %s %s: %s", request.method, request.url.path, str(exc)[:120])
+    return JSONResponse({"detail": "The service is busy, try again in a moment."}, status_code=503, headers={"Retry-After": "5"})
 
 
 @app.get("/")

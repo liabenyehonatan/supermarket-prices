@@ -25,6 +25,11 @@ export function unitPriceLabel(price: unknown, unitPrice: unknown, unit?: string
   const word = UNIT_WORDS.find(([re]) => re.test(m[2].trim()))?.[1];
   if (!word) return null;
   const qty = m[1] && Number(m[1]) !== 1 ? m[1] : '';
+  // The chains' numbers are sometimes wrong (₪16.80 cereal at "₪0.04 per 100 g" would be a 42 kg box). What the pack would
+  // weigh, if the number were right, must be a pack that exists: from a few grams to a few kilos.
+  const perAmount = (m[1] ? Number(m[1]) : 1) * (word === 'ק״ג' || word === 'ליטר' ? 1000 : 1);   // grams or ml the unit price is for
+  const impliedPack = (p / u) * perAmount;
+  if (impliedPack < 5 || impliedPack > 12000) return null;
   return { price: money(u), per: qty ? `ל-${qty} ${word}` : `ל${word}` };
 }
 

@@ -206,16 +206,23 @@ export function SearchPage() {
     if (!missing.length) return;
     missing.forEach(b => askedPrices.current.add(b));
     void (async () => {
-      try {
-        const map = await priceSummaryBatch(missing);
-        setSummary(prev => {
-          const next = { ...prev };
-          for (const b of missing) next[b] = map[b] ?? null;
-          return next;
-        });
-      } catch {
-        missing.forEach(b => askedPrices.current.delete(b));   // a failed request is tried again with the next page
+      // While the prices are being updated on the server a request can fail or take long: try again a little later
+      // (twice) before leaving the cards to the next page's request.
+      for (const wait of [0, 3000, 8000]) {
+        if (wait) await new Promise(r => setTimeout(r, wait));
+        try {
+          const map = await priceSummaryBatch(missing);
+          setSummary(prev => {
+            const next = { ...prev };
+            for (const b of missing) next[b] = map[b] ?? null;
+            return next;
+          });
+          return;
+        } catch {
+          /* try again */
+        }
       }
+      missing.forEach(b => askedPrices.current.delete(b));   // still failing: asked again with the next page
     })();
   }, [results]);
 
