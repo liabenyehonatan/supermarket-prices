@@ -155,6 +155,26 @@ async def test_chains_endpoint_lists_brands_biggest_first(client, session):
     assert r.json() == [{"name": "גדולה", "stores": 3}, {"name": "קרפור", "stores": 2}, {"name": "יינות ביתן", "stores": 1}]
 
 
+async def test_chains_endpoint_narrows_to_a_city(client, session):
+    from app.db.models import Chain, Store
+
+    a = Chain(chain_id="1", name="רשת א")
+    b = Chain(chain_id="2", name="רשת ב")
+    session.add_all([a, b])
+    await session.flush()
+    session.add_all([
+        Store(chain_id=a.id, store_id="1", name="x", city="הרצליה"),
+        Store(chain_id=a.id, store_id="2", name="y", city="חיפה"),
+        Store(chain_id=b.id, store_id="1", name="z", city="חיפה"),
+    ])
+    await session.commit()
+
+    r = await client.get("/api/v1/chains", params={"city": "הרצליה"})
+    assert r.json() == [{"name": "רשת א", "stores": 1}]
+    r = await client.get("/api/v1/chains", params={"city": "חיפה"})
+    assert {c["name"] for c in r.json()} == {"רשת א", "רשת ב"}
+
+
 async def test_zero_prices_are_never_served_or_loaded(client, session):
     from datetime import datetime
     from app.db.models import Chain, Price, Product, Store

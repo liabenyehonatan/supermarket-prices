@@ -14,17 +14,26 @@ export const FEATURED_CHAINS = [
   'עוף והודו ברקת', 'גוד פארם', 'שפע ברכת השם', 'יילו', 'וולט',
 ];
 
-/** The chains the app knows, biggest first, straight from the API (so it never drifts from the data). */
-export function useChainNames(): string[] {
-  const [names, setNames] = useState<string[]>(FEATURED_CHAINS);
+/**
+ * The chains the app knows, biggest first, straight from the API (so it never drifts from the data).
+ * With a city, only the chains that have a store there. `ready` is true once the list is the API's answer
+ * for that city (not the fallback, nor the previous city's list).
+ */
+export function useCityChains(city = ''): { names: string[]; ready: boolean } {
+  const [state, setState] = useState<{ city: string; names: string[] | null }>({ city, names: null });
   useEffect(() => {
     let live = true;
-    fetchChains()
-      .then(list => { if (live && list.length) setNames(list.map(c => c.name)); })
+    fetchChains(city)
+      .then(list => { if (live && (list.length || city)) setState({ city, names: list.map(c => c.name) }); })
       .catch(() => {});
     return () => { live = false; };
-  }, []);
-  return names;
+  }, [city]);
+  const ready = state.names !== null && state.city === city;
+  return { names: state.names ?? FEATURED_CHAINS, ready };
+}
+
+export function useChainNames(city = ''): string[] {
+  return useCityChains(city).names;
 }
 
 const CITY_KEY = 'cityFilter';

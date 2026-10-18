@@ -54,7 +54,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
   return (
     <>
     {withSearch && allChains.length > 8 && (
-      <label className="chain-search" style={style}>
+      <label className="chain-search">
         <Search size={15} strokeWidth={2} aria-hidden />
         <input
           type="search"
