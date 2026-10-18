@@ -35,7 +35,7 @@ interface BasketContextValue {
   notice: Notice | null;
   dismissNotice: () => void;
   /** Said aloud to screen readers when something is added ("added to the basket"); never shown. */
-  announcement: { id: number; text: string } | null;
+  announcement: string;
   picker: PickerState;
   openCreate: () => void;
   /** Opens the picker to send items of one basket to another. */
@@ -46,6 +46,9 @@ interface BasketContextValue {
 }
 
 const BasketContext = createContext<BasketContextValue | null>(null);
+
+// The API refuses a line above this (a basket line is 1 to 99), so the basket never holds more
+const MAX_LINE_QTY = 99;
 
 const STORAGE_KEY = 'sali_baskets_v1';
 const LEGACY_KEY = 'sali_basket';
@@ -83,7 +86,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Stored>(load);
   const stateRef = useRef(state);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [announcement, setAnnouncement] = useState<{ id: number; text: string } | null>(null);
+  const [announcement, setAnnouncement] = useState('');
   const [picker, setPicker] = useState<PickerState>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chosen = useRef((() => { try { return sessionStorage.getItem(CHOSEN_KEY) === '1'; } catch { return false; } })());
@@ -130,7 +133,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
         return {
           ...b,
           items: existing
-            ? b.items.map(i => (i.barcode === item.barcode ? { ...i, quantity: i.quantity + item.quantity } : i))
+            ? b.items.map(i => (i.barcode === item.barcode ? { ...i, quantity: Math.min(MAX_LINE_QTY, i.quantity + item.quantity) } : i))
             : [...b.items, item],
         };
       }),
@@ -143,7 +146,9 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     putInBasket(basketId, item);
     markChosen();
     const name = stateRef.current.baskets.find(b => b.id === basketId)?.name;
-    setAnnouncement(a => ({ id: (a?.id ?? 0) + 1, text: `${item.name} נוסף ל${name ? `סל "${name}"` : 'סל'}` }));
+    // Cleared first so that adding the same product twice is said twice (a live region speaks when its text changes)
+    setAnnouncement('');
+    setTimeout(() => setAnnouncement(`${item.name} נוסף ל${name ? `סל "${name}"` : 'סל'}`), 60);
   }, [putInBasket, markChosen]);
 
   const addItem = useCallback((item: LocalBasketItem, onAdded?: () => void) => {
@@ -190,7 +195,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   const updateQty = useCallback((barcode: string, qty: number) => {
     mapActive(prev => qty <= 0
       ? prev.filter(i => i.barcode !== barcode)
-      : prev.map(i => (i.barcode === barcode ? { ...i, quantity: qty } : i)));
+      : prev.map(i => (i.barcode === barcode ? { ...i, quantity: Math.min(MAX_LINE_QTY, qty) } : i)));
   }, [mapActive]);
 
   const clearBasket = useCallback(() => {
@@ -273,7 +278,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
           return {
             ...b,
             items: existing
-              ? b.items.map(i => (i.barcode === item.barcode ? { ...i, quantity: i.quantity + item.quantity } : i))
+              ? b.items.map(i => (i.barcode === item.barcode ? { ...i, quantity: Math.min(MAX_LINE_QTY, i.quantity + item.quantity) } : i))
               : [...b.items, item],
           };
         }
