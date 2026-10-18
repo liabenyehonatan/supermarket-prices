@@ -32,7 +32,7 @@ SITE_NAME = "סלי"
 SHELL_TTL = 30            # seconds; short, so a new frontend build's file names are picked up quickly
 SITEMAP_TTL = 3600
 SITEMAP_PAGE = 40000      # urls per product sitemap (the protocol allows 50,000)
-MIN_STORES_FOR_SITEMAP = 2   # a product sold in one store has nothing to compare: not worth a search result
+MIN_STORES_FOR_SITEMAP = 1   # every product with a current price; its page answers 200 (no price: 404)
 BARCODE_RE = re.compile(r"^[0-9A-Za-z_-]{1,30}$")
 
 # Pages every visitor sees the same. `index=False` pages are for using the site, not for search results.
@@ -197,6 +197,43 @@ async def _chain_names(db: AsyncSession) -> list[str]:
     return sorted(set(rows))
 
 
+async def _product_links(db: AsyncSession, sql: str, params: Optional[dict] = None) -> str:
+    """A list of links to product pages (barcode, name) from `sql`; empty when there is nothing to list.
+    Plain internal links so crawlers reach product pages from the home and promotions pages, not only the sitemap."""
+    try:
+        rows = (await db.execute(text(sql), params or {})).all()
+    except Exception:
+        return ""
+    return "".join(
+        f'<li><a href="/product/{_esc(barcode)}">{_esc(_short(name, 90))}</a></li>' for barcode, name in rows
+    )
+
+
+_POPULAR_SQL = """
+    SELECT p.barcode, p.name
+      FROM product_store_counts v JOIN products p ON p.id = v.product_id
+     WHERE length(p.barcode) >= 7 AND p.barcode ~ '^[0-9A-Za-z_-]+$' AND v.min_price >= 0.5
+     ORDER BY v.store_count DESC, v.product_id
+     LIMIT 30
+"""
+# products of promotions running now (any chain), the most widely sold first
+_PROMO_PRODUCTS_SQL = """
+    SELECT p.barcode, p.name
+      FROM product_store_counts v JOIN products p ON p.id = v.product_id
+     WHERE length(p.barcode) >= 7 AND p.barcode ~ '^[0-9A-Za-z_-]+$' AND v.min_price >= 0.5
+       AND EXISTS (SELECT 1 FROM promotions pr WHERE pr.product_id = p.id AND pr.is_active AND pr.basket_eligible)
+     ORDER BY v.store_count DESC, v.product_id
+     LIMIT 30
+"""
+_SAME_BRAND_SQL = """
+    SELECT p.barcode, p.name
+      FROM product_store_counts v JOIN products p ON p.id = v.product_id
+     WHERE p.brand = :brand AND p.id <> :pid AND length(p.barcode) >= 7 AND p.barcode ~ '^[0-9A-Za-z_-]+$'
+     ORDER BY v.store_count DESC, v.product_id
+     LIMIT 8
+"""
+
+
 async def _static_page(key: str, request: Request, db: AsyncSession) -> Response:
     page = PAGES[key]
     base = base_url(request)
@@ -210,6 +247,9 @@ async def _static_page(key: str, request: Request, db: AsyncSession) -> Response
             chains = []
         if chains:
             body += f'<p>הרשתות שאנחנו משווים: {_esc(", ".join(chains))}.</p>'
+        links = await _product_links(db, _POPULAR_SQL)
+        if links:
+            body += f"<h2>מוצרים נפוצים להשוואה</h2><ul>{links}</ul>"
         graph = [
             {"@context": "https://schema.org", "@type": "WebSite", "@id": f"{base}/#site", "name": SITE_NAME,
              "url": f"{base}/", "inLanguage": "he-IL", "publisher": {"@id": f"{base}/#org"},
@@ -219,6 +259,10 @@ async def _static_page(key: str, request: Request, db: AsyncSession) -> Response
             {"@context": "https://schema.org", **_organization(base)},
         ]
     elif page["index"]:
+        if key == "promotions":
+            links = await _product_links(db, _PROMO_PRODUCTS_SQL)
+            if links:
+                body += f"<h2>מוצרים במבצע</h2><ul>{links}</ul>"
         kind = "AboutPage" if key == "about" else "CollectionPage"
         graph = [{"@context": "https://schema.org", "@type": kind, "name": page["title"], "url": f"{base}{path}",
                   "description": page["description"], "inLanguage": "he-IL", "isPartOf": {"@id": f"{base}/#site"}}]
@@ -250,7 +294,8 @@ async def _product_page(barcode: str, request: Request, db: AsyncSession) -> Res
         where = (Price.product_id == product.id, Price.is_current, Price.price > 0, _not_wholesale())
         joined = Price.__table__.join(Store.__table__, Price.store_id == Store.id).join(Chain.__table__, Store.chain_id == Chain.id)
         stats = (await db.execute(
-            select(func.count(), func.min(Price.price), func.max(Price.price)).select_from(joined).where(*where)
+            select(func.count(), func.min(Price.price), func.max(Price.price), func.count(func.distinct(Store.chain_id)))
+            .select_from(joined).where(*where)
         )).one()
         if stats[0]:
             top = (await db.execute(
@@ -266,14 +311,15 @@ async def _product_page(barcode: str, request: Request, db: AsyncSession) -> Res
         )
         return _html_response(content, 404, False)
 
-    count, low, high = stats
+    count, low, high, chain_count = stats
+    where_text = "ברשת אחת" if chain_count == 1 else f"ב-{chain_count} רשתות"
     name = " ".join(product.name.split())
     title = f"{_short(name, 70)} — השוואת מחירים | סלי"
     if low == high:
         price_text = f"{low:.2f} ₪"
     else:
         price_text = f"{low:.2f} ₪ עד {high:.2f} ₪"
-    description = _short(f"השוואת מחירים ל{name}: {price_text} ב-{count} סניפים בכל הרשתות. ראו איפה הכי זול.", 160)
+    description = _short(f"השוואת מחירים ל{name}: {price_text} ב-{count} סניפים {where_text}. ראו איפה הכי זול.", 160)
     image = product.image_url if product.image_url and is_allowed_image_url(product.image_url) else None
     url = f"{base}/product/{barcode}"
     product_ld: dict = {
@@ -295,8 +341,13 @@ async def _product_page(barcode: str, request: Request, db: AsyncSession) -> Res
         f"<li>{_esc(chain)}{' — ' + _esc(store) if store else ''}{' (' + _esc(city) + ')' if city else ''}: {price:.2f} ₪</li>"
         for price, store, city, chain in top
     )
+    related = ""
+    if product.brand:
+        links = await _product_links(db, _SAME_BRAND_SQL, {"brand": product.brand, "pid": product.id})
+        if links:
+            related = f"<h2>עוד מוצרים של {_esc(product.brand)}</h2><ul>{links}</ul>"
     body = (f"<h1>{_esc(name)}</h1><p>{_esc(f'מחיר {price_text} ב-{count} סניפים.')}</p>"
-            f"<h2>הסניפים הזולים ביותר</h2><ul>{rows}</ul>" + _NAV)
+            f"<h2>הסניפים הזולים ביותר</h2><ul>{rows}</ul>" + related + _NAV)
     content = render_page(shell, base=base, path=f"/product/{barcode}", title=title, description=description,
                           index=True, image=image, og_type="product", body=body,
                           jsonld=[{"@context": "https://schema.org", **product_ld},
