@@ -40,6 +40,12 @@ export function DealsPage() {
     const t = setTimeout(() => setQ(typed.trim()), 350);
     return () => clearTimeout(t);
   }, [typed]);
+  // A new search starts at the top of its results (the box stays in view, so it can be changed again at once)
+  const firstQ = useRef(true);
+  useEffect(() => {
+    if (firstQ.current) { firstQ.current = false; return; }
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [q]);
   const [deals, setDeals] = useState<Deal[]>(initial.current?.deals ?? []);
   const [total, setTotal] = useState(initial.current?.total ?? 0);
   const [chains, setChains] = useState<{ name: string; count: number }[]>(initial.current?.chains ?? []);
@@ -165,7 +171,7 @@ export function DealsPage() {
             <div className="section-title">מבצעים</div>
             <div className="section-subtitle">
               {q
-                ? <>{total} מבצעים נמצאו עבור <bdi>״{q}״</bdi>{city ? ` בסניפי ${city}` : ''}</>
+                ? <>{total === 1 ? 'נמצא מבצע אחד' : total === 0 ? 'לא נמצאו מבצעים' : `${total} מבצעים נמצאו`} עבור <bdi>״{q}״</bdi>{city ? ` בסניפי ${city}` : ''}</>
                 : <>{total} מבצעים בתוקף{city ? ` בסניפי ${city}` : ''}, מדורגים לפי כמה הם זולים מהמחיר הזול שמצאנו ברשתות</>}
             </div>
           </div>
@@ -173,24 +179,26 @@ export function DealsPage() {
 
         {introOpen && <DealsRulesBox />}
 
-        <label className="chain-search deals-search">
-          <Search size={17} strokeWidth={2} aria-hidden />
-          <input
-            type="search"
-            value={typed}
-            onChange={e => setTyped(e.target.value)}
-            placeholder="חפשו מבצע, מוצר או רשת: עוגיות, חומוס…"
-            aria-label="חיפוש במבצעים"
-            enterKeyHint="search"
-            autoComplete="off"
-            maxLength={60}
-          />
-          {typed && (
-            <button type="button" className="deals-search-clear" aria-label="ניקוי החיפוש" onClick={() => { setTyped(''); setQ(''); }}>
-              <X size={15} strokeWidth={2.5} />
-            </button>
-          )}
-        </label>
+        <div className="deals-search-bar">
+          <label className="chain-search deals-search">
+            <Search size={17} strokeWidth={2} aria-hidden />
+            <input
+              type="search"
+              value={typed}
+              onChange={e => setTyped(e.target.value)}
+              placeholder="חפשו מבצע, מוצר או רשת: עוגיות, חומוס…"
+              aria-label="חיפוש במבצעים"
+              enterKeyHint="search"
+              autoComplete="off"
+              maxLength={60}
+            />
+            {typed && (
+              <button type="button" className="deals-search-clear" aria-label="ניקוי החיפוש" onClick={() => { setTyped(''); setQ(''); }}>
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            )}
+          </label>
+        </div>
 
         {/* No brand has a deal for these filters: nothing to pick from (its own "no brand found" line would be misleading) */}
         {chainNames.length > 0 && (
