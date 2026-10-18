@@ -13,7 +13,7 @@ import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
-import { unitPriceLabel } from '../lib/productMeta';
+import { sizeUnitPrice, unitPriceLabel } from '../lib/productMeta';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { FilterSheet } from '../components/FilterSheet';
@@ -217,7 +217,10 @@ export function ProductPage() {
   const cheapestChains = [...new Set(namedPrices.filter(row => Math.abs(Number(row.price) - headlineMin) < 0.005).map(row => row.chain_name))];
   const cheapestWhere = cheapestChains.length === 1 ? `ב${cheapestChains[0]}` : cheapestChains.length > 1 ? `ב-${cheapestChains.length} רשתות` : '';
   const cheapestRow = namedPrices.find(row => Math.abs(Number(row.price) - headlineMin) < 0.005);
-  const perUnit = cheapestRow && data ? unitPriceLabel(cheapestRow.price, cheapestRow.unit_price, data.product.unit_of_measure) : null;
+  const perUnit = cheapestRow && data
+    ? sizeUnitPrice(cheapestRow.price, data.product.name, data.product.brand, data.product.unit_of_measure)
+      ?? unitPriceLabel(cheapestRow.price, cheapestRow.unit_price, data.product.unit_of_measure)
+    : null;
 
   return (
     <div className="page-wrapper">
