@@ -101,7 +101,7 @@ export function HeaderSearch({ origin, onClose, closeOnBlur }: {
           type="search"
           enterKeyHint="search"
           className="header-search-field-input"
-          placeholder="חפשי מוצר, מותג או ברקוד"
+          placeholder="חפשו מוצר, מותג או ברקוד"
           value={value}
           onChange={e => onInput(e.target.value)}
           onBlur={() => { if (closeOnBlur()) close(); }}

@@ -18,7 +18,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
       <div className="empty-state" role="alert" style={{ paddingTop: 80 }}>
         <div className="empty-state-title">משהו השתבש</div>
         <div className="empty-state-desc">אירעה שגיאה בלתי צפויה. אפשר לרענן את הדף ולנסות שוב.</div>
-        <button className="btn btn-primary" onClick={() => { window.location.hash = '#/'; window.location.reload(); }}>
+        <button className="btn btn-primary" onClick={() => window.location.assign('/')}>
           חזרה לדף הבית
         </button>
       </div>

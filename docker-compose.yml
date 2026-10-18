@@ -160,6 +160,9 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: ${VITE_API_URL:-}
+    environment:
+      # The site's public address, for link previews and the canonical link (e.g. https://example.com)
+      SITE_URL: ${SITE_URL:-}
     restart: unless-stopped
 
   nginx:

@@ -35,7 +35,7 @@ export function ScanPage() {
       navigate(`/product/${code}`, { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setNotFound(code);
-      else setError('אין כרגע חיבור לשרת. נסי שוב בעוד רגע.');
+      else setError('אין כרגע חיבור לשרת. נסו שוב בעוד רגע.');
     }
   }, [navigate, stop]);
 
@@ -79,7 +79,7 @@ export function ScanPage() {
       <video ref={videoRef} className="scan-video" autoPlay muted playsInline />
       <div className="scan-shade"><div className="scan-frame" /></div>
 
-      <button className="scan-close" onClick={() => navigate('/', { replace: true })} aria-label="סגור">
+      <button className="scan-close" onClick={() => navigate('/', { replace: true })} aria-label="סגירה">
         <X size={22} strokeWidth={2.5} />
       </button>
 
@@ -89,7 +89,7 @@ export function ScanPage() {
         ) : notFound ? (
           <p className="scan-msg">
             לא מצאנו מוצר עם הברקוד {notFound}{' '}
-            <button className="scan-retry" onClick={() => void start()}>סרקי שוב</button>
+            <button className="scan-retry" onClick={() => void start()}>סרקו שוב</button>
           </p>
         ) : (
           <p className="scan-msg">כוונו את המצלמה אל הברקוד</p>

@@ -34,6 +34,8 @@ interface BasketContextValue {
   /** Short message shown at the bottom ("added to …", "deleted … · undo"). */
   notice: Notice | null;
   dismissNotice: () => void;
+  /** Said aloud to screen readers when something is added ("added to the basket"); never shown. */
+  announcement: { id: number; text: string } | null;
   picker: PickerState;
   openCreate: () => void;
   /** Opens the picker to send items of one basket to another. */
@@ -81,6 +83,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Stored>(load);
   const stateRef = useRef(state);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [announcement, setAnnouncement] = useState<{ id: number; text: string } | null>(null);
   const [picker, setPicker] = useState<PickerState>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chosen = useRef((() => { try { return sessionStorage.getItem(CHOSEN_KEY) === '1'; } catch { return false; } })());
@@ -134,10 +137,13 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  /** Adds to a basket and makes it the active one. No notice: the header pill shows where things go. */
+  /** Adds to a basket and makes it the active one. No visible notice (the header pill shows where things go),
+   *  but a screen reader is told. */
   const addTo = useCallback((basketId: string, item: LocalBasketItem) => {
     putInBasket(basketId, item);
     markChosen();
+    const name = stateRef.current.baskets.find(b => b.id === basketId)?.name;
+    setAnnouncement(a => ({ id: (a?.id ?? 0) + 1, text: `${item.name} נוסף ל${name ? `סל "${name}"` : 'סל'}` }));
   }, [putInBasket, markChosen]);
 
   const addItem = useCallback((item: LocalBasketItem, onAdded?: () => void) => {
@@ -317,10 +323,10 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     baskets: state.baskets, activeId: active.id, active, items: active.items,
     addItem, removeItem, removeItems, updateQty, clearBasket, totalItems,
     setActive, createBasket, renameBasket, deleteBasket, recordCompare,
-    notice, dismissNotice, picker, openCreate, openMove, closePicker, pickBasket, pickNew,
+    notice, dismissNotice, announcement, picker, openCreate, openMove, closePicker, pickBasket, pickNew,
   }), [state.baskets, active, totalItems, addItem, removeItem, removeItems, updateQty, clearBasket,
        setActive, createBasket, renameBasket, deleteBasket, recordCompare,
-       notice, dismissNotice, picker, openCreate, openMove, closePicker, pickBasket, pickNew]);
+       notice, dismissNotice, announcement, picker, openCreate, openMove, closePicker, pickBasket, pickNew]);
 
   return <BasketContext.Provider value={value}>{children}</BasketContext.Provider>;
 }
