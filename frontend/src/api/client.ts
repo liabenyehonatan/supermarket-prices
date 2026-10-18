@@ -130,8 +130,10 @@ export async function fetchNearestCity(lat: number, lng: number): Promise<string
   return r.city ?? '';
 }
 
-export function fetchChains(): Promise<{ name: string; stores: number }[]> {
-  return request<{ name: string; stores: number }[]>('/api/v1/chains');
+/** The chains we hold; with a city, only those with a store in it. */
+export function fetchChains(city = ''): Promise<{ name: string; stores: number }[]> {
+  const q = city.trim() ? `?city=${encodeURIComponent(city.trim())}` : '';
+  return request<{ name: string; stores: number }[]>(`/api/v1/chains${q}`);
 }
 
 export function fetchExamples(limit = 3): Promise<ExampleComparison[]> {
