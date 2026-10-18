@@ -49,7 +49,7 @@ export function BasketSwitcher({ variant = 'title' }: { variant?: 'title' | 'pil
             <div className="sheet-grab"><span className="sheet-handle" /></div>
             <div className="location-sheet-head">
               <strong>הסלים שלי</strong>
-              <button className="location-sheet-close" onClick={close} aria-label="סגור"><X size={18} strokeWidth={2.5} /></button>
+              <button className="location-sheet-close" onClick={close} aria-label="סגירה"><X size={18} strokeWidth={2.5} /></button>
             </div>
 
             <div className="location-list">

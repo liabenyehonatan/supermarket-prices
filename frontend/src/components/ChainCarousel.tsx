@@ -59,7 +59,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
           type="search"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="חפשי רשת..."
+          placeholder="חפשו רשת..."
           aria-label="חיפוש רשת"
         />
       </label>
@@ -76,7 +76,7 @@ export function ChainCarousel({ chains: allChains, selected, onSelect, style, co
             key={name}
             onClick={() => onSelect(name)}
             className={`chain-carousel-item${selected === name ? ' selected' : ''}${selected && selected !== name ? ' dimmed' : ''}`}
-            aria-label={counts?.[name] != null ? `סנן לפי ${name}, ${counts[name] === 1 ? 'מבצע אחד' : `${counts[name]} מבצעים`}` : `סנן לפי ${name}`}
+            aria-label={counts?.[name] != null ? `סינון לפי ${name}, ${counts[name] === 1 ? 'מבצע אחד' : `${counts[name]} מבצעים`}` : `סינון לפי ${name}`}
             aria-pressed={selected === name}
           >
             <ChainLogo name={name} size={50} showLabel />

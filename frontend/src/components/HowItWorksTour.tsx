@@ -40,7 +40,7 @@ const STEPS: Step[] = [
     text: () => 'כל מוצר שמוסיפים נכנס לסל הפעיל. אפשר להחזיק כמה סלים, למשל לשבת ולשבוע.',
   },
   {
-    targets: ['.bottom-nav a[href="#/basket"]', '.header-basket-btn'],
+    targets: ['.bottom-nav a[href="/basket"]', '.header-basket-btn'],
     art: <CompareTrendIcon />,
     title: 'משווים בין הרשתות',
     text: chains => `בסל רואים כמה עולה כל הקנייה בכל סניף, מהזול ליקר${chains && chains > 1 ? `. המחירים מ-${chains} רשתות ומתעדכנים פעמיים ביום` : ''}.`,

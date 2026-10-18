@@ -4,6 +4,7 @@ import { MapPin, Navigation, X, ChevronDown, Search, Check } from 'lucide-react'
 import { fetchCities } from '../api/client';
 import { LocationPrompt } from './LocationPrompt';
 import { useCurrentCity } from '../lib/location';
+import { useFocusTrap } from '../lib/useFocusTrap';
 import { matchCity, onCityFilterChange, readCityFilter, saveCityFilter } from '../lib/filters';
 
 /** Header chip showing the active city filter; opens a small sheet to change it. */
@@ -14,6 +15,7 @@ export function LocationChip() {
   const [q, setQ] = useState('');
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const trapRef = useFocusTrap();
   const dragStart = useRef<number | null>(null);
 
   const visible = useMemo(() => {
@@ -81,7 +83,10 @@ export function LocationChip() {
           <div
             className="location-sheet"
             role="dialog"
+            aria-modal="true"
             aria-label="בחירת מיקום"
+            tabIndex={-1}
+            ref={trapRef}
             style={{ transform: `translateY(${dragY}px)`, transition: dragging ? 'none' : undefined }}
             onClick={e => e.stopPropagation()}
           >
@@ -96,7 +101,7 @@ export function LocationChip() {
             </div>
             <div className="location-sheet-head">
               <strong>איפה לחפש מחירים?</strong>
-              <button className="location-sheet-close" onClick={() => setOpen(false)} aria-label="סגור">
+              <button className="location-sheet-close" onClick={() => setOpen(false)} aria-label="סגירה">
                 <X size={18} strokeWidth={2.5} />
               </button>
             </div>
@@ -112,25 +117,28 @@ export function LocationChip() {
               />
             </div>
 
-            <div className="location-list" role="listbox">
+            <div className="location-list">
+              {/* The position button is an action, not one of the options, so it stays outside the listbox */}
               {!q && (
-                <>
-                  <button className="location-row location-row-gps" onClick={() => { setOpen(false); void locate(); }} disabled={locating}>
-                    <Navigation size={17} strokeWidth={2} />
-                    <span>{locating ? 'מאתר מיקום...' : 'המיקום הנוכחי שלי'}</span>
-                  </button>
+                <button className="location-row location-row-gps" onClick={() => { setOpen(false); void locate(); }} disabled={locating}>
+                  <Navigation size={17} strokeWidth={2} />
+                  <span>{locating ? 'מאתר מיקום...' : 'המיקום הנוכחי שלי'}</span>
+                </button>
+              )}
+              <div role="listbox" aria-label="ערים">
+                {!q && (
                   <button className="location-row" role="option" aria-selected={!city} onClick={() => pick('')}>
                     <span>כל הארץ</span>
                     {!city && <Check size={17} strokeWidth={2.5} />}
                   </button>
-                </>
-              )}
-              {visible.map(c => (
-                <button key={c} className="location-row" role="option" aria-selected={c === city} onClick={() => pick(c)}>
-                  <span>{c}</span>
-                  {c === city && <Check size={17} strokeWidth={2.5} />}
-                </button>
-              ))}
+                )}
+                {visible.map(c => (
+                  <button key={c} className="location-row" role="option" aria-selected={c === city} onClick={() => pick(c)}>
+                    <span>{c}</span>
+                    {c === city && <Check size={17} strokeWidth={2.5} />}
+                  </button>
+                ))}
+              </div>
               {q && visible.length === 0 && <p className="location-empty">לא נמצאה עיר בשם הזה</p>}
             </div>
           </div>

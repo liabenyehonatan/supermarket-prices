@@ -277,7 +277,9 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   transition: background var(--dur-fast);
 }
-.header-basket-btn:hover { background: var(--surface-100); }
+@media (hover: hover) {
+  .header-basket-btn:hover { background: var(--surface-100); }
+}
 .basket-count {
   position: absolute;
   top: 4px;
@@ -403,10 +405,14 @@ img { max-width: 100%; display: block; }
   color: #fff;
 }
 /* Hover: light beige-orange (was blue) */
-.btn-primary:hover  { background: var(--orange-100); color: var(--orange-700); }
+@media (hover: hover) {
+  .btn-primary:hover  { background: var(--orange-100); color: var(--orange-700); }
+}
 .btn-primary:active { background: var(--orange-200); color: var(--orange-700); }
 /* Basket compare + camera scan CTAs: a deeper warm orange-beige on hover */
-.btn-compare:hover  { background: #C98A4B; color: #fff; }
+@media (hover: hover) {
+  .btn-compare:hover  { background: #C98A4B; color: #fff; }
+}
 .btn-compare:active { background: #A86F39; color: #fff; }
 
 
@@ -414,19 +420,25 @@ img { max-width: 100%; display: block; }
   background: var(--surface-100);
   color: var(--ink-900);
 }
-.btn-secondary:hover { background: var(--surface-200); }
+@media (hover: hover) {
+  .btn-secondary:hover { background: var(--surface-200); }
+}
 
 .btn-ghost {
   background: transparent;
   color: var(--ink-700);
 }
-.btn-ghost:hover { background: var(--surface-100); }
+@media (hover: hover) {
+  .btn-ghost:hover { background: var(--surface-100); }
+}
 
 .btn-deal {
   background: var(--orange-500);
   color: #fff;
 }
-.btn-deal:hover { background: var(--orange-600); }
+@media (hover: hover) {
+  .btn-deal:hover { background: var(--orange-600); }
+}
 
 .btn-sm  { min-height: 36px; padding: 0 var(--sp-4); font-size: var(--fs-14); border-radius: var(--r-md); }
 .btn-lg  { min-height: 52px; padding: 0 var(--sp-6); font-size: var(--fs-16); border-radius: var(--r-lg); }
@@ -447,7 +459,9 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   transition: background var(--dur-fast);
 }
-.btn-icon:hover { background: var(--surface-100); }
+@media (hover: hover) {
+  .btn-icon:hover { background: var(--surface-100); }
+}
 
 /* ============================================================
    Badges
@@ -571,7 +585,9 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast);
   border: 1px solid transparent;
 }
-.compare-row:hover { border-color: var(--line); }
+@media (hover: hover) {
+  .compare-row:hover { border-color: var(--line); }
+}
 .compare-row.cheapest {
   /* Same mint as the "הכי זול" stat tile above */
   background: var(--mint);
@@ -662,7 +678,9 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast);
   -webkit-tap-highlight-color: transparent;
 }
-.round-btn:hover { background: var(--surface-100); }
+@media (hover: hover) {
+  .round-btn:hover { background: var(--surface-100); }
+}
 .round-btn:disabled { opacity: 0.4; cursor: default; }
 .product-stage-image {
   display: flex; align-items: center; justify-content: center;
@@ -707,10 +725,14 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast), opacity var(--dur-fast);
 }
 .product-qty-btn::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch area */
-.product-qty-btn:hover { background: var(--surface-200); }
+@media (hover: hover) {
+  .product-qty-btn:hover { background: var(--surface-200); }
+}
 .product-qty-btn:disabled { opacity: 0.45; cursor: default; }
 .product-qty-btn.is-plus { background: var(--accent); color: var(--fg-on-brand); }
-.product-qty-btn.is-plus:hover { background: var(--accent-pressed); }
+@media (hover: hover) {
+  .product-qty-btn.is-plus:hover { background: var(--accent-pressed); }
+}
 .product-qty-value { min-width: 20px; text-align: center; font-size: var(--fs-16); font-weight: var(--fw-semibold); color: var(--ink-900); }
 /* The price reads like a shelf tag: one plain number, a small "less" tag beside it, the comparison in grey below */
 .product-price { margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--line); }
@@ -779,7 +801,9 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast), border-color var(--dur-fast);
   flex-shrink: 0;
 }
-.qty-btn:hover { background: var(--surface-100); border-color: var(--ink-300); }
+@media (hover: hover) {
+  .qty-btn:hover { background: var(--surface-100); border-color: var(--ink-300); }
+}
 .qty-value {
   min-width: 24px;
   text-align: center;
@@ -976,7 +1000,9 @@ img { max-width: 100%; display: block; }
   transition: color var(--dur-fast);
   -webkit-tap-highlight-color: transparent;
 }
-.page-back:hover { color: var(--ink-900); }
+@media (hover: hover) {
+  .page-back:hover { color: var(--ink-900); }
+}
 
 /* ============================================================
    Hero section
@@ -1111,9 +1137,11 @@ img { max-width: 100%; display: block; }
   text-align: center;
   min-height: 128px;
 }
-.mode-card:hover {
+@media (hover: hover) {
+  .mode-card:hover {
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
+}
 }
 .mode-card:active { transform: scale(0.97) translateY(0); }
 .mode-card.active-search {
@@ -1278,9 +1306,11 @@ img { max-width: 100%; display: block; }
   background: var(--surface-50);
   text-align: center;
 }
-.image-drop-zone:hover {
+@media (hover: hover) {
+  .image-drop-zone:hover {
   border-color: var(--green-600);
   background: var(--green-50);
+}
 }
 .image-drop-zone-icon {
   width: 56px;
@@ -1339,10 +1369,12 @@ img { max-width: 100%; display: block; }
   transition: border-color var(--dur-fast), background var(--dur-fast), color var(--dur-fast);
   white-space: nowrap;
 }
-.location-btn:hover {
+@media (hover: hover) {
+  .location-btn:hover {
   border-color: #0284C7;
   color: #0284C7;
   background: #EFF8FF;
+}
 }
 .location-btn.active {
   border-color: var(--green-600);
@@ -1366,17 +1398,21 @@ img { max-width: 100%; display: block; }
   transition: border-color 0.18s ease, color 0.18s ease,
               transform 0.18s ease, box-shadow 0.18s ease;
 }
-.location-panel > .location-btn:first-child:hover {
+@media (hover: hover) {
+  .location-panel > .location-btn:first-child:hover {
   border-color: #5A3620;
   color: #3F2514;
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(90, 54, 32, 0.14);
 }
-.location-panel > .location-btn:nth-child(2):hover {
+}
+@media (hover: hover) {
+  .location-panel > .location-btn:nth-child(2):hover {
   border-color: #2E5A40;
   color: #1F3F2C;
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(46, 90, 64, 0.14);
+}
 }
 .location-panel > .location-btn:active {
   transform: translateY(0) scale(0.98);
@@ -1463,7 +1499,9 @@ img { max-width: 100%; display: block; }
   text-decoration: none;
   white-space: nowrap;
 }
-.compare-row-delivery:hover { background: var(--blue-500); color: #fff; }
+@media (hover: hover) {
+  .compare-row-delivery:hover { background: var(--blue-500); color: #fff; }
+}
 
 .compare-row-nav {
   display: flex;
@@ -1483,7 +1521,9 @@ img { max-width: 100%; display: block; }
   border: none;
   text-decoration: none;
 }
-.compare-row-nav a:hover { background: var(--green-100); color: var(--green-700); }
+@media (hover: hover) {
+  .compare-row-nav a:hover { background: var(--green-100); color: var(--green-700); }
+}
 
 /* ============================================================
    Quick stats bar (product page)
@@ -1736,10 +1776,12 @@ img { max-width: 100%; display: block; }
   transition: border-color var(--dur-fast), background var(--dur-fast), color var(--dur-fast);
   white-space: nowrap;
 }
-.suggestion-pill:hover {
+@media (hover: hover) {
+  .suggestion-pill:hover {
   border-color: #0284C7;
   background: #EFF8FF;
   color: #0284C7;
+}
 }
 
 .basket-result-breakdown { background: var(--bg-card); }
@@ -1863,7 +1905,9 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   animation: carousel-nudge 1.6s ease-in-out 2;
 }
-.chain-carousel-arrow:hover { background: var(--orange-100); color: var(--orange-700); }
+@media (hover: hover) {
+  .chain-carousel-arrow:hover { background: var(--orange-100); color: var(--orange-700); }
+}
 .chain-carousel-arrow.start { inset-inline-start: -4px; }
 .chain-carousel-arrow.end   { inset-inline-end: -4px; }
 @keyframes carousel-nudge {
@@ -1891,7 +1935,9 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   white-space: nowrap;
 }
-.filter-chip:hover:not(:disabled) { background: var(--orange-50); border-color: var(--orange-200); }
+@media (hover: hover) {
+  .filter-chip:hover:not(:disabled) { background: var(--orange-50); border-color: var(--orange-200); }
+}
 .filter-chip:disabled { opacity: 0.6; cursor: default; }
 .filter-chip.active {
   background: var(--mint);
@@ -1952,7 +1998,9 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
 }
 .filter-suggestions button:last-child { border-bottom: none; }
-.filter-suggestions button:hover { background: var(--surface-50); }
+@media (hover: hover) {
+  .filter-suggestions button:hover { background: var(--surface-50); }
+}
 /* ============================================================
    City picker — type to filter or scroll the full A–Z list
    ============================================================ */
@@ -2030,7 +2078,9 @@ img { max-width: 100%; display: block; }
 }
 .city-picker-list button svg { color: var(--ink-400); flex-shrink: 0; }
 .city-picker-list button:last-child { border-bottom: none; }
-.city-picker-list button:hover { background: var(--surface-50); }
+@media (hover: hover) {
+  .city-picker-list button:hover { background: var(--surface-50); }
+}
 .city-picker-list button.selected { background: var(--mint); font-weight: var(--fw-semibold); }
 .city-picker-list button .city-picker-check { color: var(--green-700); margin-inline-start: auto; }
 .city-picker-empty { padding: 12px 14px; font-size: var(--fs-13); color: var(--ink-500); }
@@ -2158,7 +2208,9 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   transition: background var(--dur-fast), color var(--dur-fast);
 }
-.search-hero-scan:hover { background: var(--surface-100); color: var(--green-700); }
+@media (hover: hover) {
+  .search-hero-scan:hover { background: var(--surface-100); color: var(--green-700); }
+}
 .search-back-btn {
   display: inline-flex; align-items: center; gap: 4px;
   margin-bottom: var(--sp-3);
@@ -2166,7 +2218,9 @@ img { max-width: 100%; display: block; }
   font-family: var(--font-sans); font-size: var(--fs-14); font-weight: var(--fw-medium);
   color: var(--ink-500); cursor: pointer;
 }
-.search-back-btn:hover { color: var(--ink-900); }
+@media (hover: hover) {
+  .search-back-btn:hover { color: var(--ink-900); }
+}
 
 /* Bottom nav: raised centre scan button */
 .bottom-nav-scan {
@@ -2236,7 +2290,9 @@ img { max-width: 100%; display: block; }
 .location-chip svg { flex-shrink: 0; }
 .location-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .location-chip.active { border-color: #3B6B4F; color: #2E5A40; }
-.location-chip:hover { border-color: #2E5A40; }
+@media (hover: hover) {
+  .location-chip:hover { border-color: #2E5A40; }
+}
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 2000;
   background: rgba(16, 20, 24, 0.4);
@@ -2297,8 +2353,12 @@ img { max-width: 100%; display: block; }
 .basket-row-name { font-size: var(--fs-15, 15px); font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .basket-row-meta { font-size: var(--fs-12); color: var(--ink-500); }
 .basket-icon-btn { width: 36px; height: 36px; border: none; background: none; border-radius: 50%; color: var(--ink-400); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.basket-icon-btn:hover { background: var(--surface-100); color: var(--ink-700); }
-.basket-icon-btn.danger:hover { color: var(--red-500); }
+@media (hover: hover) {
+  .basket-icon-btn:hover { background: var(--surface-100); color: var(--ink-700); }
+}
+@media (hover: hover) {
+  .basket-icon-btn.danger:hover { color: var(--red-500); }
+}
 .basket-name-input { flex: 1; height: 42px; margin: 8px 0; padding: 0 var(--sp-3); border: 1.5px solid var(--green-600); border-radius: var(--r-lg); font-family: var(--font-sans); font-size: var(--fs-15, 15px); outline: none; }
 .basket-row-new { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 52px; border: none; background: none; cursor: pointer; font-family: var(--font-sans); font-size: var(--fs-15, 15px); font-weight: var(--fw-semibold); color: var(--green-700); }
 .undo-toast {
@@ -2333,7 +2393,9 @@ img { max-width: 100%; display: block; }
 .basket-card-wrap .basket-card { flex: 1 1 auto; min-width: 0; }
 .basket-card-wrap .basket-card-name { padding-inline-end: 18px; }
 .basket-card-remove { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2; width: 24px; height: 24px; border: none; background: none; border-radius: 50%; color: var(--ink-400); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.basket-card-remove:hover { background: var(--surface-100); color: var(--red-500); }
+@media (hover: hover) {
+  .basket-card-remove:hover { background: var(--surface-100); color: var(--red-500); }
+}
 .basket-card-new { flex: 0 0 72px; min-height: 84px; background: transparent; border: 1.5px dashed var(--line-strong); align-items: center; justify-content: center; border-style: dashed; color: var(--green-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
 
 /* Header pill: always shows which basket new items go to */
@@ -2343,7 +2405,9 @@ img { max-width: 100%; display: block; }
   font-family: var(--font-sans); font-size: var(--fs-13); font-weight: var(--fw-medium); color: var(--ink-700);
 }
 .basket-pill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.basket-pill:hover { border-color: var(--ink-400); }
+@media (hover: hover) {
+  .basket-pill:hover { border-color: var(--ink-400); }
+}
 @media (max-width: 420px) {
   .header-actions { gap: 6px; }
   .location-chip { max-width: 88px; padding: 0 8px; gap: 3px; }
@@ -2411,7 +2475,9 @@ img { max-width: 100%; display: block; }
   .home-container { max-width: 760px; }
   .header-nav { display: flex; align-items: center; gap: var(--sp-1); margin-inline-start: var(--sp-6); }
   .header-nav-link { padding: 8px 14px; border-radius: var(--r-full); font-size: var(--fs-14); font-weight: var(--fw-medium); color: var(--ink-600); text-decoration: none; }
+  @media (hover: hover) {
   .header-nav-link:hover { background: var(--surface-100); color: var(--ink-900); }
+  }
   .header-nav-link.active { color: var(--green-700); background: var(--green-100); }
 }
 
@@ -2491,7 +2557,9 @@ img { max-width: 100%; display: block; }
   display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: none; background: none;
   border-radius: var(--r-md); font-family: var(--font-sans); font-size: var(--fs-14); color: var(--red-500); cursor: pointer; text-align: start;
 }
-.basket-menu button:hover { background: var(--surface-100); }
+@media (hover: hover) {
+  .basket-menu button:hover { background: var(--surface-100); }
+}
 
 
 /* ============================================================
@@ -2526,11 +2594,15 @@ img { max-width: 100%; display: block; }
   background: var(--surface-100); color: var(--ink-700); font-size: var(--fs-13); font-weight: var(--fw-semibold); text-decoration: none;
 }
 .store-row.cheapest .store-row-actions a { background: var(--bg-card); }
-.store-row-actions a:hover { background: var(--green-100); color: var(--green-700); }
+@media (hover: hover) {
+  .store-row-actions a:hover { background: var(--green-100); color: var(--green-700); }
+}
 
 /* Header: the basket pill is filled so it reads differently from the outlined location chip */
 .basket-pill { background: var(--green-50); border-color: var(--green-200); color: var(--green-700); }
-.basket-pill:hover { border-color: var(--green-700); }
+@media (hover: hover) {
+  .basket-pill:hover { border-color: var(--green-700); }
+}
 .basket-pill svg { flex-shrink: 0; }
 
 
@@ -2611,7 +2683,9 @@ img { max-width: 100%; display: block; }
    It relies on .deal-card being position:relative and .deal-card-title NOT positioned (or the link would be clipped). */
 .deal-card-link { all: unset; cursor: pointer; }
 .deal-card-link::after { content: ''; position: absolute; inset: 0; border-radius: var(--r-lg); }
-.deal-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+@media (hover: hover) {
+  .deal-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+}
 .deal-card-link:focus-visible::after { outline: 2px solid var(--green-600); outline-offset: -2px; }   /* on the stretched layer itself: no :has() needed, and it survives forced colours */
 .deal-card-actions { position: relative; z-index: 1; }
 .deal-card-offer { font-size: var(--fs-20); font-weight: var(--fw-bold); color: var(--green-700); white-space: nowrap; }
@@ -2688,7 +2762,9 @@ img { max-width: 100%; display: block; }
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   transition: box-shadow var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
 }
-.result-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+@media (hover: hover) {
+  .result-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+}
 .result-card:active { transform: scale(0.985); }
 .result-card.is-skeleton { cursor: default; box-shadow: none; transform: none; }
 /* The picture gets as much of the frame as it can: chain photos often carry a marketing panel beside the pack */
@@ -2734,7 +2810,9 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
 }
 .result-card-add::after { content: ''; position: absolute; inset: -6px; }   /* 44px touch target */
-.result-card-add:hover { background: var(--green-50); }
+@media (hover: hover) {
+  .result-card-add:hover { background: var(--green-50); }
+}
 .result-card-add:active { transform: scale(0.9); }
 .result-card-add.in-basket, .result-card-add.is-added { background: var(--green-600); border-color: var(--green-600); color: #fff; }
 .result-card-add.is-added { animation: pop-in var(--dur-base) var(--ease-spring); }
@@ -2812,7 +2890,9 @@ img { max-width: 100%; display: block; }
 }
 .store-list > :last-child { border-bottom: 0; }
 .store-list > .store-row.cheapest { background: var(--mint); border-bottom-color: var(--mint-line); }
-.store-list > .store-row:not(.cheapest):hover { background-color: var(--surface-50); }
+@media (hover: hover) {
+  .store-list > .store-row:not(.cheapest):hover { background-color: var(--surface-50); }
+}
 
 /* ============================================================
    Header search: a button once the page's own field is out of sight, opening a field across the header
@@ -2827,7 +2907,9 @@ img { max-width: 100%; display: block; }
   transition: border-color var(--dur-fast), color var(--dur-fast);
 }
 .header-search-toggle::after { content: ''; position: absolute; inset: -4px; }   /* 44px touch target */
-.header-search-toggle:hover { border-color: #2E5A40; color: #2E5A40; }
+@media (hover: hover) {
+  .header-search-toggle:hover { border-color: #2E5A40; color: #2E5A40; }
+}
 /* On other pages wide screens have the header's search field already */
 @media (min-width: 481px) { .header-search-toggle.is-compact-only { display: none; } }
 @keyframes header-search-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }

@@ -1,3 +1,4 @@
+import { ErrorState } from '../components/ErrorState';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -58,14 +59,15 @@ function googleMapsUrl(store: Parameters<typeof storeNavQuery>[0]): string {
 }
 
 /* ── Result card ─────────────────────────────────────────── */
-function ResultCard({ store, rank, maxTotal, minTotal }: {
-  store: BasketStoreTotal; rank: number; maxTotal: number; minTotal: number;
+function ResultCard({ store, rank, nextTotal, minTotal }: {
+  store: BasketStoreTotal; rank: number; nextTotal: number | null; minTotal: number;
 }) {
   const [open, setOpen] = useState(false);
   const isWinner  = rank === 0;
-  const savings   = maxTotal - store.total_price;
+  // How much cheaper this store is than the next one in the list (never against the dearest branch of all,
+  // which would make the saving look bigger than it is).
+  const lead      = nextTotal != null ? nextTotal - store.total_price : 0;
   const promoSavings = Number(store.savings ?? 0);
-  const savingsPct = maxTotal > 0 ? Math.round((savings / maxTotal) * 100) : 0;
 
   return (
     <StoreRow
@@ -78,14 +80,11 @@ function ResultCard({ store, rank, maxTotal, minTotal }: {
       diff={store.total_price - minTotal}
       open={open}
       onToggle={() => setOpen(v => !v)}
-      banner={isWinner && savings > 0.01 ? (
+      banner={isWinner && lead > 0.01 ? (
         <div className="basket-result-savings savings-pop">
           <CheckCircle2 size={16} strokeWidth={2} color="var(--green-700)" />
           <span className="basket-result-savings-text">
-            חסכת{' '}
-            <strong className="tabular">{fmt(savings)}</strong>
-            {savingsPct > 0 && <span style={{ fontWeight: 400, opacity: 0.8 }}> ({savingsPct}%)</span>}
-            {' '}בהשוואה לרשת היקרה ביותר
+            זול ב-<strong className="tabular">{fmt(lead)}</strong> מהסניף הבא
           </span>
         </div>
       ) : undefined}
@@ -317,7 +316,7 @@ export function BasketPage() {
       }
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch {
-      if (id === requestId.current) setError('לא הצלחנו להשוות את הסל כרגע. נסי שוב בעוד רגע.');
+      if (id === requestId.current) setError('לא הצלחנו להשוות את הסל כרגע. נסו שוב בעוד רגע.');
     } finally {
       if (id === requestId.current) setLoading(false);
     }
@@ -342,14 +341,11 @@ export function BasketPage() {
   const onLocatedCity = (found: string) => changeCity(matchCity(found, cities));
   const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity);
 
-  const completeStores = results ? results.stores.filter(s => s.items_missing === 0) : [];
-  // Savings are measured against the most expensive complete basket among ALL stores (the server sends it,
-  // since the list here only holds the best ones).
-  const maxTotal = results?.max_total != null
-    ? Number(results.max_total)
-    : completeStores.length >= 2
-      ? Math.max(...completeStores.map(s => Number(s.total_price)))
-      : results && results.stores.length ? Math.max(...results.stores.map(s => Number(s.total_price))) : 0;
+  // The winner's lead is measured against the next store that has as much of the basket as the winner.
+  const nextStore = results && results.stores.length > 1
+    ? results.stores.slice(1).find(s => s.items_missing === results.stores[0].items_missing)
+    : undefined;
+  const nextTotal = nextStore ? Number(nextStore.total_price) : null;
   const minTotal = results && results.stores.length > 0 ? results.stores[0].total_price : 0;
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
 
@@ -365,11 +361,11 @@ export function BasketPage() {
             </div>
             <div className="empty-state-title">הסל שלך ריק</div>
             <div className="empty-state-desc">
-              תוסיף משהו — חפש מוצר והוסף לסל כדי להשוות מחירים
+              הוסיפו משהו: חפשו מוצר והוסיפו לסל כדי להשוות מחירים
             </div>
             <button className="btn btn-primary btn-lg" onClick={() => navigate('/')}>
               <Search size={18} strokeWidth={2} />
-              חפש מוצרים
+              חפשו מוצרים
             </button>
           </div>
         </div>
@@ -413,7 +409,7 @@ export function BasketPage() {
                     <div className="basket-menu" role="menu">
                       <button role="menuitem" onClick={() => { setResults(null); clearBasket(); setMenuOpen(false); }}>
                         <Trash2 size={15} strokeWidth={1.8} />
-                        נקה את כל הסל
+                        ניקוי כל הסל
                       </button>
                     </div>
                   )}
@@ -467,7 +463,7 @@ export function BasketPage() {
                     <button
                       className="qty-btn"
                       onClick={() => item.quantity <= 1 ? removeItem(item.barcode) : changeQty(item.barcode, item.quantity - 1)}
-                      aria-label={item.quantity <= 1 ? 'הסר מהסל' : 'הפחת כמות'}
+                      aria-label={item.quantity <= 1 ? 'הסרה מהסל' : 'הפחתת כמות'}
                     >
                       {item.quantity <= 1
                         ? <Trash2 size={13} strokeWidth={2} color="var(--red-500)" />
@@ -478,7 +474,7 @@ export function BasketPage() {
                     <button
                       className="qty-btn"
                       onClick={() => changeQty(item.barcode, item.quantity + 1)}
-                      aria-label="הגדל כמות"
+                      aria-label="הגדלת כמות"
                     >
                       <Plus size={13} strokeWidth={2.5} />
                     </button>
@@ -490,8 +486,8 @@ export function BasketPage() {
             {!editing && items.length > COLLAPSED_COUNT && (
               <button className="basket-more" onClick={() => setShowAllItems(v => !v)} aria-expanded={showAllItems}>
                 {showAllItems
-                  ? <><ChevronUp size={15} strokeWidth={2} /> הצג פחות</>
-                  : <><ChevronDown size={15} strokeWidth={2} /> הצג עוד {items.length - COLLAPSED_COUNT} מוצרים</>}
+                  ? <><ChevronUp size={15} strokeWidth={2} /> הציגו פחות</>
+                  : <><ChevronDown size={15} strokeWidth={2} /> הציגו עוד {items.length - COLLAPSED_COUNT} מוצרים</>}
               </button>
             )}
           </div>
@@ -530,7 +526,7 @@ export function BasketPage() {
         {/* Add more — a quiet row, so it does not compete with the compare action */}
         <button className="basket-add-more" onClick={() => navigate('/')}>
           <Plus size={16} strokeWidth={2.5} />
-          הוסף מוצר
+          הוסיפו מוצר
         </button>
 
         {/* One chip for city / chain; the comparison only covers what is chosen here */}
@@ -549,7 +545,7 @@ export function BasketPage() {
               <button
                 className="filter-chip-clear"
                 onClick={() => { changeCity(''); changeChain(''); }}
-                aria-label="נקי סינון"
+                aria-label="ניקוי סינון"
               >
                 <X size={15} strokeWidth={2.5} />
               </button>
@@ -572,11 +568,7 @@ export function BasketPage() {
         <LocationPrompt problem={problem} onRetry={locate} onConfirm={request} onPickCity={pickCity} suggestedCity={suggestedCity} onClose={dismiss} />
 
         {/* Error */}
-        {error && (
-          <div style={{ background: 'var(--red-100)', color: 'var(--red-600)', borderRadius: 'var(--r-lg)', padding: '12px 16px', fontSize: 14, marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
+        {error && <ErrorState text={error} onRetry={handleCompare} compact />}
 
         {/* Loading skeletons */}
         {loading && (
@@ -632,7 +624,7 @@ export function BasketPage() {
                     setCity(''); setChain(''); saveCityFilter(''); saveChainFilter('');
                     void runCompare({ city: '', chain: '' });
                   }}>
-                    הצג את כל החנויות
+                    הציגו את כל החנויות
                   </button>
                 )}
               </div>
@@ -644,7 +636,7 @@ export function BasketPage() {
                   key={`${store.store.id}-${idx}`}
                   store={store}
                   rank={idx}
-                  maxTotal={maxTotal}
+                  nextTotal={nextTotal}
                   minTotal={minTotal}
                 />
               ))}
