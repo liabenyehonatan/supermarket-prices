@@ -10,8 +10,8 @@
 	reverse_proxy nginx:80
 }
 
-# Send the "www." spelling to the main address. Uncomment once DNS has a record for www.<domain>
-# (a certificate for a name that does not resolve cannot be issued).
-# www.{$DOMAIN} {
-# 	redir https://{$DOMAIN}{uri} permanent
-# }
+# Send the "www." spelling to the main address. Needs a DNS record for www.<domain>
+# (a certificate for a name that does not resolve cannot be issued); remove this block without one.
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
