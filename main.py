@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import settings
 from app.api.routes import router
+from app.seo import router as seo_router
 from app.db.database import get_db
 
 # Create the FastAPI app instance
@@ -32,6 +33,7 @@ app.add_middleware(
 
 # Register our routes
 app.include_router(router)
+app.include_router(seo_router)   # page heads for search engines, robots.txt, sitemaps
 
 
 @app.exception_handler(DBAPIError)
@@ -99,36 +101,3 @@ async def health_data():
         },
         status_code=200 if healthy else 503,
     )
-
-
-# ── Crawler files ─────────────────────────────────────────────────────────────
-# Built from the address the request came in on, so they are right on the IP today and on the
-# domain later without a change. nginx sends /robots.txt and /sitemap.xml here.
-
-from fastapi import Request  # noqa: E402
-from fastapi.responses import PlainTextResponse, Response  # noqa: E402
-
-
-@app.get("/robots.txt", include_in_schema=False)
-async def robots_txt(request: Request):
-    base = str(request.base_url).rstrip("/")
-    return PlainTextResponse(f"User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: {base}/sitemap.xml\n")
-
-
-@app.get("/sitemap.xml", include_in_schema=False)
-async def sitemap_xml(request: Request):
-    base = str(request.base_url).rstrip("/")
-    # The pages that are the same for everybody. Product pages are not listed: there are 240 thousand of
-    # them and they are reached by searching, which is how people (and crawlers following links) find them.
-    pages = [("/", "daily", "1.0"), ("/promotions", "daily", "0.8"), ("/about", "monthly", "0.3")]
-    urls = "".join(
-        f"  <url><loc>{base}{path}</loc><changefreq>{freq}</changefreq><priority>{prio}</priority></url>\n"
-        for path, freq, prio in pages
-    )
-    body = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"{urls}"
-        "</urlset>\n"
-    )
-    return Response(body, media_type="application/xml")

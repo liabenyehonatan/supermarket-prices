@@ -8,7 +8,8 @@ const MAIL = ['liabenyehonatan', 'gmail.com'].join('@');
 
 /** About, disclaimer, privacy and credits: the "small print" a public price site needs. */
 export function AboutPage() {
-  useDocumentTitle('אודות והבהרות | סלי');
+  useDocumentTitle('אודות והבהרות | סלי',
+    'מה זה סלי, מאיפה המחירים, פרטיות והבהרות משפטיות על אתר השוואת מחירי הסופרמרקט.');
   return (
     <div className="page-wrapper">
       <div className="container about-page">

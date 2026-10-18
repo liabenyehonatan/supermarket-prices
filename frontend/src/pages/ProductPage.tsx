@@ -111,7 +111,10 @@ export function ProductPage() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [barcode]);
 
-  useDocumentTitle(data ? `${data.product.name} — השוואת מחירים | סלי` : null);
+  useDocumentTitle(
+    data ? `${data.product.name} — השוואת מחירים | סלי` : null,
+    data ? `השוואת מחירים ל${data.product.name}: ${data.cheapest_price} ₪ עד ${data.most_expensive_price} ₪ ב-${data.prices.length} סניפים. ראו איפה הכי זול.` : null,
+  );
 
   // Loads (or reloads) the product. `isCurrent` lets a slow answer for a product the user already left
   // be dropped instead of overwriting the page.
