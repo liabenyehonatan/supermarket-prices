@@ -516,12 +516,20 @@ _stats_cache: tuple[float, StatsResponse] | None = None
     response_model=List[ChainListItem],
     summary="Chains we hold prices for (the list the app filters by), biggest first",
 )
-async def list_chains(db: AsyncSession = Depends(get_db)):
+async def list_chains(
+    city: Optional[str] = Query(None, max_length=60, description="Only chains with a store whose city contains this text"),
+    db: AsyncSession = Depends(get_db),
+):
     name = display_chain_name_sql()
-    rows = await db.execute(
+    query = (
         select(name.label("name"), func.count(Store.id).label("stores"))
         .select_from(Store)
         .join(Chain, Chain.id == Store.chain_id)
+    )
+    if city and city.strip():
+        query = query.where(Store.city.icontains(city.strip(), autoescape=True))
+    rows = await db.execute(
+        query
         .group_by(name)
         .order_by(func.count(Store.id).desc(), name)
     )

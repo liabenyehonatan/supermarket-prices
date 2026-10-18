@@ -595,12 +595,6 @@ export function BasketPage() {
 
             {nowCompare && <CompareDelta prev={prevCompare} now={nowCompare} />}
 
-            {results.stores.some(s => s.promotions_known) && (
-              <div className="basket-promo-note">
-                הסכומים כוללים מבצעי &quot;N ב-X&quot; (על מוצר בודד או על קבוצת מוצרים), בסניפים שיש לנו עבורם נתוני מבצעים. מבצעי מועדון וקופונים לא נכללים.
-              </div>
-            )}
-
             <div className="section-header" style={{ marginBottom: 16 }}>
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

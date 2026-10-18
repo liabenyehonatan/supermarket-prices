@@ -12,7 +12,7 @@ import { DealsStrip } from '../components/DealsStrip';
 import { ChainCarousel } from '../components/ChainCarousel';
 import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
-import { useChainNames, readChainFilter, saveChainFilter } from '../lib/filters';
+import { useCityChains, readChainFilter, saveChainFilter, readCityFilter, onCityFilterChange } from '../lib/filters';
 import { setMainSearchHidden } from '../lib/mainSearchVisibility';
 
 /* ── constants ────────────────────────────────────────────── */
@@ -64,7 +64,9 @@ const POPULAR: { label: string; q: string; img: string }[] = [
 /* ── main component ───────────────────────────────────────── */
 export function SearchPage() {
   const navigate = useNavigate();
-  const chainNames = useChainNames();
+  const [cityFilter, setCityFilter] = useState(readCityFilter);
+  useEffect(() => onCityFilterChange(setCityFilter), []);   // header chip
+  const { names: chainNames, ready: chainsReady } = useCityChains(cityFilter);
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSnap = useRef<SearchSnapshot | null>(readSnapshot(searchParams.get('q') ?? ''));
   const { baskets, activeId, setActive, openCreate, deleteBasket } = useBasket();
@@ -245,6 +247,12 @@ export function SearchPage() {
       return params;
     }, { replace: true });
   }
+
+  // A city narrows the carousel to the chains with a store there: a chosen chain that has none in it is let go
+  useEffect(() => {
+    if (chainsReady && chainFilter && !chainNames.includes(chainFilter)) selectChain('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chainsReady, chainFilter, chainNames]);
 
   function clearSearch() {
     if (debounce.current) clearTimeout(debounce.current);
