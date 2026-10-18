@@ -136,7 +136,7 @@ async def test_robots_points_at_the_sitemap_index(client):
     assert "Disallow: /api/" in robots.text and "Sitemap: http://sali.example/sitemap.xml" in robots.text
 
 
-async def test_sitemaps_list_pages_and_comparable_products_only(client, session):
+async def test_sitemaps_list_pages_and_every_priced_product(client, session):
     from sqlalchemy import text
 
     await _product(session, "7290000000105", stores=2)
@@ -153,7 +153,7 @@ async def test_sitemaps_list_pages_and_comparable_products_only(client, session)
     assert "/basket" not in pages and "/scan" not in pages and "#" not in pages
 
     products = (await client.get("/sitemap-products-1.xml")).text
-    assert "/product/7290000000105</loc>" in products and "7290000000222" not in products   # one store: nothing to compare
+    assert "/product/7290000000105</loc>" in products and "7290000000222</loc>" in products   # single-store products too
     assert (await client.get("/sitemap-products-2.xml")).status_code == 404
 
 
@@ -167,3 +167,38 @@ async def _product_single(session):
     await session.flush()
     session.add(Price(product_id=p.id, store_id=st.id, price=3, price_updated_at=datetime(2026, 10, 1), is_current=True))
     await session.commit()
+
+
+async def test_product_page_says_how_many_chains_and_links_same_brand_products(client, session):
+    from sqlalchemy import select, text
+
+    from app.db.models import Price, Product, Store
+
+    await _product(session, stores=2)
+    store = (await session.execute(select(Store).limit(1))).scalar_one()
+    sibling = Product(barcode="7290000000333", name="גבינה לבנה", brand="תנובה")
+    other_brand = Product(barcode="7290000000444", name="יוגורט", brand="שטראוס")
+    session.add_all([sibling, other_brand])
+    await session.flush()
+    for prod in (sibling, other_brand):
+        session.add(Price(product_id=prod.id, store_id=store.id, price=7, price_updated_at=datetime(2026, 10, 1), is_current=True))
+    await session.commit()
+    async with session.bind.begin() as conn:
+        await conn.execute(text("REFRESH MATERIALIZED VIEW product_store_counts"))
+
+    page = (await client.get("/_seo/product/7290000000105")).text
+    assert "ב-2 סניפים ברשת אחת" in page and "בכל הרשתות" not in page
+    assert '<a href="/product/7290000000333">גבינה לבנה</a>' in page          # same brand
+    assert "7290000000444" not in page and 'href="/product/7290000000105"' not in page   # other brand, itself
+
+
+async def test_home_page_links_to_products(client, session):
+    from sqlalchemy import text
+
+    await _product(session, stores=2)
+    async with session.bind.begin() as conn:
+        await conn.execute(text("REFRESH MATERIALIZED VIEW product_store_counts"))
+
+    home = (await client.get("/_seo/")).text
+    assert 'href="/product/7290000000105"' in home
+    assert "<h2>מוצרים נפוצים להשוואה</h2>" in home
