@@ -396,7 +396,9 @@ async def test_a_deals_products_are_listed_and_an_unknown_deal_is_404(client, se
 
 async def test_the_limits_are_enforced(client):
     assert (await client.get("/api/v1/deals", params={"limit": 61})).status_code == 422
-    assert (await client.get("/api/v1/deals", params={"offset": 1001})).status_code == 422
+    assert (await client.get("/api/v1/deals", params={"offset": 10001})).status_code == 422
+    # the list is ~4,000 long and pictured promotions come first, so the unpictured ones start past 1,000
+    assert (await client.get("/api/v1/deals", params={"offset": 3000})).status_code == 200
     assert (await client.get("/api/v1/deals", params={"sort": "random"})).status_code == 422
 
 
