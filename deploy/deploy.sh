@@ -51,9 +51,10 @@ if [ "${#services[@]}" -gt 0 ] || echo "$changed" | grep -qE '^nginx/'; then
 fi
 
 # The site must answer (up to ~3 minutes: the api can take 90 s to start after a rebuild): the API through nginx, and a page with its own title (search-engine head tags)
+# 127.0.0.1, not "localhost": inside the nginx container "localhost" can resolve to IPv6 (::1), where nginx does not listen
 for attempt in $(seq 1 60); do
-  if $DOCKER compose exec -T nginx wget -qO- http://localhost/health >/dev/null 2>&1 \
-     && $DOCKER compose exec -T nginx wget -qO- http://localhost/promotions 2>/dev/null | grep -q '<title>'; then
+  if $DOCKER compose exec -T nginx wget -qO- http://127.0.0.1/health >/dev/null 2>&1 \
+     && $DOCKER compose exec -T nginx wget -qO- http://127.0.0.1/promotions 2>/dev/null | grep -q '<title>'; then
     echo "deployed $after (rebuilt: ${services[*]:-nothing}; the worker was not restarted)"
     exit 0
   fi
