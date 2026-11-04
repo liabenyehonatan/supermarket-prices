@@ -37,6 +37,13 @@ BARCODE_RE = re.compile(r"^[0-9A-Za-z_-]{1,30}$")
 
 # Pages every visitor sees the same. `index=False` pages are for using the site, not for search results.
 PAGES = {
+    "stats": {
+        "title": "סטטיסטיקות | סלי",
+        "description": "עמוד פנימי.",
+        "h1": "סטטיסטיקות",
+        "intro": "",
+        "index": False,
+    },
     "": {
         "title": "סלי — השוואת מחירי סופרמרקט בישראל | איפה הכי זול",
         "description": "השוואת מחירי סופרמרקט בין כל הרשתות בישראל: חפשו מוצר או סל קניות וראו איפה הכי זול, "

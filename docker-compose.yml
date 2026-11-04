@@ -89,6 +89,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-}
       SITE_URL: ${SITE_URL:-}         # canonical links and sitemaps use it whatever address a request came in on
       MAX_DATA_AGE_HOURS: ${MAX_DATA_AGE_HOURS:-36}
+      STATS_PASSWORD: ${STATS_PASSWORD:-}   # opens the statistics page /stats; empty keeps it closed
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -166,6 +167,8 @@ services:
     environment:
       # The site's public address, for link previews and the canonical link (e.g. https://example.com)
       SITE_URL: ${SITE_URL:-}
+      # Google Analytics 4 measurement ID (G-XXXXXXXXXX). Empty: Google Analytics stays off.
+      GA_MEASUREMENT_ID: ${GA_MEASUREMENT_ID:-}
     restart: unless-stopped
 
   nginx:

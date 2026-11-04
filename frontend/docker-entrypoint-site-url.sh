@@ -11,3 +11,13 @@ else
   # the image-size tags only mean something next to the image tag, so they go with it
   sed -i -e '/__SITE_URL__/d' -e '/og:image:width/d' -e '/og:image:height/d' "$page"
 fi
+
+# Google Analytics 4: the measurement ID (G-XXXXXXXXXX) is set at start-up. Without a valid one the tag is removed
+# and the site loads nothing from Google.
+ga=$(printf '%s' "${GA_MEASUREMENT_ID:-}" | tr -d ' ')
+if printf '%s' "$ga" | grep -Eq '^G-[A-Z0-9]{4,16}$'; then
+  sed -i "s|__GA_MEASUREMENT_ID__|$ga|g" "$page"
+else
+  [ -n "${GA_MEASUREMENT_ID:-}" ] && echo "GA_MEASUREMENT_ID is not like G-XXXXXXXXXX; Google Analytics left off" >&2
+  sed -i '/__GA_MEASUREMENT_ID__/d' "$page"
+fi

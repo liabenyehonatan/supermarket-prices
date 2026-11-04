@@ -85,7 +85,7 @@ async def clean_tables():
 
     async with engine.begin() as conn:
         await conn.execute(text(
-            "TRUNCATE ingested_files, ingest_runs, promotions, prices, products, stores, chains "
+            "TRUNCATE site_events, ingested_files, ingest_runs, promotions, prices, products, stores, chains "
             "RESTART IDENTITY CASCADE"
         ))
     yield

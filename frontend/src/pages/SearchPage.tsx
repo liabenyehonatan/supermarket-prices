@@ -14,6 +14,7 @@ import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { useCityChains, readChainFilter, saveChainFilter, readCityFilter, onCityFilterChange } from '../lib/filters';
 import { setMainSearchHidden } from '../lib/mainSearchVisibility';
+import { track } from '../lib/track';
 
 /* ── constants ────────────────────────────────────────────── */
 // Small pages load fast; the next one is fetched well before the end of the list is reached (infinite scroll)
@@ -165,6 +166,14 @@ export function SearchPage() {
     }
     if (q) void doSearch(q);
   }, [searchParams, doSearch]);
+
+  // A search counts once the query has stayed the same for a moment: not every half-typed word on the way to it
+  useEffect(() => {
+    const q = (searchParams.get('q') ?? '').trim();
+    if (!q) return;
+    const t = setTimeout(() => track('search', { label: q }), 1500);
+    return () => clearTimeout(t);
+  }, [searchParams]);
 
   // Save the current results for the URL's query, so "back" can restore them
   useEffect(() => {

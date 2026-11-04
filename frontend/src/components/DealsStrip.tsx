@@ -5,6 +5,7 @@ import { useBasket } from '../context/BasketContext';
 import { onCityFilterChange, readCityFilter } from '../lib/filters';
 import { DealCard } from './DealCard';
 import { DealProductsSheet } from './DealProductsSheet';
+import { track } from '../lib/track';
 
 /** The home-page strip: today's pick of the best promotions (a different one each day), two per brand at most,
  *  and only ones with a picture. Absent when there are none. */
@@ -35,7 +36,7 @@ export function DealsStrip({ chain }: { chain: string }) {
       </div>
       <div className="deals-strip">
         {deals.map(d => (
-          <DealCard key={d.deal_id} deal={d} onPick={setPicking}
+          <DealCard key={d.deal_id} deal={d} onPick={d => { track('deal_open', { label: d.brand }); setPicking(d); }}
             onAdd={(deal, onAdded) => deal.sample_products[0] && addItem({
               barcode: deal.sample_products[0].barcode, name: deal.sample_products[0].name, brand: deal.sample_products[0].brand,
               unit: deal.sample_products[0].unit_of_measure, quantity: deal.min_qty }, onAdded)} />

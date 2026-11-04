@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { track } from '../lib/track';
 import type { Basket, BasketSnapshot, LocalBasketItem } from '../types';
 
 // Several named baskets; one is "active" and is the one every "add to basket" button feeds,
@@ -145,6 +146,7 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   const addTo = useCallback((basketId: string, item: LocalBasketItem) => {
     putInBasket(basketId, item);
     markChosen();
+    track('basket_add', { label: item.barcode });
     const name = stateRef.current.baskets.find(b => b.id === basketId)?.name;
     // Cleared first so that adding the same product twice is said twice (a live region speaks when its text changes)
     setAnnouncement('');
