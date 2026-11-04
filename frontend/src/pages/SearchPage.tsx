@@ -118,7 +118,6 @@ export function SearchPage() {
       if (seq !== searchSeq.current) return;
       setResults(page);
       setHasMore(page.length === PAGE_SIZE);
-      track('search', { label: q.trim(), value: page.length });
     } catch {
       if (seq !== searchSeq.current) return;
       setError('לא הצלחנו לטעון את התוצאות כרגע. נסו שוב בעוד רגע.');
@@ -167,6 +166,14 @@ export function SearchPage() {
     }
     if (q) void doSearch(q);
   }, [searchParams, doSearch]);
+
+  // A search counts once the query has stayed the same for a moment: not every half-typed word on the way to it
+  useEffect(() => {
+    const q = (searchParams.get('q') ?? '').trim();
+    if (!q) return;
+    const t = setTimeout(() => track('search', { label: q }), 1500);
+    return () => clearTimeout(t);
+  }, [searchParams]);
 
   // Save the current results for the URL's query, so "back" can restore them
   useEffect(() => {
