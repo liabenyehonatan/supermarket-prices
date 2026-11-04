@@ -25,6 +25,29 @@ async def refresh_deals() -> None:
         await conn.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY promo_deals"))
 
 
+async def prune_site_events(days: int, batch: int = 20000) -> int:
+    """Delete visitor statistics older than `days` (STATS_RETENTION_DAYS). Returns how many rows went."""
+    total = 0
+    while True:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                result = await session.execute(
+                    text(
+                        """
+                        DELETE FROM site_events WHERE id IN (
+                            SELECT id FROM site_events
+                             WHERE created_at < now() - make_interval(days => :days)
+                             LIMIT :batch
+                        )
+                        """
+                    ),
+                    {"days": days, "batch": batch},
+                )
+        total += result.rowcount
+        if result.rowcount < batch:
+            return total
+
+
 async def prune_history(days: int, batch: int = 20000) -> int:
     """
     Delete NON-current price rows older than `days`. Opt-in only (see

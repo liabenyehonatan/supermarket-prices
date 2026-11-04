@@ -19,6 +19,7 @@ import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { FilterSheet } from '../components/FilterSheet';
 import { flyToBasket } from '../lib/flyToBasket';
 import { LocationPrompt } from '../components/LocationPrompt';
+import { track } from '../lib/track';
 
 const NEARBY_KM = 15;
 
@@ -121,7 +122,7 @@ export function ProductPage() {
   const load = useCallback((code: string, isCurrent: () => boolean) => {
     setLoading(true); setError(null);
     compareProduct(code)
-      .then(result => { if (isCurrent()) setData(result); })
+      .then(result => { if (isCurrent()) { setData(result); track('product_open', { label: code }); } })
       .catch(() => { if (isCurrent()) setError('לא הצלחנו לטעון את המוצר כרגע. נסו שוב בעוד רגע.'); })
       .finally(() => { if (isCurrent()) setLoading(false); });
   }, []);
@@ -429,17 +430,17 @@ export function ProductPage() {
                     <div className="store-row-actions">
                       {!isOnlineStore({ chain: row.chain_name, name: row.store_name, address: row.store_address }) && (<>
 
-                      <a href={wazeUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
+                      <a href={wazeUrl(row)} onClick={() => track('click', { label: 'waze' })} target="_blank" rel="noopener noreferrer" aria-label={`נווט בוויז ל-${name}`}>
                         <Navigation size={12} strokeWidth={2} />
                         Waze
                       </a>
-                      <a href={googleMapsUrl(row)} target="_blank" rel="noopener noreferrer" aria-label={`נווט בגוגל מפות ל-${name}`}>
+                      <a href={googleMapsUrl(row)} onClick={() => track('click', { label: 'google_maps' })} target="_blank" rel="noopener noreferrer" aria-label={`נווט בגוגל מפות ל-${name}`}>
                         <MapPin size={12} strokeWidth={2} />
                         Maps
                       </a>
                       </>)}
                       {safeHttpUrl(row.delivery_url) && (
-                        <a href={safeHttpUrl(row.delivery_url) as string} target="_blank" rel="noopener noreferrer" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
+                        <a href={safeHttpUrl(row.delivery_url) as string} onClick={() => track('click', { label: 'delivery' })} target="_blank" rel="noopener noreferrer" aria-label={`הזמן משלוח מ-${row.chain_name}`}>
                           <Truck size={12} strokeWidth={2} />
                           משלוח
                           <ExternalLink size={10} strokeWidth={2} />

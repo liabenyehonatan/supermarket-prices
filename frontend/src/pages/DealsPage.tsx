@@ -12,6 +12,7 @@ import { readDealsSnapshot, writeDealsSnapshot } from '../lib/dealsSnapshot';
 import { hasSeen, markSeen } from '../lib/firstVisit';
 import { onCityFilterChange, readCityFilter } from '../lib/filters';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { track } from '../lib/track';
 
 const PAGE = 24;
 const hasPicture = (d: Deal) => d.sample_products.some(p => p.image_url);
@@ -247,7 +248,7 @@ export function DealsPage() {
               {showDivider && i === firstUnpictured && (
                 <h2 className="deals-divider">מבצעים בלי תמונה</h2>
               )}
-              <DealCard deal={d} onPick={setPicking} onAdd={add} />
+              <DealCard deal={d} onPick={d => { track('deal_open', { label: d.brand }); setPicking(d); }} onAdd={add} />
             </Fragment>
           ))}
         </div>

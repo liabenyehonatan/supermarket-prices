@@ -8,6 +8,7 @@ import {
 } from '../lib/scanner';
 import { ApiError, compareProduct } from '../api/client';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { track } from '../lib/track';
 
 export function ScanPage() {
   const navigate = useNavigate();
@@ -32,9 +33,10 @@ export function ScanPage() {
     stop();
     try {
       await compareProduct(code);
+      track('scan', { label: 'found' });
       navigate(`/product/${code}`, { replace: true });
     } catch (err) {
-      if (err instanceof ApiError && err.status === 404) setNotFound(code);
+      if (err instanceof ApiError && err.status === 404) { track('scan', { label: 'not_found' }); setNotFound(code); }
       else setError('אין כרגע חיבור לשרת. נסו שוב בעוד רגע.');
     }
   }, [navigate, stop]);

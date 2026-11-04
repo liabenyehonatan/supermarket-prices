@@ -14,6 +14,7 @@ import { useBasket } from '../context/BasketContext';
 import type { Product } from '../types';
 import { useCityChains, readChainFilter, saveChainFilter, readCityFilter, onCityFilterChange } from '../lib/filters';
 import { setMainSearchHidden } from '../lib/mainSearchVisibility';
+import { track } from '../lib/track';
 
 /* ── constants ────────────────────────────────────────────── */
 // Small pages load fast; the next one is fetched well before the end of the list is reached (infinite scroll)
@@ -117,6 +118,7 @@ export function SearchPage() {
       if (seq !== searchSeq.current) return;
       setResults(page);
       setHasMore(page.length === PAGE_SIZE);
+      track('search', { label: q.trim(), value: page.length });
     } catch {
       if (seq !== searchSeq.current) return;
       setError('לא הצלחנו לטעון את התוצאות כרגע. נסו שוב בעוד רגע.');

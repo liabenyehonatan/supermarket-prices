@@ -74,6 +74,10 @@ DEV_CORS_ORIGINS = [
 # /health/data answers 503 when the last successful ingest is older than this
 # (one daily run, so a day plus a retry window).
 MAX_DATA_AGE_HOURS = _float("MAX_DATA_AGE_HOURS", 36)
+# Opens the statistics page (/stats). Empty or shorter than 12 characters keeps it closed.
+STATS_PASSWORD = _env("STATS_PASSWORD")
+# The worker removes visitor statistics older than this. A little over a year, to compare with the same month last year.
+STATS_RETENTION_DAYS = _int("STATS_RETENTION_DAYS", 400)
 
 # ── Files ─────────────────────────────────────────────────────────────────────
 DUMPS_DIR = Path(_env("DUMPS_DIR") or PROJECT_ROOT / "dumps").resolve()

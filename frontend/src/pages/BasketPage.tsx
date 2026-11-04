@@ -21,6 +21,7 @@ import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCit
 import { BasketSwitcher } from '../components/BasketSwitcher';
 import { snapshotFrom, timeAgo } from '../lib/basketCompare';
 import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal } from '../types';
+import { track } from '../lib/track';
 
 function CartPercentIcon() {
   // Shopping cart with a clear percent sign inside, drawn in currentColor so it follows
@@ -308,6 +309,7 @@ export function BasketPage() {
       const data = await compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })), filters);
       if (id !== requestId.current) return;
       setResults(data);
+      track('basket_compare', { value: items.length });
       const snap = snapshotFrom(data, items, filters);
       if (snap) {
         setPrevCompare(active.lastCompare ?? null);

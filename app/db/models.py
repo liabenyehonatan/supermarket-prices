@@ -17,10 +17,13 @@ from sqlalchemy import (
     text,        # → Raw SQL fragments (used for partial-index conditions)
     UniqueConstraint,
 )
+from sqlalchemy import BigInteger
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 # Mapped and mapped_column are the modern way (SQLAlchemy 2.0+) to define columns.
 # relationship() defines how two tables are connected in Python.
 
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -438,3 +441,28 @@ class IngestRun(Base):
 
     def __repr__(self):
         return f"<IngestRun {self.phase} {self.chain or 'ALL'} {self.status}>"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# site_events: the site's own visitor statistics
+# Anonymous: a random id made in the visitor's browser. No IP address, no raw browser string.
+# ════════════════════════════════════════════════════════════════════════════
+class SiteEvent(Base):
+    __tablename__ = "site_events"
+    __table_args__ = (
+        Index("ix_site_events_created_at", "created_at"),
+        Index("ix_site_events_visitor_created", "visitor_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    visitor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    event: Mapped[str] = mapped_column(String(24), nullable=False)
+    path: Mapped[Optional[str]] = mapped_column(String(200))
+    label: Mapped[Optional[str]] = mapped_column(String(80))     # button text, search term or barcode
+    value: Mapped[Optional[int]] = mapped_column(Integer)        # search result count, or seconds on the site
+    source: Mapped[Optional[str]] = mapped_column(String(80))    # the site the visitor came from
+    device: Mapped[str] = mapped_column(String(10), nullable=False)
+    os: Mapped[str] = mapped_column(String(12), nullable=False)
+    browser: Mapped[str] = mapped_column(String(12), nullable=False)

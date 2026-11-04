@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigationType } from 'react-router-dom';
 import { BasketProvider } from './context/BasketContext';
 import { Header } from './components/Header';
@@ -7,6 +7,7 @@ import { BasketOverlays } from './components/BasketOverlays';
 import { SearchPage } from './pages/SearchPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SiteFooter } from './components/SiteFooter';
+import { startTracking, track } from './lib/track';
 
 // The home page loads at once; the other pages (and the barcode scanner library inside ScanPage) are
 // fetched when first visited, which keeps the first download small.
@@ -38,6 +39,15 @@ function ScrollToTopOnNavigate() {
   return null;
 }
 
+/** Reports each page the visitor opens (a single-page app loads the page once, so the router has to say it). */
+function PageViewTracker() {
+  const { pathname } = useLocation();
+  useEffect(() => { track('page_view'); }, [pathname]);
+  return null;
+}
+
+startTracking();
+
 export function App() {
   return (
     <ErrorBoundary>
@@ -45,6 +55,7 @@ export function App() {
       {/* startTransition: the page you are on stays until the next one (its code included) is ready, so there is no blank frame between them */}
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ScrollToTopOnNavigate />
+        <PageViewTracker />
         <Header />
         <Suspense fallback={<div className="page-loading" aria-busy="true" style={{ minHeight: '60vh' }} />}>
         <Routes>

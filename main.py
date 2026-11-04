@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError, TimeoutError as PoolTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import settings
+from app.analytics import router as analytics_router
 from app.api.routes import router
 from app.seo import router as seo_router
 from app.db.database import get_db
@@ -33,6 +34,7 @@ app.add_middleware(
 
 # Register our routes
 app.include_router(router)
+app.include_router(analytics_router)   # anonymous visitor statistics and the /stats page's data
 app.include_router(seo_router)   # page heads for search engines, robots.txt, sitemaps
 
 
