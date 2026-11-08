@@ -1067,3 +1067,11 @@ async def test_substitute_is_not_offered_when_the_name_says_nothing_about_size_o
     await session.commit()
     r = await client.post("/api/v1/basket/substitutes", json={"store_id": store.id, "barcodes": ["7290000000601", "7290000000603"]})
     assert r.json() == {}
+
+
+async def test_basket_compare_can_be_limited_to_chosen_stores_to_open_their_details(client, session):
+    full, small = await _two_stores_milk(session)
+    body = (await client.post(f"/api/v1/basket/compare?store_ids={small.id}",
+                              json=[{"barcode": "7290000000502", "quantity": 1}])).json()
+    assert [s["store"]["id"] for s in body["stores"]] == [small.id]
+    assert body["stores"][0]["item_prices"][0]["barcode"] == "7290000000502"

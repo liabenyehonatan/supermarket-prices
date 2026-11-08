@@ -762,6 +762,7 @@ async def compare_basket(
     chain: Optional[str] = Query(None, max_length=60, description="Only stores of this chain (exact name)"),
     limit: Optional[int] = Query(None, ge=1, le=500, description="Return only the best N stores (default: all)"),
     compact: bool = Query(False, description="Leave out the per-item breakdown (the map needs only totals and positions)"),
+    store_ids: Optional[List[int]] = Query(None, max_length=50, description="Only these stores (the details of the ones a visitor opens)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -822,6 +823,8 @@ async def compare_basket(
         prices_query = prices_query.where(Store.city.icontains(city.strip(), autoescape=True))
     if chain and chain.strip():
         prices_query = prices_query.where(display_chain_name_sql() == chain.strip())
+    if store_ids:
+        prices_query = prices_query.where(Store.id.in_(store_ids))
 
     all_price_rows = (await db.execute(prices_query)).all()
 
