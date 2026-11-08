@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, TrendingUp,
   Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal, SlidersHorizontal, X, List, Map as MapIcon,
 } from 'lucide-react';
-import { compareBasket, fetchCities } from '../api/client';
+import { compareBasket, fetchSubstitutes, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
@@ -20,7 +20,7 @@ import { useBasket } from '../context/BasketContext';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { BasketSwitcher } from '../components/BasketSwitcher';
 import { snapshotFrom, timeAgo } from '../lib/basketCompare';
-import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal, StoreResponse } from '../types';
+import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal, StoreResponse, Substitute } from '../types';
 import { track } from '../lib/track';
 
 // The map library is large: it is fetched only when someone opens the map
@@ -56,10 +56,22 @@ const wazeUrl = (store: StoreResponse) => wazeLink(navText(store));
 const googleMapsUrl = (store: StoreResponse) => googleMapsLink(navText(store));
 
 /* ── Result card ─────────────────────────────────────────── */
-function ResultCard({ store, rank, nextTotal, minTotal, totalItems }: {
+function ResultCard({ store, rank, nextTotal, minTotal, totalItems, missing }: {
   store: BasketStoreTotal; rank: number; nextTotal: number | null; minTotal: number; totalItems: number;
+  /** The basket products this store does not sell */
+  missing: { barcode: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
+  // Something like each missing product that this store does sell: asked for only when the card is opened
+  const [subs, setSubs] = useState<Record<string, Substitute> | null>(null);
+  useEffect(() => {
+    if (!open || missing.length === 0 || subs) return;
+    let current = true;
+    fetchSubstitutes(store.store.id, missing.map(m => m.barcode))
+      .then(r => { if (current) setSubs(r); })
+      .catch(() => { if (current) setSubs({}); });      // a suggestion is a bonus: no message when it fails
+    return () => { current = false; };
+  }, [open]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Only a store with the whole basket can be "the cheapest": a partial basket always looks cheap
   const isWinner  = rank === 0 && store.items_missing === 0;
   // How much cheaper this store is than the next one in the list (never against the dearest branch of all,
@@ -139,6 +151,20 @@ function ResultCard({ store, rank, nextTotal, minTotal, totalItems }: {
                   {fmt(item.line_total)}
                 </span>
             }
+          </div>
+        ))}
+
+        {missing.map(m => (
+          <div key={`miss-${m.barcode}`} className="basket-breakdown-row basket-breakdown-lacking">
+            <div className="basket-breakdown-name" title={m.name}>
+              {m.name}
+              {subs?.[m.barcode] && (
+                <div className="basket-breakdown-sub">
+                  בסניף הזה יש במקומו: {subs[m.barcode].name} · {fmt(subs[m.barcode].price)} (הצעה, לא כלולה בסכום)
+                </div>
+              )}
+            </div>
+            <span className="basket-breakdown-missing">לא זמין</span>
           </div>
         ))}
 
@@ -299,16 +325,21 @@ export function BasketPage() {
   const allSelected = items.length > 0 && selected.size === items.length;
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  async function runCompare(filters: { city: string; chain: string }) {
-    if (!items.length) return;
+  // Products left out of this comparison only (the basket itself is not changed)
+  const [skipped, setSkipped] = useState<string[]>([]);
+  useEffect(() => { setSkipped([]); }, [activeId, items.length]);
+
+  async function runCompare(filters: { city: string; chain: string }, skip: string[] = skipped) {
+    const compareItems = items.filter(i => !skip.includes(i.barcode));
+    if (!compareItems.length) return;
     const id = ++requestId.current;  // only the latest request may update the page
     setLoading(true); setError(null); setResults(null);
     try {
-      const data = await compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })), filters);
+      const data = await compareBasket(compareItems.map(i => ({ barcode: i.barcode, quantity: i.quantity })), filters);
       if (id !== requestId.current) return;
       setResults(data);
       track('basket_compare', { value: items.length });
-      const snap = snapshotFrom(data, items, filters);
+      const snap = skip.length === 0 ? snapshotFrom(data, items, filters) : null;   // a basket without some products is not the basket
       if (snap) {
         setPrevCompare(active.lastCompare ?? null);
         setNowCompare(snap);
@@ -322,7 +353,8 @@ export function BasketPage() {
     }
   }
 
-  const handleCompare = () => void runCompare({ city, chain });
+  const handleCompare = () => void runCompare({ city, chain }, skipped);
+  function compareWithout(barcodes: string[]) { setSkipped(barcodes); void runCompare({ city, chain }, barcodes); }
   // The totals on screen no longer match once a quantity changes: clear them (removing an item already does).
   function changeQty(barcode: string, quantity: number) { setResults(null); updateQty(barcode, quantity); }
 
@@ -353,7 +385,7 @@ export function BasketPage() {
     if (view !== 'map' || !results || mapData?.source === results) return;
     let stale = false;
     const done = (stores: BasketStoreTotal[]) => { if (!stale) setMapData({ source: results, stores }); };
-    compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })), { city, chain }, true)
+    compareBasket(items.filter(i => !skipped.includes(i.barcode)).map(i => ({ barcode: i.barcode, quantity: i.quantity })), { city, chain }, true)
       .then(d => done(d.stores))
       .catch(() => done(results.stores));         // the map still works with the stores the list has
     return () => { stale = true; };
@@ -366,6 +398,15 @@ export function BasketPage() {
   const hasPartial = partialCount > 0 && !noCompleteStore;
   const filterComplete = onlyComplete && hasPartial;
   const shownStores = results ? (filterComplete ? results.stores.filter(s => s.items_missing === 0) : results.stores) : [];
+
+  // A product most stores do not sell makes almost every basket partial: offer the comparison without it
+  const rareItems = results && skipped.length === 0 && items.length > 1
+    ? (results.item_coverage ?? [])
+        .filter(c => c.stores_total >= 10 && c.stores_with_item / c.stores_total <= 0.4)
+        .sort((a, b) => a.stores_with_item / a.stores_total - b.stores_with_item / b.stores_total)
+        .slice(0, 3)
+    : [];
+  const skippedNames = items.filter(i => skipped.includes(i.barcode)).map(i => i.name);
 
   // The winner's lead is measured against the next store that has as much of the basket as the winner.
   const nextStore = results && results.stores.length > 1
@@ -634,6 +675,19 @@ export function BasketPage() {
               </div>
             </div>
 
+            {skipped.length > 0 && (
+              <div className="partial-note ok" role="status">
+                ההשוואה הזו בלי: {skippedNames.join(', ')}.{' '}
+                <button className="link-btn" onClick={() => compareWithout([])}>החזירו לסל</button>
+              </div>
+            )}
+            {rareItems.map(c => (
+              <div key={c.barcode} className="partial-note" role="status">
+                <strong>{c.name}</strong> נמכר רק ב-{c.stores_with_item} מתוך {c.stores_total} סניפים ({Math.round(100 * c.stores_with_item / c.stores_total)}%).{' '}
+                <button className="link-btn" onClick={() => compareWithout([c.barcode])}>השוו בלעדיו</button>
+              </div>
+            ))}
+
             {results.stores.length > 0 && (
               <div className="view-toggle" role="group" aria-label="תצוגה" style={{ marginBottom: 14 }}>
                 <button aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={14} strokeWidth={2.2} />רשימה</button>
@@ -692,6 +746,8 @@ export function BasketPage() {
                     nextTotal={nextTotal}
                     minTotal={minTotal}
                     totalItems={results.total_items_requested}
+                    missing={items.filter(i => !skipped.includes(i.barcode) && !store.item_prices.some(p => p.barcode === i.barcode))
+                      .map(i => ({ barcode: i.barcode, name: i.name }))}
                   />
                 </Fragment>
               ))}

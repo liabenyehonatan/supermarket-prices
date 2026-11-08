@@ -2,7 +2,9 @@
 
 import logging
 import random
+import re
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, List, Literal, Optional
@@ -33,6 +35,9 @@ from app.api.schemas import (
     CheapestPriceRequest,
     BasketItem,
     BasketCompareResponse,
+    ItemCoverage,
+    SubstitutesRequest,
+    Substitute,
     BasketStoreTotal,
     StoreResponse,
     ChainResponse,
@@ -910,7 +915,12 @@ async def compare_basket(
         for missing, total, savings, adjustments, r, items_by_barcode in shown
     ]
 
+    holding = Counter(b for _, items_here in grouped.values() for b in items_here)
+    coverage = [ItemCoverage(barcode=b, name=products[b].name, stores_with_item=holding.get(b, 0), stores_total=len(grouped))
+                for b in barcodes if b in products]
+
     response = BasketCompareResponse.model_construct(
+        item_coverage=coverage,
         stores=store_totals,
         total_items_requested=len(barcodes),
         cheapest_store=cheapest_store,
@@ -919,6 +929,49 @@ async def compare_basket(
         max_total=max_total,
     )
     return Response(content=response.model_dump_json(), media_type="application/json")
+
+
+# ─── Something like a missing product, that the store does sell ─────────────
+
+_NUMBERS = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+@router.post(
+    "/basket/substitutes",
+    response_model=dict[str, Substitute],
+    summary="For products a store does not hold: a similar one it does sell (same size and strength)",
+)
+async def basket_substitutes(payload: SubstitutesRequest, db: AsyncSession = Depends(get_db)):
+    """
+    A suggestion, never part of a total. "Similar" means a close name (trigram similarity), the same unit of measure
+    and the same numbers in the name (3% against 1% fat, 1 litre against 1.5 litres are different products). Products
+    with no such match are left out of the answer.
+    """
+    barcodes = [b for b in payload.barcodes if b]
+    if not barcodes:
+        return {}
+    wanted = (await db.execute(
+        select(Product).where(Product.barcode.in_(barcodes), _real_barcode()))).scalars().all()
+    await db.execute(text("SET LOCAL pg_trgm.similarity_threshold = 0.45"))
+    answer: dict[str, Substitute] = {}
+    for product in wanted:
+        rows = (await db.execute(
+            select(Product.barcode, Product.name, Product.unit_of_measure, Price.price,
+                   func.similarity(Product.name, product.name).label("sim"))
+            .join(Price, Price.product_id == Product.id)
+            .where(Price.store_id == payload.store_id, Price.is_current, Price.price > 0, _real_barcode(),
+                   Product.barcode != product.barcode,
+                   Product.name.op("%")(product.name),
+                   Product.unit_of_measure.is_not_distinct_from(product.unit_of_measure))
+            .order_by(text("sim DESC"), Price.price.asc())
+            .limit(8)
+        )).all()
+        mine = sorted(_NUMBERS.findall(product.name))
+        for barcode, name, unit, price, _sim in rows:
+            if sorted(_NUMBERS.findall(name)) == mine:     # same size and strength
+                answer[product.barcode] = Substitute(barcode=barcode, name=name, price=price, unit_of_measure=unit)
+                break
+    return answer
 
 
 # ─── Promotions section: deals across brands ─────────────────────────────────
