@@ -753,10 +753,12 @@ html { touch-action: manipulation; }
 .map-legend-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green-600); }
 
 /* Stores that lack some of the basket (the red outline is only on the map) */
-.partial-note { margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: #FEF2F2; color: #991B1B; font-size: 13px; }
+.partial-note { margin-bottom: 12px; padding: 10px 14px; border-radius: 12px; background: var(--surface-100, #f3f4f6); color: var(--ink-700); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.partial-note-head { color: var(--ink-600); }
+.partial-note-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.partial-note-row .link-btn { white-space: nowrap; color: var(--green-700, var(--green-600)); }
 .partial-toggle { font: inherit; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--ink-300, #cbd5e1); background: #fff; color: var(--ink-700); cursor: pointer; }
 .partial-toggle.active { border-color: var(--green-600); color: var(--green-700, var(--green-600)); }
-.partial-divider { margin: 8px 2px 0; font-size: 12.5px; font-weight: 600; color: #B91C1C; }
-.partial-note.ok { background: var(--green-50); color: var(--green-700, #166534); }
+.partial-divider { margin: 8px 2px 0; font-size: 12.5px; font-weight: 600; color: var(--ink-600); }
 .link-btn { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; }
 .basket-breakdown-sub { margin-top: 3px; font-size: 12px; color: var(--ink-600); font-weight: 500; }
