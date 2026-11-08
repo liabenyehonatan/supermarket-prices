@@ -7,7 +7,7 @@ import { Locate, MapPin, Navigation, X } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 import { ISRAEL_BOUNDS, MIN_ZOOM, mapStyle } from '../lib/mapStyle';
 import { distanceKm } from '../lib/geo';
-import { googleMapsLink, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
+import { googleMapsLink, isEilat, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
 import { money } from '../lib/safe';
 import { saveMyCoords, type Coords } from '../lib/location';
 import type { BasketStoreTotal } from '../types';
@@ -73,7 +73,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
     const near = all.filter(s => s.items_missing === 0 && (me
       ? distanceKm(me.lat, me.lng, s.store.latitude!, s.store.longitude!) <= NEAR_KM
       : bounds.contains([s.store.longitude!, s.store.latitude!])));
-    const withVat = near.filter(s => !(s.store.city ?? '').includes('אילת'));
+    const withVat = near.filter(s => !isEilat(s.store.city));
     return (withVat.length ? withVat : near)[0];
   }
 

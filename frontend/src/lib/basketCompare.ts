@@ -1,3 +1,4 @@
+import { isEilat } from './store';
 import type { Basket, BasketCompareResponse, BasketSnapshot } from '../types';
 
 /** Same contents ⇒ same signature, so a price change can be told apart from an edited basket. */
@@ -9,7 +10,10 @@ export function snapshotFrom(
   res: BasketCompareResponse, items: Basket['items'], filters: { city: string; chain: string },
 ): BasketSnapshot | null {
   if (!res.stores.length) return null;
-  const pick = res.stores.filter(s => s.items_missing === 0).sort((a, b) => a.total_price - b.total_price)[0] ?? res.stores[0];
+  // Eilat has no VAT: its branches would always be "the cheapest", so they only count when nothing else is listed
+  const complete = res.stores.filter(s => s.items_missing === 0);
+  const withVat = complete.filter(s => !isEilat(s.store.city));
+  const pick = [...(withVat.length ? withVat : complete)].sort((a, b) => a.total_price - b.total_price)[0] ?? res.stores[0];
   return {
     at: Date.now(),
     total: Number(pick.total_price),

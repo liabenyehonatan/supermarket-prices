@@ -73,3 +73,17 @@ export function wazeLink(s: StoreText): string {
 export function googleMapsLink(s: StoreText): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(navQuery(s) || s.chain)}`;
 }
+
+/** Eilat sells without VAT, so its prices run about a sixth lower than everywhere else and always come out cheapest. */
+export function isEilat(city?: string | null): boolean {
+  return (city ?? '').includes('אילת');
+}
+
+export const EILAT_NOTE = 'אילת: המחיר בלי מע״מ, לא להשוואה לשאר הארץ';
+
+/** Puts Eilat after everything else of the same tier (stable, so the price order is kept), unless nothing else is
+ *  listed. `tier` is what must stay first regardless (a basket missing items is always after a full one). */
+export function eilatLast<T>(rows: T[], cityOf: (row: T) => string | null | undefined, tierOf: (row: T) => number = () => 0): T[] {
+  if (rows.every(r => isEilat(cityOf(r)))) return rows;
+  return [...rows].sort((a, b) => tierOf(a) - tierOf(b) || Number(isEilat(cityOf(a))) - Number(isEilat(cityOf(b))));
+}
