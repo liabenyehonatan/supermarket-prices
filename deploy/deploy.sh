@@ -46,6 +46,8 @@ if [ "${#services[@]}" -gt 0 ]; then
   $DOCKER compose up -d --build "${services[@]}"
 fi
 if [ "${#services[@]}" -gt 0 ] || echo "$changed" | grep -qE '^nginx/'; then
+  # a changed compose file (a new volume, say) only reaches nginx by recreating it; `up` does nothing when nothing changed
+  $DOCKER compose up -d nginx
   # nginx keeps the old containers' addresses until restarted
   $DOCKER compose restart nginx
 fi

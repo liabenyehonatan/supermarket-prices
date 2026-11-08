@@ -1,10 +1,10 @@
 import { ErrorState } from '../components/ErrorState';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
   ChevronDown, ChevronUp, TrendingUp,
-  Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal, SlidersHorizontal, X,
+  Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal, SlidersHorizontal, X, List, Map as MapIcon,
 } from 'lucide-react';
 import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
@@ -15,13 +15,16 @@ import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { endsText } from '../lib/dealDays';
 import { LocationPrompt } from '../components/LocationPrompt';
-import { useCurrentCity } from '../lib/location';
+import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { useBasket } from '../context/BasketContext';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { BasketSwitcher } from '../components/BasketSwitcher';
 import { snapshotFrom, timeAgo } from '../lib/basketCompare';
 import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal } from '../types';
 import { track } from '../lib/track';
+
+// The map library is large: it is fetched only when someone opens the map
+const BasketMap = lazy(() => import('../components/BasketMap'));
 
 function CartPercentIcon() {
   // Shopping cart with a clear percent sign inside, drawn in currentColor so it follows
@@ -341,7 +344,9 @@ export function BasketPage() {
   }
 
   const onLocatedCity = (found: string) => changeCity(matchCity(found, cities));
-  const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity);
+  const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
+  const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity, setMyCoords);
+  const [view, setView] = useState<'list' | 'map'>('list');
 
   // The winner's lead is measured against the next store that has as much of the basket as the winner.
   const nextStore = results && results.stores.length > 1
@@ -610,6 +615,13 @@ export function BasketPage() {
               </div>
             </div>
 
+            {results.stores.length > 0 && (
+              <div className="view-toggle" role="group" aria-label="תצוגה" style={{ marginBottom: 14 }}>
+                <button aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={14} strokeWidth={2.2} />רשימה</button>
+                <button aria-pressed={view === 'map'} onClick={() => setView('map')}><MapIcon size={14} strokeWidth={2.2} />מפה</button>
+              </div>
+            )}
+
             {results.stores.length === 0 && (
               <div className="empty-state" style={{ padding: '32px 0' }}>
                 <div className="empty-state-title">
@@ -626,7 +638,13 @@ export function BasketPage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
+            {view === 'map' && results.stores.length > 0 && (
+              <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
+                <BasketMap stores={results.stores} myCoords={myCoords} onLocate={locate} />
+              </Suspense>
+            )}
+
+            <div style={{ display: view === 'map' ? 'none' : 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
               {results.stores.map((store, idx) => (
                 <ResultCard
                   key={`${store.store.id}-${idx}`}

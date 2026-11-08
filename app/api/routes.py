@@ -778,7 +778,7 @@ async def compare_basket(
         select(
             Price.price, Price.product_id,
             Store.id.label("store_pk"), Store.store_id, Store.name.label("store_name"), Store.city,
-            Store.address, Store.latitude, Store.longitude,
+            Store.address, Store.latitude, Store.longitude, Store.geo_precision,
             func.coalesce(Store.last_promo_at >= func.now() - timedelta(days=PROMO_FRESH_DAYS), False).label("promo_known"),
             Chain.id.label("chain_pk"), Chain.name.label("chain_name"), Chain.chain_id.label("chain_code"),
         )
@@ -869,7 +869,7 @@ async def compare_basket(
         BasketStoreTotal.model_construct(
             store=StoreResponse.model_construct(
                 id=r.store_pk, store_id=r.store_id, name=r.store_name, city=r.city, address=r.address,
-                latitude=r.latitude, longitude=r.longitude,
+                latitude=r.latitude, longitude=r.longitude, geo_precision=r.geo_precision,
                 chain=ChainResponse.model_construct(
                     id=r.chain_pk, name=display_chain_name(r.chain_name, r.store_name), chain_id=r.chain_code,
                 ),

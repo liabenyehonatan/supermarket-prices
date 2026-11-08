@@ -686,3 +686,57 @@ html { touch-action: manipulation; }
   margin-inline: -14px; padding: 6px 14px 8px; background: #fff;
 }
 .deals-search-bar .deals-search { margin-bottom: 0; }
+
+/* ── Basket map: Airbnb-style price pins ───────────────────────────────── */
+.view-toggle { display: inline-flex; background: var(--surface-100); border-radius: 999px; padding: 3px; gap: 2px; }
+.view-toggle button {
+  border: 0; background: transparent; color: var(--ink-500); font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 6px 14px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+}
+.view-toggle button[aria-pressed="true"] { background: #fff; color: var(--ink-900); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14); }
+
+.basket-map { position: relative; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-card); margin-bottom: 40px; background: var(--surface-100); }
+.basket-map-canvas { height: clamp(380px, 64vh, 620px); width: 100%; direction: ltr; }
+.basket-map .maplibregl-ctrl-top-left { inset-inline-start: 10px; }
+.basket-map .maplibregl-ctrl-group { border-radius: 14px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16); }
+
+.map-pin {
+  font: inherit; font-size: 13px; font-weight: 700; line-height: 1; color: var(--ink-900);
+  background: #fff; border: 0; border-radius: 999px; padding: 8px 11px; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28); font-variant-numeric: tabular-nums;
+  transition: transform 0.12s;
+}
+.map-pin:hover { transform: scale(1.08); }
+.map-pin-best { background: var(--green-600); color: #fff; font-size: 14px; padding: 9px 13px; }
+.map-pin-partial { background: var(--surface-100); color: var(--ink-500); font-weight: 600; }
+.map-pin-selected { background: var(--ink-900); color: #fff; transform: scale(1.12); }
+
+.map-me {
+  width: 16px; height: 16px; border-radius: 50%; background: #2563EB; border: 3px solid #fff;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.22);
+}
+
+.map-locate {
+  position: absolute; top: 10px; inset-inline-end: 10px; display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: #fff; color: var(--ink-800); font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 8px 12px; border-radius: 999px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16); cursor: pointer;
+}
+.map-hidden-note, .map-empty {
+  position: absolute; inset-inline: 10px; bottom: 8px; text-align: center; font-size: 11.5px; color: var(--ink-600);
+  background: rgba(255, 255, 255, 0.92); border-radius: 10px; padding: 5px 10px; pointer-events: none;
+}
+.map-empty { top: 50%; bottom: auto; transform: translateY(-50%); font-size: 13px; padding: 12px; }
+.map-note { padding: 20px; text-align: center; color: var(--ink-600); font-size: 13px; }
+
+.map-card {
+  position: absolute; left: 56px; right: 10px; top: 10px; background: #fff; border-radius: var(--r-lg);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.24); padding: 14px; z-index: 5; direction: rtl;
+}
+.map-card-close { position: absolute; top: 8px; inset-inline-start: 8px; border: 0; background: var(--surface-100); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-600); cursor: pointer; }
+.map-card-head { display: flex; gap: 12px; align-items: center; padding-inline-start: 22px; }
+.map-card-info { flex: 1; min-width: 0; }
+.map-card-name { font-weight: 700; font-size: 14px; }
+.map-card-sub { font-size: 12px; color: var(--ink-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-card-price { font-weight: 800; font-size: 18px; }
+.map-card-warn { margin-top: 8px; font-size: 12px; color: var(--orange-500); }
+.map-card .store-row-actions { margin-top: 10px; }

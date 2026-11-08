@@ -898,3 +898,26 @@ async def test_price_summary_names_every_chain_at_the_cheapest_price_with_its_un
 
     too_many = await client.post("/api/v1/products/price-summary-batch", json={"barcodes": ["1"] * 101})
     assert too_many.status_code == 422
+
+
+async def test_basket_compare_tells_how_exactly_a_store_was_located(client, session):
+    """The map leaves out branches known only by their town's centre, so the answer says how each was located."""
+    from datetime import datetime
+
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="7290000000999", name="שופרסל")
+    session.add(chain)
+    await session.flush()
+    exact = Store(chain_id=chain.id, store_id="1", name="a", city="חיפה", latitude=32.80, longitude=34.99, geo_precision="address")
+    town = Store(chain_id=chain.id, store_id="2", name="b", city="אילת", latitude=29.55, longitude=34.95, geo_precision="city")
+    product = Product(barcode="7290000000777", name="מוצר")
+    session.add_all([exact, town, product])
+    await session.flush()
+    now = datetime(2026, 10, 12)
+    session.add_all([Price(product_id=product.id, store_id=s.id, price=5, price_updated_at=now, is_current=True) for s in (exact, town)])
+    await session.commit()
+
+    r = await client.post("/api/v1/basket/compare", json=[{"barcode": "7290000000777", "quantity": 1}])
+    located = {s["store"]["name"]: s["store"]["geo_precision"] for s in r.json()["stores"]}
+    assert located == {"a": "address", "b": "city"}
