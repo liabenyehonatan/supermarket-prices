@@ -1,0 +1,5 @@
+# The MCP service is a separate image: the API pins fastapi 0.111 / starlette 0.37, which would make pip pick an
+# ancient mcp. mcp 2.x renamed FastMCP and changed its API, so stay on the 1.x line this code is written for.
+mcp==1.30.0
+httpx>=0.27,<1
+uvicorn>=0.30
