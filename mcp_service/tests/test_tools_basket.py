@@ -158,3 +158,19 @@ async def test_no_stores_at_all_is_answered_with_a_warning(make_api):
     out = await tools.compare_basket(basket_api(make_api, []), [{"barcode": B1, "qty": 2}])
     assert out["stores"] == [] and out["complete_basket_found"] is False and out["warnings"]
     assert "shopping_list" not in out
+
+
+async def test_promotions_warning_is_given_once_per_chain(make_api):
+    stores = [store("שופרסל", "חיפה", 24, GOOD, promos_known=False), store("שופרסל", "עכו", 25, GOOD, promos_known=False),
+              store("רמי לוי", "חיפה", 26, GOOD, promos_known=False)]
+    out = await tools.compare_basket(basket_api(make_api, stores), [{"barcode": B1, "qty": 2}])
+    promo_warnings = [w for w in out["warnings"] if "מבצעים" in w]
+    assert len(promo_warnings) == 2 and "שופרסל" in promo_warnings[0] and "רמי לוי" in promo_warnings[1]
+
+
+async def test_incomplete_baskets_rank_fewer_missing_first_like_the_site(make_api):
+    api = basket_api(make_api, [store("זול חסר שניים", "חיפה", 10, [GOOD[0]], missing=2),
+                                store("חסר אחד", "חיפה", 20, [GOOD[0], GOOD[1]], missing=1)])
+    out = await tools.compare_basket(api, [{"barcode": B1, "qty": 2}, {"barcode": B2, "qty": 1}])
+    assert [s["chain"] for s in out["stores"]] == ["חסר אחד", "זול חסר שניים"]
+    assert out["cheapest"]["chain"] == "חסר אחד"

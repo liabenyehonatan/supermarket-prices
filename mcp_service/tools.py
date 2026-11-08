@@ -242,7 +242,7 @@ async def compare_basket(api, items: list[dict], city: str | None = None, chain:
             "savings": _num(s.get("savings")) or 0.0, "promotions_known": bool(s.get("promotions_known")),
             "lines": lines, "_delivery": s["store"].get("delivery_url") or "",
         })
-    shown.sort(key=lambda s: (s["items_missing"] > 0, s["total"]))   # complete baskets first, cheapest first
+    shown.sort(key=lambda s: (s["items_missing"], s["total"]))   # the site's own order: fewest missing first, then cheapest
     shown = shown[:3]
 
     as_of = await prices_as_of(api)
@@ -252,9 +252,8 @@ async def compare_basket(api, items: list[dict], city: str | None = None, chain:
         warnings.append("אף סניף לא מחזיק אף אחד מהמוצרים האלה (בסינון שביקשת).")
     elif not complete:
         warnings.append("אף סניף לא מחזיק את כל המוצרים בסל. המחירים הם של סלים חלקיים; ראה missing_barcodes.")
-    for s in shown:
-        if not s["promotions_known"]:
-            warnings.append(f"אין נתוני מבצעים עדכניים לסניף של {s['chain']}: המחיר שלו הוא מחיר מדף וייתכן שהוא גבוה מדי.")
+    for chain_name in dict.fromkeys(s["chain"] for s in shown if not s["promotions_known"]):   # once per chain
+        warnings.append(f"אין נתוני מבצעים עדכניים לסניפים של {chain_name}: המחיר שלהם הוא מחיר מדף וייתכן שהוא גבוה מדי.")
     age = _hours_since(as_of)
     if age is not None and age > STALE_AFTER_HOURS:
         warnings.append(f"נתוני המחירים עודכנו לפני כ-{round(age)} שעות; ייתכן שחלו שינויים.")
