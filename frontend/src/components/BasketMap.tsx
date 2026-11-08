@@ -208,15 +208,30 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
     }
   }
 
-  // New results (a different set of located branches): go to the opening area
+  // New results. A different set of located branches: go to the opening area. The same branches with other totals (a
+  // product left out of the comparison): only the pins change, the view stays where the visitor put it.
+  const lastSet = useRef('');
   useEffect(() => {
     if (!mapRef.current) return;
-    selectedRef.current = null;
-    setSelected(null);
+    const sig = located.map(s => s.store.id).join(',');
+    const same = sig === lastSet.current;
+    lastSet.current = sig;
     for (const m of pins.current.values()) m.remove();
     pins.current.clear();
+    if (same && fitted.current) {
+      if (selectedRef.current != null) {
+        const keepSel = located.find(s => s.store.id === selectedRef.current);
+        setSelected(keepSel ?? null);
+        if (!keepSel) selectedRef.current = null;
+      }
+      draw();
+      return;
+    }
+    selectedRef.current = null;
+    setSelected(null);
+    const wasFitted = fitted.current;
     fitted.current = false;
-    fitToStores();
+    fitToStores(wasFitted ? 700 : 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [located]);
 

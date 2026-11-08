@@ -348,11 +348,17 @@ export function BasketPage() {
   const [skipped, setSkipped] = useState<string[]>([]);
   useEffect(() => { setSkipped([]); }, [activeId, items.length]);
 
+  const [refreshing, setRefreshing] = useState(false);
+
   async function runCompare(filters: { city: string; chain: string }, skip: string[] = skipped) {
     const compareItems = items.filter(i => !skip.includes(i.barcode));
     if (!compareItems.length) return;
     const id = ++requestId.current;  // only the latest request may update the page
-    setLoading(true); setError(null); setResults(null);
+    // Comparing again while results are on screen (a filter, "compare without"): they stay, dimmed, and are replaced
+    // when the new ones arrive. Tearing them down would collapse the page and make it jump.
+    const keep = !!results;
+    setError(null);
+    if (keep) setRefreshing(true); else { setLoading(true); setResults(null); }
     try {
       const data = await compareBasket(compareItems.map(i => ({ barcode: i.barcode, quantity: i.quantity })), filters);
       if (id !== requestId.current) return;
@@ -364,11 +370,11 @@ export function BasketPage() {
         setNowCompare(snap);
         recordCompare(active.id, snap);
       }
-      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+      if (!keep) setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch {
       if (id === requestId.current) setError('לא הצלחנו להשוות את הסל כרגע. נסו שוב בעוד רגע.');
     } finally {
-      if (id === requestId.current) setLoading(false);
+      if (id === requestId.current) { setLoading(false); setRefreshing(false); }
     }
   }
 
@@ -417,6 +423,7 @@ export function BasketPage() {
   const [onlyComplete, setOnlyComplete] = useState(true);
   const [mapData, setMapData] = useState<{ source: BasketCompareResponse; stores: BasketStoreTotal[] } | null>(null);
   useEffect(() => { if (mapActive) setMapOpened(true); }, [mapActive]);
+  useEffect(() => { if (!results) setMapData(null); }, [results]);
   useEffect(() => {
     if (!mapActive || !results || mapData?.source === results) return;
     let stale = false;
@@ -430,7 +437,8 @@ export function BasketPage() {
 
   // The stores the list shows. On a narrow screen: the cheapest 100 of the comparison. Beside the map: the stores in
   // the map's view, cheapest first (complete baskets first, Eilat after the rest), the way the map's pins are.
-  const mapReady = !!results && mapData?.source === results && mapBounds != null;
+  // (the previous map data stays in use while newer data loads, so the map and list do not blink out)
+  const mapReady = !!results && !!mapData && mapBounds != null;
   const inView = split && mapReady
     ? eilatLast(
         mapData!.stores
@@ -722,7 +730,7 @@ export function BasketPage() {
 
             {nowCompare && <CompareDelta prev={prevCompare} now={nowCompare} />}
 
-            <div className={wide ? 'results-area' : undefined}>
+            <div className={`${wide ? 'results-area' : ''}${refreshing || (mapActive && mapData != null && mapData.source !== results) ? ' is-refreshing' : ''}`}>
             <div className="section-header" style={{ marginBottom: 16 }}>
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -782,7 +790,7 @@ export function BasketPage() {
 
             {(mapActive || mapOpened) && results.stores.length > 0 && (
               <div className="results-map" style={{ display: mapActive ? 'block' : 'none' }}>
-                {mapData?.source === results ? (
+                {mapData ? (
                   <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
                     <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={mapActive}
                       onlyComplete={onlyComplete} onOnlyCompleteChange={setOnlyComplete}
