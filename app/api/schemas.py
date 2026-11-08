@@ -134,6 +134,7 @@ class PriceAtStore(BaseModel):
     scraped_at: Optional[datetime] = None  # last time a chain file confirmed this price
     latitude: Optional[float]
     longitude: Optional[float]
+    geo_precision: Optional[str] = None  # 'address' = the branch itself; 'city' = only the town's centre
     delivery_url: Optional[str]
     promotions: List[PromoInfo] = []
 

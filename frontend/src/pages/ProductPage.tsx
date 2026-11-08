@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowRight, MapPin, Truck, Plus, Minus, Share2, ShoppingBasket,
-  Check, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal,
+  Check, ExternalLink, Navigation, X, ChevronDown, SlidersHorizontal, List, Map as MapIcon,
 } from 'lucide-react';
 import { compareProduct, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
@@ -11,7 +11,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { cityName, EILAT_NOTE, eilatLast, isEilat, isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
-import type { ProductCompareResponse, PriceAtStore } from '../types';
+import type { ProductCompareResponse, PriceAtStore, BasketStoreTotal } from '../types';
 import { cleanBrand, extractProductDisplay } from '../lib/utils';
 import { sizeUnitPrice, unitPriceLabel } from '../lib/productMeta';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
@@ -22,7 +22,21 @@ import { LocationPrompt } from '../components/LocationPrompt';
 import { track } from '../lib/track';
 import { distanceKm } from '../lib/geo';
 
+const BasketMap = lazy(() => import('../components/BasketMap'));
+
 const NEARBY_KM = 15;
+
+/** One product's price at a store, in the shape the map draws (a basket of one item, nothing missing). */
+function asMapStore(row: PriceAtStore): BasketStoreTotal {
+  return {
+    store: {
+      id: row.store_id, store_id: String(row.store_id), name: row.store_name, city: row.store_city, address: row.store_address,
+      latitude: row.latitude, longitude: row.longitude, geo_precision: row.geo_precision, delivery_url: row.delivery_url,
+      chain: { id: 0, name: row.chain_name, chain_id: '' },
+    },
+    total_price: row.price, items_found: 1, items_missing: 0, item_prices: [],
+  };
+}
 
 function fmt(p: number | string) { return money(p); }
 
@@ -89,6 +103,8 @@ export function ProductPage() {
   const [chainFilter, setChainFilter] = useState(readChainFilter);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [view, setView] = useState<'list' | 'map'>('list');
+  const [mapOpened, setMapOpened] = useState(false);
   // Popular products are sold in ~1,500 stores; drawing them all at once is slow on a phone.
   const [visibleCount, setVisibleCount] = useState(STORES_PAGE);
   // Nearby mode is an explicit opt-in per visit — a position left over from an earlier
@@ -184,6 +200,7 @@ export function ProductPage() {
           || distanceKm(myCoords.lat, myCoords.lng, a.latitude!, a.longitude!)
            - distanceKm(myCoords.lat, myCoords.lng, b.latitude!, b.longitude!)), row => row.store_city)
     : [];
+  const mapStores = useMemo(() => matchingPrices.map(asMapStore), [data, cityFilter, chainFilter]);  // eslint-disable-line react-hooks/exhaustive-deps
   const nearbyMode = nearbyPrices.length > 0 && !showAll;
   const filteredPrices = nearbyMode ? nearbyPrices : matchingPrices;
   const shownPrices = filteredPrices.slice(0, visibleCount);
@@ -377,6 +394,21 @@ export function ProductPage() {
               </div>
             )}
 
+            {matchingPrices.length > 0 && (
+              <div className="view-toggle" role="group" aria-label="תצוגה" style={{ marginBottom: 14 }}>
+                <button aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={14} strokeWidth={2.2} />רשימה</button>
+                <button aria-pressed={view === 'map'} onClick={() => { setView('map'); setMapOpened(true); }}><MapIcon size={14} strokeWidth={2.2} />מפה</button>
+              </div>
+            )}
+            {mapOpened && matchingPrices.length > 0 && (
+              <div style={{ display: view === 'map' ? 'block' : 'none' }}>
+                <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
+                  <BasketMap stores={mapStores} myCoords={myCoords} onCoords={setMyCoords} visible={view === 'map'} />
+                </Suspense>
+              </div>
+            )}
+
+            <div style={{ display: view === 'map' ? 'none' : 'block' }}>
             <div className="compare-table store-list" style={{ marginBottom: 20 }}>
               {shownPrices.map((row, idx) => {
                 const isCheapest = idx === 0;
@@ -461,6 +493,7 @@ export function ProductPage() {
                 חזרה לחנויות קרובות
               </button>
             )}
+            </div>
 
             {/* Bottom spacing for sticky bar */}
             <div style={{ height: 88 }} />

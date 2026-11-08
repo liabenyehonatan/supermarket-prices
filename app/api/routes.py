@@ -76,6 +76,17 @@ def _not_wholesale():
     return or_(Store.name.is_(None), ~Store.name.ilike("%סיטונ%"))
 
 
+def _is_eilat():
+    """Eilat is VAT-free, so its prices run ~17% below the rest of the country: never the "cheapest" for a shopper
+    elsewhere. (The same rule as the front end's isEilat.)"""
+    return func.coalesce(Store.city, "").contains("אילת")
+
+
+def _cheapest(column):
+    """Lowest of `column` over the rows, ignoring Eilat unless every row is Eilat (then Eilat's lowest)."""
+    return func.coalesce(func.min(case((~_is_eilat(), column))), func.min(column))
+
+
 # ─── Endpoint 1: Search Products ─────────────────────────────────────────────
 
 @router.get(
@@ -333,6 +344,7 @@ async def compare_product_prices(
             scraped_at=max(filter(None, (price.scraped_at, store.last_full_at)), default=None),
             latitude=store.latitude,
             longitude=store.longitude,
+            geo_precision=store.geo_precision,
             delivery_url=store.delivery_url,
             promotions=promos.get(store.id, []),
         ))
@@ -375,7 +387,7 @@ async def cheapest_prices_batch(
         return {}
 
     rows = await db.execute(
-        select(Product.barcode, func.min(Price.price))
+        select(Product.barcode, _cheapest(Price.price))
         .join(Price, Price.product_id == Product.id)
         .join(Store, Price.store_id == Store.id)
         .where(
@@ -416,7 +428,10 @@ async def price_summary_batch(
             Price.price.label("price"),
             Price.unit_price.label("unit_price"),
             display_chain_name_sql().label("chain"),
-            func.min(Price.price).over(partition_by=Product.barcode).label("min_price"),
+            # Eilat (no VAT) never sets the cheapest price unless it is the only place that sells the product.
+            func.min(case((~_is_eilat(), Price.price))).over(partition_by=Product.barcode).label("min_elsewhere"),
+            func.min(Price.price).over(partition_by=Product.barcode).label("min_all"),
+            _is_eilat().label("eilat"),
         )
         .join(Price, Price.product_id == Product.id)
         .join(Store, Price.store_id == Store.id)
@@ -430,16 +445,21 @@ async def price_summary_batch(
         )
         .subquery()
     )
+    min_price = func.coalesce(current.c.min_elsewhere, current.c.min_all)
     rows = await db.execute(
         select(
             current.c.barcode,
             current.c.unit,
-            current.c.min_price,
+            min_price,
             func.min(case((current.c.unit_price > 0, current.c.unit_price))),
             func.array_agg(current.c.chain.distinct()),
         )
-        .where(current.c.price == current.c.min_price)
-        .group_by(current.c.barcode, current.c.unit, current.c.min_price)
+        .where(
+            current.c.price == min_price,
+            # an Eilat row only counts when there is nowhere else (a tie in price must not list it)
+            or_(~current.c.eilat, current.c.min_elsewhere.is_(None)),
+        )
+        .group_by(current.c.barcode, current.c.unit, min_price)
     )
     return {
         barcode: PriceSummary(price=price, chains=sorted(set(chains)), unit_price=unit_price, unit=unit)
@@ -468,7 +488,7 @@ async def unit_prices_batch(
         return {}
 
     rows = await db.execute(
-        select(Product.barcode, Product.unit_of_measure, func.min(Price.unit_price))
+        select(Product.barcode, Product.unit_of_measure, _cheapest(Price.unit_price))
         .join(Price, Price.product_id == Product.id)
         .join(Store, Price.store_id == Store.id)
         .where(
@@ -851,9 +871,12 @@ async def compare_basket(
         total = sum((info["line_total"] for info in items_by_barcode.values()), Decimal("0")) - adjusted
         savings = sum((info["regular_line_total"] - info["line_total"] for info in items_by_barcode.values()), Decimal("0")) + adjusted
         ranked.append((len(barcodes) - len(items_by_barcode), total, savings, adjustments, r, items_by_barcode))
-    ranked.sort(key=lambda x: (x[0], x[1]))
+    # Eilat has no VAT (~17% cheaper), so within a tier it comes after the rest, and it never sets the savings range
+    in_eilat = lambda x: "אילת" in (x[4].city or "")
+    ranked.sort(key=lambda x: (x[0], in_eilat(x), x[1]))
 
-    complete_totals = [t for missing, t, _, _, _, _ in ranked if missing == 0]
+    complete = [x for x in ranked if x[0] == 0]
+    complete_totals = [x[1] for x in complete if not in_eilat(x)] or [x[1] for x in complete]
     if len(complete_totals) >= 2:
         max_savings = complete_totals[-1] - complete_totals[0]
         max_total = complete_totals[-1]
