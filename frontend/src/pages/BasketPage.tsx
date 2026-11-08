@@ -10,7 +10,7 @@ import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
-import { googleMapsLink, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
+import { EILAT_NOTE, googleMapsLink, isEilat, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { endsText } from '../lib/dealDays';
@@ -71,7 +71,7 @@ function ResultCard({ store, rank, nextTotal, minTotal }: {
       chain={store.store.chain.name}
       name={store.store.chain.name}
       city={storeSubtitle({ chain: store.store.chain.name, name: store.store.name, address: store.store.address, city: store.store.city })}
-      warning={store.items_missing > 0 ? `חסרים ${store.items_missing} מוצרים` : undefined}
+      warning={[store.items_missing > 0 && `חסרים ${store.items_missing} מוצרים`, isEilat(store.store.city) && EILAT_NOTE].filter(Boolean).join(' · ') || undefined}
       price={store.total_price}
       isCheapest={isWinner}
       diff={store.total_price - minTotal}

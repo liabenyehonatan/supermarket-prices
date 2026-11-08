@@ -8,7 +8,7 @@ import { compareProduct, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
-import { cityName, isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
+import { cityName, EILAT_NOTE, eilatLast, isEilat, isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore } from '../types';
@@ -168,20 +168,21 @@ export function ProductPage() {
   const { locate: handleGps, request: confirmLocation, pickCity: pickLocationCity, suggestedCity, locating: gpsLoading, problem: locationProblem, dismiss: dismissLocation } = useCurrentCity(onLocatedCity, setMyCoords);
 
   const namedPrices = data ? data.prices.filter(row => row.store_name) : [];
-  const matchingPrices = namedPrices
+  // Eilat has no VAT: its prices always come out lowest, so its stores are listed after the rest and left out of "cheapest"
+  const matchingPrices = eilatLast(namedPrices
     .filter(row => !cityFilter || cityName(row.store_city).includes(cityFilter))
-    .filter(row => !chainFilter || row.chain_name === chainFilter);
+    .filter(row => !chainFilter || row.chain_name === chainFilter), row => row.store_city);
   // Nearby mode: stores within NEARBY_KM of the user. Only geocoded stores have
   // coordinates, so "all stores" stays one tap away.
   const nearbyPrices = nearbyActive && myCoords
-    ? namedPrices
+    ? eilatLast(namedPrices
         .filter(row => !chainFilter || row.chain_name === chainFilter)
         .filter(row => row.latitude != null && row.longitude != null
           && distanceKm(myCoords.lat, myCoords.lng, row.latitude, row.longitude) <= NEARBY_KM)
         // Cheapest first; among equal prices the closest store comes first.
         .sort((a, b) => Number(a.price) - Number(b.price)
           || distanceKm(myCoords.lat, myCoords.lng, a.latitude!, a.longitude!)
-           - distanceKm(myCoords.lat, myCoords.lng, b.latitude!, b.longitude!))
+           - distanceKm(myCoords.lat, myCoords.lng, b.latitude!, b.longitude!)), row => row.store_city)
     : [];
   const nearbyMode = nearbyPrices.length > 0 && !showAll;
   const filteredPrices = nearbyMode ? nearbyPrices : matchingPrices;
@@ -202,15 +203,17 @@ export function ProductPage() {
   }
 
   // The headline numbers describe the stores listed below (rows without a store name are not listed).
-  const listedPrices = namedPrices.map(row => Number(row.price)).filter(Number.isFinite);
+  const withVat = namedPrices.filter(row => !isEilat(row.store_city));
+  const headlineRows = withVat.length ? withVat : namedPrices;
+  const listedPrices = headlineRows.map(row => Number(row.price)).filter(Number.isFinite);
   const headlineMin = listedPrices.length ? Math.min(...listedPrices) : Number(data?.cheapest_price ?? 0);
   const headlineMax = listedPrices.length ? Math.max(...listedPrices) : Number(data?.most_expensive_price ?? 0);
   const savings     = data ? headlineMax - headlineMin : 0;
   const savingsPct  = data && headlineMax > 0 ? Math.round((savings / headlineMax) * 100) : 0;
   // Where the cheapest price is: one chain by name, several by count
-  const cheapestChains = [...new Set(namedPrices.filter(row => Math.abs(Number(row.price) - headlineMin) < 0.005).map(row => row.chain_name))];
+  const cheapestChains = [...new Set(headlineRows.filter(row => Math.abs(Number(row.price) - headlineMin) < 0.005).map(row => row.chain_name))];
   const cheapestWhere = cheapestChains.length === 1 ? `ב${cheapestChains[0]}` : cheapestChains.length > 1 ? `ב-${cheapestChains.length} רשתות` : '';
-  const cheapestRow = namedPrices.find(row => Math.abs(Number(row.price) - headlineMin) < 0.005);
+  const cheapestRow = headlineRows.find(row => Math.abs(Number(row.price) - headlineMin) < 0.005);
   const perUnit = cheapestRow && data
     ? sizeUnitPrice(cheapestRow.price, data.product.name, data.product.brand, data.product.unit_of_measure)
       ?? unitPriceLabel(cheapestRow.price, cheapestRow.unit_price, data.product.unit_of_measure)
@@ -390,7 +393,7 @@ export function ProductPage() {
                     chain={row.chain_name}
                     name={row.chain_name}
                     city={storeSubtitle({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city })}
-                    warning={isStale(row.scraped_at ?? row.price_updated_at) ? `מחיר ישן · עודכן לפני ${timeAgo(row.scraped_at ?? row.price_updated_at)}` : undefined}
+                    warning={[isStale(row.scraped_at ?? row.price_updated_at) && `מחיר ישן · עודכן לפני ${timeAgo(row.scraped_at ?? row.price_updated_at)}`, isEilat(row.store_city) && EILAT_NOTE].filter(Boolean).join(' · ') || undefined}
                     promo={promos[0]?.description}
                     price={row.price}
                     isCheapest={isCheapest}

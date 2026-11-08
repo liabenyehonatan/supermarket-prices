@@ -7,7 +7,7 @@ import { Locate, MapPin, Navigation, X } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 import { ISRAEL_BOUNDS, MIN_ZOOM, mapStyle } from '../lib/mapStyle';
 import { distanceKm } from '../lib/geo';
-import { googleMapsLink, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
+import { googleMapsLink, isEilat, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
 import { money } from '../lib/safe';
 import { saveMyCoords, type Coords } from '../lib/location';
 import type { BasketStoreTotal } from '../types';
@@ -21,6 +21,7 @@ export function isMappable(s: BasketStoreTotal): boolean {
 }
 
 const MAX_PINS = 80;                 // pins drawn at once (the cheapest that fit; zooming in shows more)
+const NEAR_KM = 5;                   // "near me" for the green pin
 const PIN_W = 76, PIN_H = 34;        // the pixel box a pin needs, to keep pins from covering each other
 
 let ready = false;
@@ -61,17 +62,28 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
 
   const mapped = useMemo(() => stores.filter(isMappable), [stores]);
   const hidden = stores.length - mapped.length;
-  const cheapestId = stores[0]?.store.id;
-
   // Everything the draw function reads is kept in a ref so the map's own event handlers never go stale
-  const data = useRef({ mapped, cheapestId });
-  data.current = { mapped, cheapestId };
+  const data = useRef({ mapped, myCoords });
+  data.current = { mapped, myCoords };
+
+  /** The green pin: the cheapest complete basket near the visitor (or, without a position, in the area shown).
+   *  The overall cheapest is no use: Eilat has no VAT, so its branches always win and mean nothing elsewhere.
+   *  `stores` is in comparison order, so the first match is the cheapest. */
+  function pickBest(all: BasketStoreTotal[], bounds: maplibregl.LngLatBounds, me: Coords | null): BasketStoreTotal | undefined {
+    const near = all.filter(s => s.items_missing === 0 && (me
+      ? distanceKm(me.lat, me.lng, s.store.latitude!, s.store.longitude!) <= NEAR_KM
+      : bounds.contains([s.store.longitude!, s.store.latitude!])));
+    const withVat = near.filter(s => !isEilat(s.store.city));
+    return (withVat.length ? withVat : near)[0];
+  }
 
   function draw() {
     const map = mapRef.current;
     if (!map) return;
-    const { mapped: all, cheapestId: best } = data.current;
+    const { mapped: all, myCoords: me } = data.current;
     const bounds = map.getBounds();
+    const bestStore = pickBest(all, bounds, me);
+    const best = bestStore?.store.id;
     const taken: { x: number; y: number }[] = [];
     const keep = new Set<number>();
     const place = (s: BasketStoreTotal, force: boolean) => {
@@ -82,6 +94,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
     };
     const sel = all.find(s => s.store.id === selectedRef.current);
     if (sel) place(sel, true);
+    if (bestStore && bounds.contains([bestStore.store.longitude!, bestStore.store.latitude!])) place(bestStore, true);
     for (const s of all) {
       if (keep.size >= MAX_PINS) break;
       if (keep.has(s.store.id) || !bounds.contains([s.store.longitude!, s.store.latitude!])) continue;
@@ -161,16 +174,21 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
     setSelected(null);
     for (const m of pins.current.values()) m.remove();
     pins.current.clear();
-    const view = new maplibregl.LngLatBounds();
-    mapped.slice(0, 25).forEach(s => view.extend([s.store.longitude!, s.store.latitude!]));
-    if (myCoords) view.extend([myCoords.lng, myCoords.lat]);
-    if (!view.isEmpty()) map.fitBounds(view, { padding: { top: 60, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration: 0 });
-    else draw();
+    if (myCoords && mapped.length > 0) {
+      showAround(myCoords, 0);                       // where the visitor is, with the branches around them
+    } else if (mapped.length > 0) {
+      // Not located: the area where most of the branches are, not the corner the few cheapest ones happen to be in
+      const lats = mapped.map(s => s.store.latitude!).sort((a, b) => a - b);
+      const lngs = mapped.map(s => s.store.longitude!).sort((a, b) => a - b);
+      const at = (v: number[], q: number) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
+      const view = new maplibregl.LngLatBounds([at(lngs, 0.1), at(lats, 0.1)], [at(lngs, 0.9), at(lats, 0.9)]);
+      map.fitBounds(view, { padding: 40, maxZoom: 12, duration: 0 });
+    } else draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped]);
 
   /** Where the visitor is, and the branches around them: the map goes there. Stays in the browser, nothing is sent. */
-  function showAround(me: Coords) {
+  function showAround(me: Coords, duration = 700) {
     const map = mapRef.current;
     if (!map) return;
     const near = [...data.current.mapped]
@@ -178,7 +196,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
       .slice(0, 6);
     const view = new maplibregl.LngLatBounds([me.lng, me.lat], [me.lng, me.lat]);
     near.forEach(s => view.extend([s.store.longitude!, s.store.latitude!]));
-    map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration: 700 });
+    map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration });
   }
 
   function locateMe() {
@@ -222,6 +240,8 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
     el.className = 'map-me';
     el.setAttribute('aria-label', 'המיקום שלך');
     me.current = new maplibregl.Marker({ element: el }).setLngLat([myCoords.lng, myCoords.lat]).addTo(map);
+    draw();                       // the green pin follows the visitor's position
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myCoords]);
 
   const km = selected && myCoords && selected.store.latitude != null
@@ -274,6 +294,11 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
           )}
         </div>
       )}
+
+      <div className="map-legend">
+        <span className="map-legend-dot" />
+        {myCoords ? `הירוק: הכי זול ברדיוס ${NEAR_KM} ק״מ ממך` : 'הירוק: הכי זול באזור שמוצג במפה'}
+      </div>
 
       {hidden > 0 && mapped.length > 0 && (
         <div className="map-hidden-note">{hidden} סניפים בלי מיקום מדויק מופיעים רק ברשימה</div>

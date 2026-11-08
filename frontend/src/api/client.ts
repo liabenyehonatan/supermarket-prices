@@ -25,7 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-import { cityName } from '../lib/store';
+import { cityName, eilatLast } from '../lib/store';
 export function searchProducts(q: string, limit = 20, offset = 0): Promise<Product[]> {
   return request<Product[]>(
     `/api/v1/products/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`
@@ -172,5 +172,5 @@ export function compareBasket(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(items),
-  });
+  }).then(res => ({ ...res, stores: eilatLast(res.stores, s => s.store.city, s => s.items_missing) }));  // Eilat has no VAT: never first
 }
