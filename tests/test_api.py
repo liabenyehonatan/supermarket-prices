@@ -1045,3 +1045,25 @@ async def test_substitute_has_the_same_size_and_strength_and_is_sold_by_that_sto
     assert body["7290000000501"]["barcode"] == "7290000000502"        # the other brand's 3%, not the 1%
     assert float(body["7290000000501"]["price"]) == 6.20
     assert "7290000000504" not in body                                 # the small store has this bread itself: nothing to suggest
+
+
+async def test_substitute_is_not_offered_when_the_name_says_nothing_about_size_or_the_other_product_is_different(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="7290027600007", name="שופרסל")
+    session.add(chain)
+    await session.flush()
+    store = Store(chain_id=chain.id, store_id="1", name="סניף", city="חיפה")
+    plain = Product(barcode="7290000000601", name="חלב תנובה", unit_of_measure="100מל'")
+    goat = Product(barcode="7290000000602", name="תנובה חלב עיזים", unit_of_measure="100מל'")
+    sized = Product(barcode="7290000000603", name="גבינה לבנה 5% 250 גרם תנובה", unit_of_measure="100 גרם")
+    goat_cheese = Product(barcode="7290000000604", name="גבינה לבנה עיזים בטעם 5% 250 גרם תנובה מיוחדת", unit_of_measure="100 גרם")
+    session.add_all([store, plain, goat, sized, goat_cheese])
+    await session.flush()
+    now = datetime(2026, 11, 8)
+    for prod in (goat, goat_cheese):
+        session.add(Price(product_id=prod.id, store_id=store.id, price="15.50", price_updated_at=now, is_current=True))
+    await session.commit()
+    r = await client.post("/api/v1/basket/substitutes", json={"store_id": store.id, "barcodes": ["7290000000601", "7290000000603"]})
+    assert r.json() == {}
