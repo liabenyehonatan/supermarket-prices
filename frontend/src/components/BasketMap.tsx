@@ -15,7 +15,9 @@ import type { BasketStoreTotal } from '../types';
 /** A branch we can put on the map: it has a position of its own, not just its town's centre. */
 export function isMappable(s: BasketStoreTotal): boolean {
   const { latitude, longitude, geo_precision } = s.store;
-  return latitude != null && longitude != null && geo_precision !== 'city';
+  // Only a position found from the branch's own address counts: 'city' (the town's centre) and rows from before
+  // precision was recorded would stack several branches on one spot and look exact when they are not.
+  return latitude != null && longitude != null && geo_precision === 'address';
 }
 
 const MAX_PINS = 80;                 // pins drawn at once (the cheapest that fit; zooming in shows more)
@@ -40,8 +42,10 @@ function priceText(total: number): string {
  * lack some of the basket in grey. `stores` is in the comparison's order (complete baskets first, cheapest first),
  * and that order decides which pins win when they would overlap.
  */
-export default function BasketMap({ stores, myCoords, onLocate }: {
+export default function BasketMap({ stores, myCoords, onLocate, visible }: {
   stores: BasketStoreTotal[];
+  /** False while the list is shown: the map stays mounted but has no size */
+  visible: boolean;
   myCoords: Coords | null;
   onLocate: () => void;
 }) {
@@ -87,18 +91,22 @@ export default function BasketMap({ stores, myCoords, onLocate }: {
       if (!keep.has(s.store.id)) continue;
       let marker = pins.current.get(s.store.id);
       if (!marker) {
-        const el = document.createElement('button');
-        el.type = 'button';
-        el.addEventListener('click', e => { e.stopPropagation(); selectStore(s); });
-        marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        // MapLibre moves the marker element with an inline transform, so the pill (which animates) is a child of it
+        const wrap = document.createElement('div');
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.addEventListener('click', e => { e.stopPropagation(); selectStore(s); });
+        wrap.appendChild(pill);
+        marker = new maplibregl.Marker({ element: wrap, anchor: 'bottom' })
           .setLngLat([s.store.longitude!, s.store.latitude!]).addTo(map);
         pins.current.set(s.store.id, marker);
       }
       const el = marker.getElement();
+      const pill = el.firstElementChild as HTMLButtonElement;
       const isBest = s.store.id === best && s.items_missing === 0;
-      el.className = `map-pin${isBest ? ' map-pin-best' : ''}${s.items_missing > 0 ? ' map-pin-partial' : ''}${s.store.id === selectedRef.current ? ' map-pin-selected' : ''}`;
-      el.textContent = priceText(s.total_price);
-      el.setAttribute('aria-label', `${s.store.chain.name}, ${money(s.total_price)}${s.items_missing > 0 ? `, חסרים ${s.items_missing} מוצרים` : ''}`);
+      pill.className = `map-pin${isBest ? ' map-pin-best' : ''}${s.items_missing > 0 ? ' map-pin-partial' : ''}${s.store.id === selectedRef.current ? ' map-pin-selected' : ''}`;
+      pill.textContent = priceText(s.total_price);
+      pill.setAttribute('aria-label', `${s.store.chain.name}, ${money(s.total_price)}${s.items_missing > 0 ? `, חסרים ${s.items_missing} מוצרים` : ''}`);
       el.style.zIndex = s.store.id === selectedRef.current ? '3' : isBest ? '2' : '1';
     }
   }
@@ -157,6 +165,11 @@ export default function BasketMap({ stores, myCoords, onLocate }: {
     else draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped]);
+
+  // Shown again after the list: the map was laid out while hidden
+  useEffect(() => {
+    if (visible) mapRef.current?.resize();
+  }, [visible]);
 
   // The visitor's own position
   const me = useRef<maplibregl.Marker | null>(null);

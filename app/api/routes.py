@@ -736,6 +736,7 @@ async def compare_basket(
     city: Optional[str] = Query(None, max_length=60, description="Only stores whose city contains this text"),
     chain: Optional[str] = Query(None, max_length=60, description="Only stores of this chain (exact name)"),
     limit: Optional[int] = Query(None, ge=1, le=500, description="Return only the best N stores (default: all)"),
+    compact: bool = Query(False, description="Leave out the per-item breakdown (the map needs only totals and positions)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -881,7 +882,7 @@ async def compare_basket(
             promotions_known=bool(r.promo_known),
             promo_adjustments=adjustments,
             # In the order the items were listed in the basket (the database returns them in no fixed order).
-            item_prices=sorted(items_by_barcode.values(), key=lambda i: basket_order[i["barcode"]]),
+            item_prices=[] if compact else sorted(items_by_barcode.values(), key=lambda i: basket_order[i["barcode"]]),
         )
         for missing, total, savings, adjustments, r, items_by_barcode in shown
     ]

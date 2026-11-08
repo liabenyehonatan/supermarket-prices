@@ -21,7 +21,7 @@ pmtiles extract "https://build.protomaps.com/$latest" il.pmtiles --bbox=34.2,29.
 scp il.pmtiles <server>:<project folder>/deploy/tiles/il.pmtiles
 ```
 
-No restart is needed: nginx reads the file on every request. For local development copy it to
+Replace the file in one step (copy to `il.pmtiles.new` on the server, then `mv il.pmtiles.new il.pmtiles`) so a visitor never reads a half-written file. No restart is needed: nginx reads the file on every request and browsers revalidate it. For local development copy it to
 `frontend/public/tiles/il.pmtiles` (also not in git).
 
 ## Credit

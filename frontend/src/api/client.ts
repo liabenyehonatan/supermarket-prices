@@ -158,12 +158,15 @@ export function fetchCities(): Promise<string[]> {
 
 export function compareBasket(
   items: { barcode: string; quantity: number }[],
-  filters: { city?: string; chain?: string } = {}
+  filters: { city?: string; chain?: string } = {},
+  /** The map wants every store (to show the ones near the visitor), but only totals and positions, not the item lines. */
+  forMap = false,
 ): Promise<BasketCompareResponse> {
   const params = new URLSearchParams();
   if (filters.city?.trim()) params.set('city', filters.city.trim());
   if (filters.chain?.trim()) params.set('chain', filters.chain.trim());
-  params.set('limit', '100');          // the best 100 stores are plenty to show; the full list is ~1.3 MB
+  if (forMap) params.set('compact', 'true');
+  else params.set('limit', '100');     // the best 100 stores are plenty to show; the full list is ~1.3 MB
   const qs = params.toString();
   return request<BasketCompareResponse>(`/api/v1/basket/compare${qs ? `?${qs}` : ''}`, {
     method: 'POST',

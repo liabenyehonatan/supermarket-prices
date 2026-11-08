@@ -10,7 +10,7 @@ import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
-import { isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
+import { googleMapsLink, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { endsText } from '../lib/dealDays';
@@ -20,7 +20,7 @@ import { useBasket } from '../context/BasketContext';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { BasketSwitcher } from '../components/BasketSwitcher';
 import { snapshotFrom, timeAgo } from '../lib/basketCompare';
-import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal } from '../types';
+import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal, StoreResponse } from '../types';
 import { track } from '../lib/track';
 
 // The map library is large: it is fetched only when someone opens the map
@@ -50,17 +50,10 @@ function CartPercentIcon() {
 
 function fmt(p: number | string) { return money(p); }
 
-// Same navigation links as the product page's store rows — Waze and Google Maps
-// both accept a free-text destination, so no store coordinates are needed.
-function storeNavQuery(store: { name: string; address?: string; city?: string; chain: { name: string } }): string {
-  return navQuery({ chain: store.chain.name, name: store.name, address: store.address, city: store.city }) || store.chain.name;
-}
-function wazeUrl(store: Parameters<typeof storeNavQuery>[0]): string {
-  return `https://waze.com/ul?q=${encodeURIComponent(storeNavQuery(store))}&navigate=yes`;
-}
-function googleMapsUrl(store: Parameters<typeof storeNavQuery>[0]): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(storeNavQuery(store))}`;
-}
+// Same navigation links as the product page's store rows (Waze and Google Maps both accept a free-text destination).
+const navText = (store: StoreResponse) => ({ chain: store.chain.name, name: store.name, address: store.address, city: store.city });
+const wazeUrl = (store: StoreResponse) => wazeLink(navText(store));
+const googleMapsUrl = (store: StoreResponse) => googleMapsLink(navText(store));
 
 /* ── Result card ─────────────────────────────────────────── */
 function ResultCard({ store, rank, nextTotal, minTotal }: {
@@ -347,6 +340,21 @@ export function BasketPage() {
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
   const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity, setMyCoords);
   const [view, setView] = useState<'list' | 'map'>('list');
+  // The map shows every store, not just the 100 cheapest the list is cut to: fetched when the map is first opened
+  // for these results. Once opened it stays mounted (hidden) so switching back and forth keeps zoom and selection.
+  const [mapOpened, setMapOpened] = useState(false);
+  const [mapData, setMapData] = useState<{ source: BasketCompareResponse; stores: BasketStoreTotal[] } | null>(null);
+  useEffect(() => { if (view === 'map') setMapOpened(true); }, [view]);
+  useEffect(() => {
+    if (view !== 'map' || !results || mapData?.source === results) return;
+    let stale = false;
+    const done = (stores: BasketStoreTotal[]) => { if (!stale) setMapData({ source: results, stores }); };
+    compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })), { city, chain }, true)
+      .then(d => done(d.stores))
+      .catch(() => done(results.stores));         // the map still works with the stores the list has
+    return () => { stale = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, results]);
 
   // The winner's lead is measured against the next store that has as much of the basket as the winner.
   const nextStore = results && results.stores.length > 1
@@ -638,10 +646,16 @@ export function BasketPage() {
               </div>
             )}
 
-            {view === 'map' && results.stores.length > 0 && (
-              <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
-                <BasketMap stores={results.stores} myCoords={myCoords} onLocate={locate} />
-              </Suspense>
+            {(view === 'map' || mapOpened) && results.stores.length > 0 && (
+              <div style={{ display: view === 'map' ? 'block' : 'none' }}>
+                {mapData?.source === results ? (
+                  <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
+                    <BasketMap stores={mapData.stores} myCoords={myCoords} onLocate={locate} visible={view === 'map'} />
+                  </Suspense>
+                ) : (
+                  <div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />
+                )}
+              </div>
             )}
 
             <div style={{ display: view === 'map' ? 'none' : 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>

@@ -46,10 +46,13 @@ if [ "${#services[@]}" -gt 0 ]; then
   $DOCKER compose up -d --build "${services[@]}"
 fi
 if [ "${#services[@]}" -gt 0 ] || echo "$changed" | grep -qE '^nginx/'; then
-  # a changed compose file (a new volume, say) only reaches nginx by recreating it; `up` does nothing when nothing changed
-  $DOCKER compose up -d nginx
-  # nginx keeps the old containers' addresses until restarted
-  $DOCKER compose restart nginx
+  if echo "$changed" | grep -q '^docker-compose\.yml'; then
+    # a changed compose file (a new volume, say) only reaches nginx by recreating it; that also gives it fresh addresses
+    $DOCKER compose up -d --force-recreate nginx
+  else
+    # nginx keeps the old containers' addresses until restarted
+    $DOCKER compose restart nginx
+  fi
 fi
 
 # The site must answer (up to ~3 minutes: the api can take 90 s to start after a rebuild): the API through nginx, and a page with its own title (search-engine head tags)
