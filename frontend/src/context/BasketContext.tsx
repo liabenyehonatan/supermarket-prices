@@ -32,6 +32,11 @@ interface BasketContextValue {
   renameBasket: (id: string, name: string) => void;
   deleteBasket: (id: string) => void;
   recordCompare: (id: string, snapshot: BasketSnapshot) => void;
+  /** Adds a NEW basket holding `items` and makes it the active one (the "open this basket" link from Claude);
+   *  other baskets are untouched. `notFound` is how many products of the link we could not find. */
+  importBasket: (name: string, items: LocalBasketItem[], notFound: number) => string;
+  /** A plain message at the bottom of the page. */
+  notify: (text: string) => void;
   /** Short message shown at the bottom ("added to …", "deleted … · undo"). */
   notice: Notice | null;
   dismissNotice: () => void;
@@ -221,6 +226,16 @@ export function BasketProvider({ children }: { children: ReactNode }) {
     return id;
   }, [markChosen, showNotice]);
 
+  const importBasket = useCallback((name: string, items: LocalBasketItem[], notFound: number) => {
+    const basket = newBasket(name, items);
+    setState(s => ({ baskets: [...s.baskets, basket], activeId: basket.id }));
+    markChosen();
+    showNotice({ text: `נוצר סל "${name}" עם ${items.length} מוצרים${notFound > 0 ? ` · ${notFound} לא נמצאו` : ''}` }, 8000);
+    return basket.id;
+  }, [markChosen, showNotice]);
+
+  const notify = useCallback((text: string) => showNotice({ text }, 6000), [showNotice]);
+
   const renameBasket = useCallback((id: string, name: string) => {
     const clean = name.trim();
     if (!clean) return;
@@ -329,10 +344,10 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   const value = useMemo<BasketContextValue>(() => ({
     baskets: state.baskets, activeId: active.id, active, items: active.items,
     addItem, removeItem, removeItems, updateQty, clearBasket, totalItems,
-    setActive, createBasket, renameBasket, deleteBasket, recordCompare,
+    setActive, createBasket, renameBasket, deleteBasket, recordCompare, importBasket, notify,
     notice, dismissNotice, announcement, picker, openCreate, openMove, closePicker, pickBasket, pickNew,
   }), [state.baskets, active, totalItems, addItem, removeItem, removeItems, updateQty, clearBasket,
-       setActive, createBasket, renameBasket, deleteBasket, recordCompare,
+       setActive, createBasket, renameBasket, deleteBasket, recordCompare, importBasket, notify,
        notice, dismissNotice, announcement, picker, openCreate, openMove, closePicker, pickBasket, pickNew]);
 
   return <BasketContext.Provider value={value}>{children}</BasketContext.Provider>;

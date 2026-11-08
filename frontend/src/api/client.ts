@@ -32,6 +32,15 @@ export function searchProducts(q: string, limit = 20, offset = 0): Promise<Produ
   );
 }
 
+/** The products for a list of barcodes (at most 100); a barcode we do not hold is simply missing from the answer. */
+export function fetchProductsByBarcodes(barcodes: string[]): Promise<Product[]> {
+  return request<Product[]>('/api/v1/products/by-barcodes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ barcodes }),
+  });
+}
+
 export function compareProduct(barcode: string): Promise<ProductCompareResponse> {
   return request<ProductCompareResponse>(`/api/v1/products/${barcode}/compare`);
 }
