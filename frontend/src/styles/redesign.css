@@ -731,7 +731,7 @@ html { touch-action: manipulation; }
 .map-note { padding: 20px; text-align: center; color: var(--ink-600); font-size: 13px; }
 
 .map-card {
-  position: absolute; left: 56px; right: 10px; top: 10px; background: #fff; border-radius: var(--r-lg);
+  position: absolute; left: 56px; right: 10px; top: 10px; max-width: 380px; background: #fff; border-radius: var(--r-lg);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.24); padding: 14px; z-index: 5; direction: rtl;
 }
 .map-card-close { position: absolute; top: 8px; inset-inline-start: 8px; border: 0; background: var(--surface-100); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-600); cursor: pointer; }

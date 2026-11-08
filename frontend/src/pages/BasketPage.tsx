@@ -400,9 +400,10 @@ export function BasketPage() {
   const shownStores = results ? (filterComplete ? results.stores.filter(s => s.items_missing === 0) : results.stores) : [];
 
   // A product most stores do not sell makes almost every basket partial: offer the comparison without it
+  // With no complete basket at all, the rarest products are what is in the way, however common each one is alone
   const rareItems = results && skipped.length === 0 && items.length > 1
     ? (results.item_coverage ?? [])
-        .filter(c => c.stores_total >= 10 && c.stores_with_item / c.stores_total <= 0.4)
+        .filter(c => c.stores_total >= 10 && (noCompleteStore ? c.stores_with_item < c.stores_total : c.stores_with_item / c.stores_total <= 0.4))
         .sort((a, b) => a.stores_with_item / a.stores_total - b.stores_with_item / b.stores_total)
         .slice(0, 3)
     : [];
@@ -681,9 +682,15 @@ export function BasketPage() {
                 <button className="link-btn" onClick={() => compareWithout([])}>החזירו לסל</button>
               </div>
             )}
+            {noCompleteStore && (
+              <div className="partial-note" role="status">
+                אף סניף לא מחזיק את כל המוצרים בסל, והסכומים כאן חלקיים ולא להשוואה ישירה.
+                {rareItems.length > 0 && ' אפשר להשוות בלי המוצרים שהכי מפילים סניפים:'}
+              </div>
+            )}
             {rareItems.map(c => (
               <div key={c.barcode} className="partial-note" role="status">
-                <strong>{c.name}</strong> נמכר רק ב-{c.stores_with_item} מתוך {c.stores_total} סניפים ({Math.round(100 * c.stores_with_item / c.stores_total)}%).{' '}
+                <strong>{c.name}</strong> נמכר {c.stores_with_item / c.stores_total <= 0.4 ? "רק " : ""}ב-{c.stores_with_item} מתוך {c.stores_total} סניפים ({Math.round(100 * c.stores_with_item / c.stores_total)}%).{' '}
                 <button className="link-btn" onClick={() => compareWithout([c.barcode])}>השוו בלעדיו</button>
               </div>
             ))}
@@ -724,9 +731,6 @@ export function BasketPage() {
               </div>
             )}
 
-            {noCompleteStore && (
-              <div className="partial-note" role="status">אף סניף לא מחזיק את כל המוצרים בסל. הסכומים כאן חלקיים ולא להשוואה ישירה.</div>
-            )}
             {hasPartial && (
               <button className={`partial-toggle${filterComplete ? ' active' : ''}`} aria-pressed={filterComplete}
                       style={{ display: view === 'map' ? 'none' : undefined }} onClick={() => setOnlyComplete(!filterComplete)}>
