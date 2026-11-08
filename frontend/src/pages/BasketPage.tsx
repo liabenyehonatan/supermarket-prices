@@ -401,7 +401,7 @@ export function BasketPage() {
 
   // A product most stores do not sell makes almost every basket partial: offer the comparison without it
   // With no complete basket at all, the rarest products are what is in the way, however common each one is alone
-  const rareItems = results && skipped.length === 0 && items.length > 1
+  const rareItems = results && items.filter(i => !skipped.includes(i.barcode)).length > 1
     ? (results.item_coverage ?? [])
         .filter(c => c.stores_total >= 10 && (noCompleteStore ? c.stores_with_item < c.stores_total : c.stores_with_item / c.stores_total <= 0.4))
         .sort((a, b) => a.stores_with_item / a.stores_total - b.stores_with_item / b.stores_total)
@@ -676,24 +676,24 @@ export function BasketPage() {
               </div>
             </div>
 
-            {skipped.length > 0 && (
-              <div className="partial-note ok" role="status">
-                ההשוואה הזו בלי: {skippedNames.join(', ')}.{' '}
-                <button className="link-btn" onClick={() => compareWithout([])}>החזירו לסל</button>
-              </div>
-            )}
-            {noCompleteStore && (
+            {(skipped.length > 0 || noCompleteStore || rareItems.length > 0) && (
               <div className="partial-note" role="status">
-                אף סניף לא מחזיק את כל המוצרים בסל, והסכומים כאן חלקיים ולא להשוואה ישירה.
-                {rareItems.length > 0 && ' אפשר להשוות בלי המוצרים שהכי מפילים סניפים:'}
+                {skipped.length > 0 && (
+                  <div>
+                    ההשוואה הזו בלי: {skippedNames.join(', ')}.{' '}
+                    <button className="link-btn" onClick={() => compareWithout([])}>החזירו לסל</button>
+                  </div>
+                )}
+                {noCompleteStore && <div>אף סניף לא מחזיק את כל המוצרים בסל, והסכומים כאן חלקיים.</div>}
+                {rareItems.length > 0 && <div className="partial-note-head">אפשר להשוות בלי מוצרים שחסרים בהרבה סניפים:</div>}
+                {rareItems.map(c => (
+                  <div key={c.barcode} className="partial-note-row">
+                    <span><strong>{c.name}</strong> · ב-{c.stores_with_item} מתוך {c.stores_total} סניפים</span>
+                    <button className="link-btn" onClick={() => compareWithout([...skipped, c.barcode])}>השוו בלעדיו</button>
+                  </div>
+                ))}
               </div>
             )}
-            {rareItems.map(c => (
-              <div key={c.barcode} className="partial-note" role="status">
-                <strong>{c.name}</strong> נמכר {c.stores_with_item / c.stores_total <= 0.4 ? "רק " : ""}ב-{c.stores_with_item} מתוך {c.stores_total} סניפים ({Math.round(100 * c.stores_with_item / c.stores_total)}%).{' '}
-                <button className="link-btn" onClick={() => compareWithout([c.barcode])}>השוו בלעדיו</button>
-              </div>
-            ))}
 
             {results.stores.length > 0 && (
               <div className="view-toggle" role="group" aria-label="תצוגה" style={{ marginBottom: 14 }}>
