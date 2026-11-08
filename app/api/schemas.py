@@ -87,6 +87,8 @@ class StoreResponse(BaseModel):
     address: Optional[str]
     latitude: Optional[float]
     longitude: Optional[float]
+    # How the position was found: 'address' (the branch itself) or 'city' (only the town's centre; the map leaves these out)
+    geo_precision: Optional[str] = None
     chain: ChainResponse
 
     class Config:

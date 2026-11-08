@@ -1,28 +1,31 @@
 import { ErrorState } from '../components/ErrorState';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
   ChevronDown, ChevronUp, TrendingUp,
-  Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal, SlidersHorizontal, X,
+  Truck, CheckCircle2, ExternalLink, Navigation, MapPin, ArrowLeftRight, Pencil, Check, MoreHorizontal, SlidersHorizontal, X, List, Map as MapIcon,
 } from 'lucide-react';
 import { compareBasket, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
-import { isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
+import { googleMapsLink, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { endsText } from '../lib/dealDays';
 import { LocationPrompt } from '../components/LocationPrompt';
-import { useCurrentCity } from '../lib/location';
+import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { useBasket } from '../context/BasketContext';
 import { useBasketLinkImport } from '../lib/useBasketLinkImport';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { BasketSwitcher } from '../components/BasketSwitcher';
 import { snapshotFrom, timeAgo } from '../lib/basketCompare';
-import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal } from '../types';
+import type { BasketCompareResponse, BasketSnapshot, BasketStoreTotal, StoreResponse } from '../types';
 import { track } from '../lib/track';
+
+// The map library is large: it is fetched only when someone opens the map
+const BasketMap = lazy(() => import('../components/BasketMap'));
 
 function CartPercentIcon() {
   // Shopping cart with a clear percent sign inside, drawn in currentColor so it follows
@@ -48,17 +51,10 @@ function CartPercentIcon() {
 
 function fmt(p: number | string) { return money(p); }
 
-// Same navigation links as the product page's store rows — Waze and Google Maps
-// both accept a free-text destination, so no store coordinates are needed.
-function storeNavQuery(store: { name: string; address?: string; city?: string; chain: { name: string } }): string {
-  return navQuery({ chain: store.chain.name, name: store.name, address: store.address, city: store.city }) || store.chain.name;
-}
-function wazeUrl(store: Parameters<typeof storeNavQuery>[0]): string {
-  return `https://waze.com/ul?q=${encodeURIComponent(storeNavQuery(store))}&navigate=yes`;
-}
-function googleMapsUrl(store: Parameters<typeof storeNavQuery>[0]): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(storeNavQuery(store))}`;
-}
+// Same navigation links as the product page's store rows (Waze and Google Maps both accept a free-text destination).
+const navText = (store: StoreResponse) => ({ chain: store.chain.name, name: store.name, address: store.address, city: store.city });
+const wazeUrl = (store: StoreResponse) => wazeLink(navText(store));
+const googleMapsUrl = (store: StoreResponse) => googleMapsLink(navText(store));
 
 /* ── Result card ─────────────────────────────────────────── */
 function ResultCard({ store, rank, nextTotal, minTotal }: {
@@ -343,7 +339,24 @@ export function BasketPage() {
   }
 
   const onLocatedCity = (found: string) => changeCity(matchCity(found, cities));
-  const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity);
+  const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
+  const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity, setMyCoords);
+  const [view, setView] = useState<'list' | 'map'>('list');
+  // The map shows every store, not just the 100 cheapest the list is cut to: fetched when the map is first opened
+  // for these results. Once opened it stays mounted (hidden) so switching back and forth keeps zoom and selection.
+  const [mapOpened, setMapOpened] = useState(false);
+  const [mapData, setMapData] = useState<{ source: BasketCompareResponse; stores: BasketStoreTotal[] } | null>(null);
+  useEffect(() => { if (view === 'map') setMapOpened(true); }, [view]);
+  useEffect(() => {
+    if (view !== 'map' || !results || mapData?.source === results) return;
+    let stale = false;
+    const done = (stores: BasketStoreTotal[]) => { if (!stale) setMapData({ source: results, stores }); };
+    compareBasket(items.map(i => ({ barcode: i.barcode, quantity: i.quantity })), { city, chain }, true)
+      .then(d => done(d.stores))
+      .catch(() => done(results.stores));         // the map still works with the stores the list has
+    return () => { stale = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, results]);
 
   // The winner's lead is measured against the next store that has as much of the basket as the winner.
   const nextStore = results && results.stores.length > 1
@@ -612,6 +625,13 @@ export function BasketPage() {
               </div>
             </div>
 
+            {results.stores.length > 0 && (
+              <div className="view-toggle" role="group" aria-label="תצוגה" style={{ marginBottom: 14 }}>
+                <button aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={14} strokeWidth={2.2} />רשימה</button>
+                <button aria-pressed={view === 'map'} onClick={() => setView('map')}><MapIcon size={14} strokeWidth={2.2} />מפה</button>
+              </div>
+            )}
+
             {results.stores.length === 0 && (
               <div className="empty-state" style={{ padding: '32px 0' }}>
                 <div className="empty-state-title">
@@ -628,7 +648,19 @@ export function BasketPage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
+            {(view === 'map' || mapOpened) && results.stores.length > 0 && (
+              <div style={{ display: view === 'map' ? 'block' : 'none' }}>
+                {mapData?.source === results ? (
+                  <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
+                    <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={view === 'map'} />
+                  </Suspense>
+                ) : (
+                  <div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />
+                )}
+              </div>
+            )}
+
+            <div style={{ display: view === 'map' ? 'none' : 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
               {results.stores.map((store, idx) => (
                 <ResultCard
                   key={`${store.store.id}-${idx}`}
