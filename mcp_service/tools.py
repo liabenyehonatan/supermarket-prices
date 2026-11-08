@@ -4,9 +4,11 @@ with a small dict: only what Claude needs to talk to the shopper, never the API'
 import asyncio
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from mcp_service import config
+from mcp_service.basket_link import build_basket_link
 from mcp_service.errors import ToolUserError
 from mcp_service.filters import get_cities, validate_chain, validate_city
 from mcp_service.text import clean_text
@@ -178,3 +180,101 @@ async def list_deals(api, city: str | None = None, chain: str | None = None, q: 
         "min_qty": d["min_qty"], "saving_pct": round(float(d["saving_pct"]) * 100), "ends_at": d.get("ends_at"),
         "stores": d["stores"],
     } for d in data["deals"]]}
+
+
+STALE_AFTER_HOURS = 36
+
+
+def _merge_items(items: list[dict]) -> list[tuple[str, int]]:
+    """Validated (barcode, qty) pairs in the order asked; a barcode listed twice has its quantities added (max 99)."""
+    if not items:
+        raise ToolUserError("הסל ריק: הוסף לפחות מוצר אחד.")
+    merged: dict[str, int] = {}
+    for item in items:
+        (barcode,) = _check_barcodes([str(item.get("barcode", ""))], 1)
+        qty = item.get("qty")
+        if not isinstance(qty, int) or isinstance(qty, bool) or not 1 <= qty <= config.MAX_QTY:
+            raise ToolUserError(f"כמות לא תקינה למוצר {barcode}: צריך מספר שלם בין 1 ל-{config.MAX_QTY}.")
+        merged[barcode] = min(config.MAX_QTY, merged.get(barcode, 0) + qty)
+    if len(merged) > config.MAX_BASKET_ITEMS:
+        raise ToolUserError(
+            f"עד {config.MAX_BASKET_ITEMS} מוצרים בבדיקה אחת. פצל את הרשימה לשתיים ובדוק כל חלק בנפרד.")
+    return list(merged.items())
+
+
+def _hours_since(stamp: str | None) -> float | None:
+    if not stamp:
+        return None
+    try:
+        when = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - when).total_seconds() / 3600
+
+
+async def compare_basket(api, items: list[dict], city: str | None = None, chain: str | None = None) -> dict:
+    """Total of the whole basket at the three cheapest branches. "Cheapest" means the cheapest COMPLETE basket
+    (a basket missing items always looks cheap); when no branch has everything, that is said. `shopping_list`
+    is the cheapest branch's list: `price` is the line's total in shekels (promotion applied)."""
+    pairs = _merge_items(items)
+    params: dict = {"limit": 3}
+    if chain:
+        params["chain"] = await validate_chain(api, chain)
+    if city:
+        params["city"] = await validate_city(api, city)
+    data = await api.post("/api/v1/basket/compare", [{"barcode": b, "quantity": q} for b, q in pairs], params)
+
+    asked = [b for b, _ in pairs]
+    shown = []
+    for s in data["stores"]:
+        lines = [{
+            "barcode": i["barcode"], "name": clean_text(i["product_name"]), "qty": i["quantity"],
+            "unit_price": _num(i["unit_price"]), "line_total": _num(i["line_total"]),
+            "promo": clean_text(i["promo"]["description"]) if i.get("promo") else None,
+        } for i in s["item_prices"]]
+        have = {l["barcode"] for l in lines}
+        shown.append({
+            "chain": clean_text(s["store"]["chain"]["name"]), "city": clean_text(s["store"].get("city")) or None,
+            "name": clean_text(s["store"].get("name")) or None, "total": _num(s["total_price"]),
+            "items_missing": s["items_missing"], "missing_barcodes": [b for b in asked if b not in have],
+            "savings": _num(s.get("savings")) or 0.0, "promotions_known": bool(s.get("promotions_known")),
+            "lines": lines, "_delivery": s["store"].get("delivery_url") or "",
+        })
+    shown.sort(key=lambda s: (s["items_missing"] > 0, s["total"]))   # complete baskets first, cheapest first
+
+    as_of = await prices_as_of(api)
+    complete = bool(shown) and shown[0]["items_missing"] == 0
+    warnings: list[str] = []
+    if not shown:
+        warnings.append("אף סניף לא מחזיק אף אחד מהמוצרים האלה (בסינון שביקשת).")
+    elif not complete:
+        warnings.append("אף סניף לא מחזיק את כל המוצרים בסל. המחירים הם של סלים חלקיים; ראה missing_barcodes.")
+    for s in shown:
+        if not s["promotions_known"]:
+            warnings.append(f"אין נתוני מבצעים עדכניים לסניף של {s['chain']}: המחיר שלו הוא מחיר מדף וייתכן שהוא גבוה מדי.")
+    age = _hours_since(as_of)
+    if age is not None and age > STALE_AFTER_HOURS:
+        warnings.append(f"נתוני המחירים עודכנו לפני כ-{round(age)} שעות; ייתכן שחלו שינויים.")
+
+    out: dict = {
+        "items_requested": len(pairs), "complete_basket_found": complete, "prices_as_of": as_of,
+        "max_savings": _num(data.get("max_savings")) or 0.0, "warnings": warnings,
+    }
+    if shown:
+        best = shown[0]
+        out["cheapest"] = {"chain": best["chain"], "city": best["city"], "total": best["total"], "complete": complete}
+        out["shopping_list"] = {
+            "chain": best["chain"], "city": best["city"],
+            "delivery_url": best["_delivery"] if best["_delivery"].startswith("http") else None,
+            "lines": [{"name": l["name"], "qty": l["qty"], "price": l["line_total"]} for l in best["lines"]],
+            "total": best["total"],
+        }
+    for s in shown:
+        s.pop("_delivery")
+    out["stores"] = shown
+    link = build_basket_link(config.SITE_URL, pairs)
+    if link:
+        out["open_in_site_url"] = link
+    return out
