@@ -187,20 +187,20 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   }, []);
 
   /** Goes to the opening area: around the visitor when known, otherwise where most of the branches are */
-  function fitToStores() {
+  function fitToStores(duration = 0) {
     const map = mapRef.current;
     if (!map) return;
     const all = data.current.mapped, me = data.current.myCoords;
     fitted.current = true;
     if (me && all.length > 0) {
-      showAround(me, 0);                              // where the visitor is, with the branches around them
+      showAround(me, duration);                       // where the visitor is, with the branches around them
     } else if (all.length > 0) {
       // Not located: the area where most of the branches are, not the corner the few cheapest ones happen to be in
       const lats = all.map(s => s.store.latitude!).sort((a, b) => a - b);
       const lngs = all.map(s => s.store.longitude!).sort((a, b) => a - b);
       const at = (v: number[], q: number) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
       const view = new maplibregl.LngLatBounds([at(lngs, 0.1), at(lats, 0.1)], [at(lngs, 0.9), at(lats, 0.9)]);
-      map.fitBounds(view, { padding: 40, maxZoom: 12, duration: 0 });
+      map.fitBounds(view, { padding: 40, maxZoom: 12, duration, essential: true });
     } else {
       draw();
       const b = map.getBounds();
@@ -238,7 +238,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   useEffect(() => {
     if (recenterKey === lastRecenter.current) return;
     lastRecenter.current = recenterKey;
-    fitToStores();
+    fitToStores(1100);                                // the map glides back, so it is clear where it went
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterKey]);
 
@@ -252,7 +252,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
       .slice(0, 6);
     const view = new maplibregl.LngLatBounds([me.lng, me.lat], [me.lng, me.lat]);
     near.forEach(s => view.extend([s.store.longitude!, s.store.latitude!]));
-    map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration });
+    map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration, essential: true });
   }
 
   /** `auto`: the map found the visitor by itself on opening; it stays quiet when that does not work. */
