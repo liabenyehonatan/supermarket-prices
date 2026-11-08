@@ -766,14 +766,15 @@ html { touch-action: manipulation; }
 /* Wide screens: the results list and the map side by side, the map staying in view while the list scrolls */
 @media (min-width: 1100px) {
   .results-area {
-    --results-w: min(1480px, calc(100vw - 48px));
+    --results-gap: 32px;
+    --results-w: min(1480px, calc(100vw - 2 * var(--results-gap)));
     width: var(--results-w); margin-inline: calc((100% - var(--results-w)) / 2);
     display: grid; grid-template-columns: minmax(400px, 5fr) minmax(0, 7fr); column-gap: 24px; align-items: start;
   }
   .results-area > * { grid-column: 1; min-width: 0; }
   .results-area > .results-map {
-    grid-column: 2; grid-row: 1 / span 12; align-self: start; position: sticky; top: calc(var(--header-h) + 12px);
+    grid-column: 2; grid-row: 1 / span 12; align-self: start; position: sticky; top: calc(var(--header-h) + var(--results-gap));
   }
   .results-area .basket-map { margin-bottom: 0; border: 2px solid #C3CAD3; border-radius: 20px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); }
-  .results-area .basket-map-canvas { height: min(560px, calc(100dvh - var(--header-h) - 120px)); min-height: 420px; }
+  .results-area .basket-map-canvas { height: calc(100dvh - var(--header-h) - 2 * var(--results-gap) - 4px); min-height: 420px; }
 }
