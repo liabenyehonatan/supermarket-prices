@@ -61,7 +61,9 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
 
   const mapped = useMemo(() => stores.filter(isMappable), [stores]);
   const hidden = stores.length - mapped.length;
-  const cheapestId = stores[0]?.store.id;
+  // The green pin is the cheapest complete basket among the branches the map can show (the very cheapest may have
+  // no exact position). `stores` is in comparison order, so it is the first complete one.
+  const cheapestId = mapped.find(s => s.items_missing === 0)?.store.id;
 
   // Everything the draw function reads is kept in a ref so the map's own event handlers never go stale
   const data = useRef({ mapped, cheapestId });
@@ -161,16 +163,21 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
     setSelected(null);
     for (const m of pins.current.values()) m.remove();
     pins.current.clear();
-    const view = new maplibregl.LngLatBounds();
-    mapped.slice(0, 25).forEach(s => view.extend([s.store.longitude!, s.store.latitude!]));
-    if (myCoords) view.extend([myCoords.lng, myCoords.lat]);
-    if (!view.isEmpty()) map.fitBounds(view, { padding: { top: 60, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration: 0 });
-    else draw();
+    if (myCoords && mapped.length > 0) {
+      showAround(myCoords, 0);                       // where the visitor is, with the branches around them
+    } else if (mapped.length > 0) {
+      // Not located: the area where most of the branches are, not the corner the few cheapest ones happen to be in
+      const lats = mapped.map(s => s.store.latitude!).sort((a, b) => a - b);
+      const lngs = mapped.map(s => s.store.longitude!).sort((a, b) => a - b);
+      const at = (v: number[], q: number) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
+      const view = new maplibregl.LngLatBounds([at(lngs, 0.1), at(lats, 0.1)], [at(lngs, 0.9), at(lats, 0.9)]);
+      map.fitBounds(view, { padding: 40, maxZoom: 12, duration: 0 });
+    } else draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped]);
 
   /** Where the visitor is, and the branches around them: the map goes there. Stays in the browser, nothing is sent. */
-  function showAround(me: Coords) {
+  function showAround(me: Coords, duration = 700) {
     const map = mapRef.current;
     if (!map) return;
     const near = [...data.current.mapped]
@@ -178,7 +185,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
       .slice(0, 6);
     const view = new maplibregl.LngLatBounds([me.lng, me.lat], [me.lng, me.lat]);
     near.forEach(s => view.extend([s.store.longitude!, s.store.latitude!]));
-    map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration: 700 });
+    map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration });
   }
 
   function locateMe() {
