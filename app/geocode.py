@@ -10,6 +10,8 @@ from typing import Optional
 
 import httpx
 
+from app import street_match
+
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 HEADERS = {"User-Agent": "sali-prices/1.0 (https://github.com/liabenyehonatan/supermarket-prices)"}
 # Israel, roughly: anything outside is a wrong match (a street of the same name abroad).
@@ -119,6 +121,10 @@ async def geocode(client: httpx.AsyncClient, address: Optional[str], city: Optio
             await sleep()
             if _city_centres[city]:
                 break
+        if not _city_centres[city]:
+            # The "city" field of the search wants an official name; a plain search takes the name as people write it
+            _city_centres[city] = await _search(client, q=f"{city}, ישראל")
+            await sleep()
 
     def plausible(hit: Optional[tuple[float, float]]) -> Optional[tuple[float, float]]:
         """A street of the same name in another town is the usual wrong match: reject it."""
@@ -159,6 +165,22 @@ async def geocode(client: httpx.AsyncClient, address: Optional[str], city: Optio
             await sleep()
             if hit:
                 return hit[0], hit[1], "street"
+            # Written another way than OpenStreetMap writes it (no vowel letters, surname first, abbreviation marks):
+            # find the street among the town's own street names, then ask for the house on it.
+            centre = _city_centres.get(city)
+            streets = await street_match.town_streets(client, city, centre) if centre else None
+            match = street_match.best_match(street, streets, near=centre) if streets else None
+            if match:
+                name, lat, lng = match
+                number = re.search(r"\d+", cleaned)
+                if number:
+                    hit = plausible(await _search(client, street=f"{number.group(0)} {name}", city=city_variants(city)[0]))
+                    await sleep()
+                    if hit:
+                        return hit[0], hit[1], "address"
+                hit = plausible((lat, lng))
+                if hit:
+                    return hit[0], hit[1], "street"
     elif address and not JUNK_ADDRESS.match(address) and name:
         # No city on record. A bare street ("צה\"ל 34") matches the wrong town, but the store name
         # usually carries the town ("חדרה חדש", "נתניה", "ירושלים תלפיות"): search with both.

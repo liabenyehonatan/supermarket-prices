@@ -111,3 +111,15 @@ async def store(session):
     session.add(st)
     await session.commit()
     return st
+
+
+@pytest.fixture(autouse=True)
+def _street_lists_are_not_shared(tmp_path, monkeypatch):
+    """The town street lists are cached in memory and on disk; a test must neither read nor leave any."""
+    from app import street_match
+    monkeypatch.setattr(street_match, "CACHE_DIR", tmp_path / "streets")
+    monkeypatch.setattr(street_match, "RETRY_PAUSE", 0)
+    monkeypatch.setattr(street_match, "POLITE_PAUSE", 0)
+    street_match._streets.clear()
+    yield
+    street_match._streets.clear()
