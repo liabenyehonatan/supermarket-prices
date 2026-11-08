@@ -1,5 +1,5 @@
 import { ErrorState } from '../components/ErrorState';
-import { useState, useRef, useEffect, lazy, Suspense } from 'react';
+import { useState, useRef, useEffect, lazy, Suspense, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBasket, Search, Minus, Plus, Trash2,
@@ -56,11 +56,12 @@ const wazeUrl = (store: StoreResponse) => wazeLink(navText(store));
 const googleMapsUrl = (store: StoreResponse) => googleMapsLink(navText(store));
 
 /* ── Result card ─────────────────────────────────────────── */
-function ResultCard({ store, rank, nextTotal, minTotal }: {
-  store: BasketStoreTotal; rank: number; nextTotal: number | null; minTotal: number;
+function ResultCard({ store, rank, nextTotal, minTotal, totalItems }: {
+  store: BasketStoreTotal; rank: number; nextTotal: number | null; minTotal: number; totalItems: number;
 }) {
   const [open, setOpen] = useState(false);
-  const isWinner  = rank === 0;
+  // Only a store with the whole basket can be "the cheapest": a partial basket always looks cheap
+  const isWinner  = rank === 0 && store.items_missing === 0;
   // How much cheaper this store is than the next one in the list (never against the dearest branch of all,
   // which would make the saving look bigger than it is).
   const lead      = nextTotal != null ? nextTotal - store.total_price : 0;
@@ -71,10 +72,11 @@ function ResultCard({ store, rank, nextTotal, minTotal }: {
       chain={store.store.chain.name}
       name={store.store.chain.name}
       city={storeSubtitle({ chain: store.store.chain.name, name: store.store.name, address: store.store.address, city: store.store.city })}
-      warning={[store.items_missing > 0 && `חסרים ${store.items_missing} מוצרים`, isEilat(store.store.city) && EILAT_NOTE].filter(Boolean).join(' · ') || undefined}
+      warning={[store.items_missing > 0 && `חסרים ${store.items_missing} מתוך ${totalItems} מוצרים · הסכום חלקי`, isEilat(store.store.city) && EILAT_NOTE].filter(Boolean).join(' · ') || undefined}
       price={store.total_price}
       isCheapest={isWinner}
-      diff={store.total_price - minTotal}
+      partial={store.items_missing > 0}
+      diff={store.items_missing > 0 ? undefined : store.total_price - minTotal}
       open={open}
       onToggle={() => setOpen(v => !v)}
       banner={isWinner && lead > 0.01 ? (
@@ -343,6 +345,8 @@ export function BasketPage() {
   // The map shows every store, not just the 100 cheapest the list is cut to: fetched when the map is first opened
   // for these results. Once opened it stays mounted (hidden) so switching back and forth keeps zoom and selection.
   const [mapOpened, setMapOpened] = useState(false);
+  // Branches that lack products look cheaper than they are: by default only complete baskets are compared
+  const [onlyComplete, setOnlyComplete] = useState(true);
   const [mapData, setMapData] = useState<{ source: BasketCompareResponse; stores: BasketStoreTotal[] } | null>(null);
   useEffect(() => { if (view === 'map') setMapOpened(true); }, [view]);
   useEffect(() => {
@@ -355,6 +359,13 @@ export function BasketPage() {
     return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, results]);
+
+  // Complete baskets only, unless none is complete or none is partial (then there is nothing to choose)
+  const partialCount = results ? results.stores.filter(s => s.items_missing > 0).length : 0;
+  const noCompleteStore = !!results && results.stores.length > 0 && partialCount === results.stores.length;
+  const hasPartial = partialCount > 0 && !noCompleteStore;
+  const filterComplete = onlyComplete && hasPartial;
+  const shownStores = results ? (filterComplete ? results.stores.filter(s => s.items_missing === 0) : results.stores) : [];
 
   // The winner's lead is measured against the next store that has as much of the basket as the winner.
   const nextStore = results && results.stores.length > 1
@@ -650,7 +661,8 @@ export function BasketPage() {
               <div style={{ display: view === 'map' ? 'block' : 'none' }}>
                 {mapData?.source === results ? (
                   <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
-                    <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={view === 'map'} />
+                    <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={view === 'map'}
+                      onlyComplete={onlyComplete} onOnlyCompleteChange={setOnlyComplete} />
                   </Suspense>
                 ) : (
                   <div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />
@@ -658,15 +670,30 @@ export function BasketPage() {
               </div>
             )}
 
+            {noCompleteStore && (
+              <div className="partial-note" role="status">אף סניף לא מחזיק את כל המוצרים בסל. הסכומים כאן חלקיים ולא להשוואה ישירה.</div>
+            )}
+            {hasPartial && (
+              <button className={`partial-toggle${filterComplete ? ' active' : ''}`} aria-pressed={filterComplete}
+                      style={{ display: view === 'map' ? 'none' : undefined }} onClick={() => setOnlyComplete(!filterComplete)}>
+                {filterComplete ? `רק סניפים עם כל המוצרים · מוסתרים ${partialCount}` : 'הציגו גם סניפים שחסרים בהם מוצרים'}
+              </button>
+            )}
+
             <div style={{ display: view === 'map' ? 'none' : 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
-              {results.stores.map((store, idx) => (
-                <ResultCard
-                  key={`${store.store.id}-${idx}`}
-                  store={store}
-                  rank={idx}
-                  nextTotal={nextTotal}
-                  minTotal={minTotal}
-                />
+              {shownStores.map((store, idx) => (
+                <Fragment key={`${store.store.id}-${idx}`}>
+                  {!filterComplete && !noCompleteStore && store.items_missing > 0 && (idx === 0 || shownStores[idx - 1].items_missing === 0) && (
+                    <div className="partial-divider">סניפים שחסרים בהם מוצרים · לא להשוואה ישירה</div>
+                  )}
+                  <ResultCard
+                    store={store}
+                    rank={idx}
+                    nextTotal={nextTotal}
+                    minTotal={minTotal}
+                    totalItems={results.total_items_requested}
+                  />
+                </Fragment>
               ))}
             </div>
           </>
