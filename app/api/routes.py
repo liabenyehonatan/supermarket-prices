@@ -870,9 +870,12 @@ async def compare_basket(
         total = sum((info["line_total"] for info in items_by_barcode.values()), Decimal("0")) - adjusted
         savings = sum((info["regular_line_total"] - info["line_total"] for info in items_by_barcode.values()), Decimal("0")) + adjusted
         ranked.append((len(barcodes) - len(items_by_barcode), total, savings, adjustments, r, items_by_barcode))
-    ranked.sort(key=lambda x: (x[0], x[1]))
+    # Eilat has no VAT (~17% cheaper), so within a tier it comes after the rest, and it never sets the savings range
+    in_eilat = lambda x: "אילת" in (x[4].city or "")
+    ranked.sort(key=lambda x: (x[0], in_eilat(x), x[1]))
 
-    complete_totals = [t for missing, t, _, _, _, _ in ranked if missing == 0]
+    complete = [x for x in ranked if x[0] == 0]
+    complete_totals = [x[1] for x in complete if not in_eilat(x)] or [x[1] for x in complete]
     if len(complete_totals) >= 2:
         max_savings = complete_totals[-1] - complete_totals[0]
         max_total = complete_totals[-1]

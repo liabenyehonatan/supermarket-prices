@@ -978,3 +978,26 @@ async def test_search_card_prices_never_take_eilat_as_the_cheapest(client, sessi
     assert float(summary["7290000000302"]["price"]) == 3.00
     units = (await client.post("/api/v1/products/unit-prices-batch", json=codes)).json()
     assert float(units["7290000000301"]["unit_price"]) == 6.00 and float(units["7290000000302"]["unit_price"]) == 3.00
+
+
+async def test_basket_compare_lists_eilat_after_the_rest_and_keeps_it_out_of_the_savings_range(client, session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="7290027600007", name="שופרסל")
+    session.add(chain)
+    await session.flush()
+    stores = [Store(chain_id=chain.id, store_id=str(n), name=f"סניף {n}", city=city)
+              for n, city in enumerate(["אילת", "תל אביב", "חיפה"], start=1)]
+    milk = Product(barcode="7290000000401", name="חלב", unit_of_measure="ליטר")
+    session.add_all(stores + [milk])
+    await session.flush()
+    now = datetime(2026, 11, 8)
+    for store, price in zip(stores, ["5.00", "6.00", "7.00"]):
+        session.add(Price(product_id=milk.id, store_id=store.id, price=price, price_updated_at=now, is_current=True))
+    await session.commit()
+
+    r = await client.post("/api/v1/basket/compare", json=[{"barcode": "7290000000401", "quantity": 1}])
+    body = r.json()
+    assert [s["store"]["city"] for s in body["stores"]] == ["תל אביב", "חיפה", "אילת"]
+    assert float(body["max_savings"]) == 1.0          # Tel Aviv vs Haifa, not measured against Eilat's 5.00
