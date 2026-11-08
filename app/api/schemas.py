@@ -198,6 +198,27 @@ class BasketStoreTotal(BaseModel):
     promo_adjustments: List[dict] = []
 
 
+class ItemCoverage(BaseModel):
+    """How many of the compared stores hold one basket product (the whole basket is only as complete as its rarest item)."""
+    barcode: str
+    name: str
+    stores_with_item: int
+    stores_total: int
+
+
+class SubstitutesRequest(BaseModel):
+    """Products a store lacks, to find something like them that it does sell."""
+    store_id: int
+    barcodes: Annotated[List[Annotated[str, StringConstraints(max_length=20)]], Field(max_length=20)]
+
+
+class Substitute(BaseModel):
+    barcode: str
+    name: str
+    price: Decimal
+    unit_of_measure: Optional[str] = None
+
+
 class BasketCompareResponse(BaseModel):
     """
     Returned when comparing a full shopping basket across all stores.
@@ -212,6 +233,8 @@ class BasketCompareResponse(BaseModel):
     # among complete baskets (what "you save" is measured against).
     total_stores: int = 0
     max_total: Decimal = Decimal("0")
+    # Per basket product: in how many of the stores (that hold at least one basket product) it is sold
+    item_coverage: List[ItemCoverage] = []
 
 class ChainListItem(BaseModel):
     """A chain as users know it (brands told apart), with how many stores we hold for it."""

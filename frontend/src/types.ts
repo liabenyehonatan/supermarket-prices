@@ -110,6 +110,23 @@ export interface BasketCompareResponse {
   /** All matching stores (the list above is cut to the best N) and the highest total among complete baskets. */
   total_stores?: number;
   max_total?: number | string;
+  /** In how many of the compared stores each basket product is sold */
+  item_coverage?: ItemCoverage[];
+}
+
+export interface ItemCoverage {
+  barcode: string;
+  name: string;
+  stores_with_item: number;
+  stores_total: number;
+}
+
+/** Something like a missing product that the store does sell (a suggestion, never part of a total) */
+export interface Substitute {
+  barcode: string;
+  name: string;
+  price: number | string;
+  unit_of_measure?: string | null;
 }
 
 export interface LocalBasketItem {

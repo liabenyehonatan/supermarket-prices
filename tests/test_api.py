@@ -1001,3 +1001,47 @@ async def test_basket_compare_lists_eilat_after_the_rest_and_keeps_it_out_of_the
     body = r.json()
     assert [s["store"]["city"] for s in body["stores"]] == ["תל אביב", "חיפה", "אילת"]
     assert float(body["max_savings"]) == 1.0          # Tel Aviv vs Haifa, not measured against Eilat's 5.00
+
+
+async def _two_stores_milk(session):
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="7290027600007", name="שופרסל")
+    session.add(chain)
+    await session.flush()
+    full = Store(chain_id=chain.id, store_id="1", name="סניף מלא", city="חיפה")
+    small = Store(chain_id=chain.id, store_id="2", name="סניף קטן", city="חיפה")
+    milk = Product(barcode="7290000000501", name="חלב תנובה 3% בקרטון 1 ליטר", unit_of_measure="ליטר")
+    milk_same = Product(barcode="7290000000502", name="חלב טרה 3% בקרטון 1 ליטר", unit_of_measure="ליטר")
+    milk_light = Product(barcode="7290000000503", name="חלב תנובה 1% בקרטון 1 ליטר", unit_of_measure="ליטר")
+    bread = Product(barcode="7290000000504", name="לחם פרוס אחוה", unit_of_measure="יחידה")
+    session.add_all([full, small, milk, milk_same, milk_light, bread])
+    await session.flush()
+    now = datetime(2026, 11, 8)
+    p = lambda prod, store, price: Price(product_id=prod.id, store_id=store.id, price=price, price_updated_at=now, is_current=True)
+    session.add_all([
+        p(milk, full, "6.50"), p(bread, full, "9.00"),
+        p(milk_same, small, "6.20"), p(milk_light, small, "5.90"), p(bread, small, "8.50"),   # the small store lacks the Tnuva 3%
+    ])
+    await session.commit()
+    return full, small
+
+
+async def test_basket_compare_tells_how_many_stores_hold_each_product(client, session):
+    await _two_stores_milk(session)
+    body = (await client.post("/api/v1/basket/compare", json=[
+        {"barcode": "7290000000501", "quantity": 1}, {"barcode": "7290000000504", "quantity": 1}])).json()
+    cover = {c["barcode"]: c for c in body["item_coverage"]}
+    assert cover["7290000000501"]["stores_with_item"] == 1 and cover["7290000000501"]["stores_total"] == 2
+    assert cover["7290000000504"]["stores_with_item"] == 2
+
+
+async def test_substitute_has_the_same_size_and_strength_and_is_sold_by_that_store(client, session):
+    _, small = await _two_stores_milk(session)
+    r = await client.post("/api/v1/basket/substitutes", json={"store_id": small.id, "barcodes": ["7290000000501", "7290000000504"]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["7290000000501"]["barcode"] == "7290000000502"        # the other brand's 3%, not the 1%
+    assert float(body["7290000000501"]["price"]) == 6.20
+    assert "7290000000504" not in body                                 # the small store has this bread itself: nothing to suggest

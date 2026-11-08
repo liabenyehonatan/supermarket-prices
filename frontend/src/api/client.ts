@@ -2,6 +2,7 @@ import type {
   Product,
   ProductCompareResponse,
   BasketCompareResponse,
+  Substitute,
 } from '../types';
 
 // Empty = same origin (the production default). The dev server proxies /api (see vite.config.ts).
@@ -173,4 +174,13 @@ export function compareBasket(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(items),
   }).then(res => ({ ...res, stores: eilatLast(res.stores, s => s.store.city, s => s.items_missing) }));  // Eilat has no VAT: never first
+}
+
+/** For products a store lacks: a similar one (same size and strength) that it sells. Keyed by the missing barcode. */
+export function fetchSubstitutes(storeId: number, barcodes: string[]): Promise<Record<string, Substitute>> {
+  return request<Record<string, Substitute>>('/api/v1/basket/substitutes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ store_id: storeId, barcodes }),
+  });
 }
