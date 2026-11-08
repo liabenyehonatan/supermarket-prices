@@ -55,7 +55,7 @@ export interface StoreResponse {
   address?: string;
   latitude?: number;
   longitude?: number;
-  /** 'address' = the branch itself, 'city' = only the town's centre (the map leaves those out) */
+  /** 'address' = the branch itself, 'street' = the right street, 'city' = only the town's centre (the map leaves those out) */
   geo_precision?: string | null;
   delivery_url?: string;
   chain: ChainResponse;

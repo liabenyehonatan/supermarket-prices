@@ -27,8 +27,8 @@ _ONLINE = r"(online|אונליין|אינטרנט|^\s*(https?://|www\.))"
 
 _NEXT = text(
     """
-    SELECT id, name, address, city FROM stores
-     WHERE latitude IS NULL
+    SELECT id, name, address, city, latitude FROM stores
+     WHERE (latitude IS NULL OR geo_precision = 'city')   -- a town-centre position is looked up again for a better one
        AND (geocoded_at IS NULL OR geocoded_at < now() - make_interval(days => :days))
      ORDER BY id
      LIMIT :batch
@@ -77,6 +77,13 @@ async def fill_geocodes(minutes: float, batch: int = 50) -> tuple[int, int]:
                     else:
                         errors = 0
                     result, precision = (hit[:2], hit[2]) if hit else (None, "none")
+                if result is None and row.latitude is not None:
+                    # Already at its town's centre and still nothing better: keep that, try again in a month
+                    async with AsyncSessionLocal() as session:
+                        async with session.begin():
+                            await session.execute(text("UPDATE stores SET geocoded_at = :t WHERE id = :i"), {"t": now, "i": row.id})
+                    missed += 1
+                    continue
                 async with AsyncSessionLocal() as session:
                     async with session.begin():
                         await session.execute(

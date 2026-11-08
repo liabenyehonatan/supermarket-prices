@@ -163,3 +163,65 @@ async def test_a_street_match_in_another_town_is_rejected_for_the_city_centre():
     async with _client(handler) as c:
         got = await geo.geocode(c, "שד' משה דיין 160", "ירושלים", _no_sleep)
     assert got == (31.77, 35.21, "city")
+
+
+def test_address_cleaning_and_spelling_variants():
+    assert geo.clean_address("רח' דרויאנוב 5") == "דרויאנוב 5"
+    assert geo.clean_address("שד' בן גוריון 3 (קומה 2)") == "שדרות בן גוריון 3"
+    assert geo.clean_address("רח.משה שפירא 28") == "משה שפירא 28"
+    assert geo.clean_address("14 רחוב הבנים") == "14 הבנים"
+    assert geo.clean_address("רח' שחר 79, ירושלים.") == "שחר 79"
+    assert geo.street_only("הזית פינת גלבוע") == "הזית"
+    assert geo.street_only("הרצל 12 א") == "הרצל"
+    assert geo.street_only("2 עמק האלה") == "עמק האלה"
+    assert "קרית אונו" in geo.city_variants("קריית-אונו") and "באר שבע" in geo.city_variants("באר-שבע")
+
+
+async def test_an_address_with_a_street_word_or_another_spelling_of_the_town_is_still_found():
+    geo._city_centres.clear()
+
+    def handler(request):
+        p = dict(request.url.params)
+        if p.get("city") == "קרית אונו" and "street" not in p:
+            return httpx.Response(200, json=[{"lat": "32.05", "lon": "34.86"}])
+        if p.get("street") == "שלמה המלך 2" and p.get("city") == "קרית אונו":
+            return httpx.Response(200, json=[{"lat": "32.0545", "lon": "34.8603"}])
+        return httpx.Response(200, json=[])
+
+    async with _client(handler) as c:
+        # the chain writes "רח'" and "קריית"; the search only knows the clean form
+        assert await geo.geocode(c, "רח' שלמה המלך 2", "קריית אונו", _no_sleep) == (32.0545, 34.8603, "address")
+
+
+async def test_the_street_alone_is_enough_when_the_house_number_is_not_found():
+    geo._city_centres.clear()
+
+    def handler(request):
+        p = dict(request.url.params)
+        if p.get("city") == "גדרה" and "street" not in p:
+            return httpx.Response(200, json=[{"lat": "31.81", "lon": "34.77"}])
+        if p.get("street") == "הזית" and p.get("city") == "גדרה":
+            return httpx.Response(200, json=[{"lat": "31.812", "lon": "34.771"}])
+        return httpx.Response(200, json=[])
+
+    async with _client(handler) as c:
+        assert await geo.geocode(c, "הזית פינת גלבוע", "גדרה", _no_sleep) == (31.812, 34.771, "street")
+
+
+async def test_a_store_at_its_town_centre_is_looked_up_again_and_keeps_that_position_when_nothing_better_comes(session, monkeypatch):
+    geo._city_centres.clear()
+    chain = Chain(chain_id="1", name="רשת")
+    session.add(chain)
+    await session.flush()
+    session.add(Store(chain_id=chain.id, store_id="1", name="סניף", address="רחוב שלא קיים 9", city="גדרה",
+                      latitude=31.81, longitude=34.77, geo_precision="city"))
+    await session.commit()
+
+    async def no_hit(client, address, city, sleep, name=None):
+        return None
+    monkeypatch.setattr(job, "geocode", no_hit)
+    monkeypatch.setattr(job, "PAUSE", 0)
+    await job.fill_geocodes(0.05)
+    store = (await session.execute(select(Store))).scalar_one()
+    await session.refresh(store)
+    assert (store.latitude, store.geo_precision) == (31.81, "city") and store.geocoded_at is not None

@@ -12,12 +12,12 @@ import { money } from '../lib/safe';
 import { saveMyCoords, type Coords } from '../lib/location';
 import type { BasketStoreTotal } from '../types';
 
-/** A branch we can put on the map: it has a position of its own, not just its town's centre. */
+/** A branch we can put on the map: it has a position of its own (its address, or at least its street), not just its town's centre. */
 export function isMappable(s: BasketStoreTotal): boolean {
   const { latitude, longitude, geo_precision } = s.store;
   // Only a position found from the branch's own address counts: 'city' (the town's centre) and rows from before
   // precision was recorded would stack several branches on one spot and look exact when they are not.
-  return latitude != null && longitude != null && geo_precision === 'address';
+  return latitude != null && longitude != null && (geo_precision === 'address' || geo_precision === 'street');
 }
 
 const MAX_PINS = 80;                 // pins drawn at once (the cheapest that fit; zooming in shows more)
