@@ -103,3 +103,11 @@ def test_any_host_is_accepted_when_site_url_is_empty():
     with http_client("") as c:
         r = c.post("/mcp", headers={**HEADERS, "Host": "203.0.113.5"}, json=LIST)
     assert r.status_code == 200
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "127.0.0.1:8001", "mcp:8001"])
+def test_internal_hosts_are_accepted_when_site_url_is_set(host):
+    # deploy/deploy.sh asks /mcp from inside the nginx container, whose Host is a bare 127.0.0.1
+    with http_client() as c:
+        r = c.post("/mcp", headers={**HEADERS, "Host": host}, json=LIST)
+    assert r.status_code == 200

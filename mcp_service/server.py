@@ -148,7 +148,7 @@ def _security(site_url: str) -> TransportSecuritySettings:
         return TransportSecuritySettings(enable_dns_rebinding_protection=False)
     return TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[host, "mcp:8001", "localhost:*", "127.0.0.1:*"],
+        allowed_hosts=[host, "mcp:8001", "localhost", "localhost:*", "127.0.0.1", "127.0.0.1:*"],
         allowed_origins=[f"https://{host}", f"http://{host}"],
     )
 
