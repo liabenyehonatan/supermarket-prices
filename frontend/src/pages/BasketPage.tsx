@@ -374,15 +374,25 @@ export function BasketPage() {
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
   const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity, setMyCoords);
   const [view, setView] = useState<'list' | 'map'>('list');
+  // On a wide screen the list and the map sit side by side (the map is the main thing); the switch is for phones
+  const [wide, setWide] = useState(() => window.matchMedia?.('(min-width: 1100px)').matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(min-width: 1100px)');
+    if (!mq) return;
+    const on = () => setWide(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const mapActive = wide || view === 'map';
   // The map shows every store, not just the 100 cheapest the list is cut to: fetched when the map is first opened
   // for these results. Once opened it stays mounted (hidden) so switching back and forth keeps zoom and selection.
   const [mapOpened, setMapOpened] = useState(false);
   // Branches that lack products look cheaper than they are: by default only complete baskets are compared
   const [onlyComplete, setOnlyComplete] = useState(true);
   const [mapData, setMapData] = useState<{ source: BasketCompareResponse; stores: BasketStoreTotal[] } | null>(null);
-  useEffect(() => { if (view === 'map') setMapOpened(true); }, [view]);
+  useEffect(() => { if (mapActive) setMapOpened(true); }, [mapActive]);
   useEffect(() => {
-    if (view !== 'map' || !results || mapData?.source === results) return;
+    if (!mapActive || !results || mapData?.source === results) return;
     let stale = false;
     const done = (stores: BasketStoreTotal[]) => { if (!stale) setMapData({ source: results, stores }); };
     compareBasket(items.filter(i => !skipped.includes(i.barcode)).map(i => ({ barcode: i.barcode, quantity: i.quantity })), { city, chain }, true)
@@ -390,7 +400,7 @@ export function BasketPage() {
       .catch(() => done(results.stores));         // the map still works with the stores the list has
     return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, results]);
+  }, [mapActive, results]);
 
   // Complete baskets only, unless none is complete or none is partial (then there is nothing to choose)
   const partialCount = results ? results.stores.filter(s => s.items_missing > 0).length : 0;
@@ -663,6 +673,7 @@ export function BasketPage() {
 
             {nowCompare && <CompareDelta prev={prevCompare} now={nowCompare} />}
 
+            <div className={wide ? 'results-area' : undefined}>
             <div className="section-header" style={{ marginBottom: 16 }}>
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -695,7 +706,7 @@ export function BasketPage() {
               </div>
             )}
 
-            {results.stores.length > 0 && (
+            {!wide && results.stores.length > 0 && (
               <div className="view-toggle" role="group" aria-label="תצוגה" style={{ marginBottom: 14 }}>
                 <button aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={14} strokeWidth={2.2} />רשימה</button>
                 <button aria-pressed={view === 'map'} onClick={() => setView('map')}><MapIcon size={14} strokeWidth={2.2} />מפה</button>
@@ -718,11 +729,11 @@ export function BasketPage() {
               </div>
             )}
 
-            {(view === 'map' || mapOpened) && results.stores.length > 0 && (
-              <div style={{ display: view === 'map' ? 'block' : 'none' }}>
+            {(mapActive || mapOpened) && results.stores.length > 0 && (
+              <div className="results-map" style={{ display: mapActive ? 'block' : 'none' }}>
                 {mapData?.source === results ? (
                   <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
-                    <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={view === 'map'}
+                    <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={mapActive}
                       onlyComplete={onlyComplete} onOnlyCompleteChange={setOnlyComplete} />
                   </Suspense>
                 ) : (
@@ -733,12 +744,12 @@ export function BasketPage() {
 
             {hasPartial && (
               <button className={`partial-toggle${filterComplete ? ' active' : ''}`} aria-pressed={filterComplete}
-                      style={{ display: view === 'map' ? 'none' : undefined }} onClick={() => setOnlyComplete(!filterComplete)}>
+                      style={{ display: mapActive && !wide ? 'none' : undefined }} onClick={() => setOnlyComplete(!filterComplete)}>
                 {filterComplete ? `רק סניפים עם כל המוצרים · מוסתרים ${partialCount}` : 'הציגו גם סניפים שחסרים בהם מוצרים'}
               </button>
             )}
 
-            <div style={{ display: view === 'map' ? 'none' : 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
+            <div style={{ display: mapActive && !wide ? 'none' : 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
               {shownStores.map((store, idx) => (
                 <Fragment key={`${store.store.id}-${idx}`}>
                   {!filterComplete && !noCompleteStore && store.items_missing > 0 && (idx === 0 || shownStores[idx - 1].items_missing === 0) && (
@@ -755,6 +766,7 @@ export function BasketPage() {
                   />
                 </Fragment>
               ))}
+            </div>
             </div>
           </>
         )}
