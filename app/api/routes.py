@@ -944,7 +944,7 @@ _NUMBERS = re.compile(r"\d+(?:[.,]\d+)?")
 async def basket_substitutes(payload: SubstitutesRequest, db: AsyncSession = Depends(get_db)):
     """
     A suggestion, never part of a total. "Similar" means a close name (trigram similarity), the same unit of measure
-    and the same numbers in the name (3% against 1% fat, 1 litre against 1.5 litres are different products). Products
+    and the same numbers in the name (a name without any number gets no suggestion) (3% against 1% fat, 1 litre against 1.5 litres are different products). Products
     with no such match are left out of the answer.
     """
     barcodes = [b for b in payload.barcodes if b]
@@ -967,8 +967,13 @@ async def basket_substitutes(payload: SubstitutesRequest, db: AsyncSession = Dep
             .limit(8)
         )).all()
         mine = sorted(_NUMBERS.findall(product.name))
+        if not mine:
+            continue      # a name with no size or strength ("חלב תנובה") says too little to tell what would be the same
+        words = set(product.name.split())
         for barcode, name, unit, price, _sim in rows:
-            if sorted(_NUMBERS.findall(name)) == mine:     # same size and strength
+            # same size and strength, and no more than a couple of words that the original does not have
+            # (a goat's milk is not a substitute for milk)
+            if sorted(_NUMBERS.findall(name)) == mine and len(set(name.split()) - words) <= 2:
                 answer[product.barcode] = Substitute(barcode=barcode, name=name, price=price, unit_of_measure=unit)
                 break
     return answer
