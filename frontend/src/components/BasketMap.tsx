@@ -43,11 +43,14 @@ function priceText(total: number): string {
  * lack some of the basket in grey. `stores` is in the comparison's order (complete baskets first, cheapest first),
  * and that order decides which pins win when they would overlap.
  */
-export default function BasketMap({ stores, myCoords, onCoords, visible }: {
+export default function BasketMap({ stores, myCoords, onCoords, visible, onlyComplete: onlyCompleteProp, onOnlyCompleteChange }: {
   stores: BasketStoreTotal[];
   /** False while the list is shown: the map stays mounted but has no size */
   visible: boolean;
   myCoords: Coords | null;
+  /** Shared with the list: show only branches that have the whole basket. Without these the map keeps its own switch. */
+  onlyComplete?: boolean;
+  onOnlyCompleteChange?: (on: boolean) => void;
   /** The visitor's position, when the map's own button found it */
   onCoords: (coords: Coords) => void;
 }) {
@@ -62,7 +65,9 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
 
   // Baskets that lack products look cheaper than they are, so by default only complete ones are drawn
   // (when there is at least one complete basket on the map; otherwise the partial ones are all there is).
-  const [onlyComplete, setOnlyComplete] = useState(true);
+  const [ownOnlyComplete, setOwnOnlyComplete] = useState(true);
+  const onlyComplete = onlyCompleteProp ?? ownOnlyComplete;
+  const setOnlyComplete = (on: boolean) => (onOnlyCompleteChange ?? setOwnOnlyComplete)(on);
   const located = useMemo(() => stores.filter(isMappable), [stores]);
   const partialCount = located.filter(s => s.items_missing > 0).length;
   const filterComplete = onlyComplete && partialCount > 0 && partialCount < located.length;
@@ -318,7 +323,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
       </div>
 
       {partialCount > 0 && partialCount < located.length && (
-        <button className={`map-filter${filterComplete ? ' active' : ''}`} aria-pressed={filterComplete} onClick={() => setOnlyComplete(v => !v)}>
+        <button className={`map-filter${filterComplete ? ' active' : ''}`} aria-pressed={filterComplete} onClick={() => setOnlyComplete(!filterComplete)}>
           {filterComplete ? `רק סניפים עם כל המוצרים · מוסתרים ${partialCount}` : 'הציגו גם סניפים שחסרים בהם מוצרים'}
         </button>
       )}

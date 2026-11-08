@@ -10,7 +10,7 @@ function fmt(p: number | string) { return `₪${Number(p).toFixed(2)}`; }
  */
 export function StoreRow({
   chain, name, city, warning, promo, price, isCheapest, cheapestLabel = 'הכי זול', diff,
-  open, onToggle, banner, children,
+  open, onToggle, banner, children, partial,
 }: {
   chain: string;
   name: string;
@@ -26,11 +26,13 @@ export function StoreRow({
   onToggle: () => void;
   /** Optional strip above the row (e.g. "you saved ₪X") */
   banner?: React.ReactNode;
+  /** The store lacks some of the basket: drawn with a red outline, its price is not a like-for-like total */
+  partial?: boolean;
   /** Details shown when the row is expanded */
   children?: React.ReactNode;
 }) {
   return (
-    <div className={`store-row${isCheapest ? ' cheapest' : ''}`}>
+    <div className={`store-row${isCheapest ? ' cheapest' : ''}${partial ? ' partial' : ''}`}>
       {banner}
       <button className="store-row-main" onClick={onToggle} aria-expanded={open}>
         <ChainLogo name={chain} size={44} />
