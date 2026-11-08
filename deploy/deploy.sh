@@ -46,6 +46,9 @@ if [ "${#services[@]}" -gt 0 ]; then
   $DOCKER compose up -d --build "${services[@]}"
 fi
 if [ "${#services[@]}" -gt 0 ] || echo "$changed" | grep -qE '^nginx/'; then
+  # nginx keeps each page's HTML for up to 5 minutes, and that HTML names the previous build's files (index-<hash>.js),
+  # which a new build deletes: a page opened in those minutes is blank. Empty the cache before nginx restarts.
+  $DOCKER compose exec -T nginx sh -c 'rm -rf /var/cache/nginx/api/*' || true
   if echo "$changed" | grep -q '^docker-compose\.yml'; then
     # a changed compose file (a new volume, say) only reaches nginx by recreating it; that also gives it fresh addresses
     $DOCKER compose up -d --force-recreate nginx
