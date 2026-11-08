@@ -73,6 +73,32 @@ def expand_abbreviations(text: str) -> str:
     return text
 
 
+def clean_address(address: str) -> str:
+    """"רח' דרויאנוב 5" / "רח.משה שפירא 28" / "14 רחוב הבנים" -> the street and number alone: street words,
+    brackets, a trailing town and stray punctuation are things the search does not know."""
+    address = re.sub(r"\([^)]*\)", " ", address)
+    address = address.replace('"', "").replace("׳", "'").replace("’", "'")
+    address = re.sub(r"(?<![\w])(שד'|שד\.)\s*", "שדרות ", address)
+    address = re.sub(r"(?<![\w])(רח'|רח\.|רחוב|רח)(?![\w])\.?\s*", " ", address)
+    address = address.split(",")[0]                     # "שחר 79, ירושלים." -> "שחר 79"
+    return re.sub(r"\s+", " ", address).strip(" .,-")
+
+
+def street_only(address: str) -> str:
+    """The street without the house number or a "corner of" part: "הזית פינת גלבוע" -> "הזית", "הרצל 12 א" -> "הרצל"."""
+    address = re.split(r"\s+(?:פינת|ליד|מול|פינה)\s+", address)[0]
+    address = re.sub(r"\s+\d.*$", "", address)           # "הרצל 12 א" -> "הרצל"
+    address = re.sub(r"^\d+\s+", "", address)            # "12 הרצל" -> "הרצל"
+    return address.strip(" ,-")
+
+
+def city_variants(city: str) -> list[str]:
+    """The same town is written in several ways: "קריית"/"קרית", with a hyphen or without."""
+    base = city.replace("-", " ").replace("־", " ").replace("  ", " ").strip()
+    variants = [city, base, base.replace("קריית", "קרית"), base.replace("קרית", "קריית"), base.replace("'", "")]
+    return list(dict.fromkeys(v for v in variants if v))
+
+
 def address_in_name(name: Optional[str]) -> str:
     """Some chains (City Market) publish no address, but the name ends with it:
     'סיטי מרקט הרצוג גבעתיים, הרצוג 23 גבעתיים' -> 'הרצוג 23 גבעתיים'."""
@@ -83,12 +109,16 @@ def address_in_name(name: Optional[str]) -> str:
 
 async def geocode(client: httpx.AsyncClient, address: Optional[str], city: Optional[str],
                   sleep, name: Optional[str] = None) -> Optional[tuple[float, float, str]]:
-    """(lat, lng, 'address'|'city') or None. `sleep` is awaited between requests (rate limit)."""
+    """(lat, lng, 'address'|'street'|'city') or None. 'street': the right street, not the house number. `sleep` is awaited between requests (rate limit)."""
     address = (address or "").strip()
     city = (city or "").strip()
     if city and city not in _city_centres:
-        _city_centres[city] = await _search(client, city=city)
-        await sleep()
+        _city_centres[city] = None
+        for town in city_variants(city)[:3]:
+            _city_centres[city] = await _search(client, city=town)
+            await sleep()
+            if _city_centres[city]:
+                break
 
     def plausible(hit: Optional[tuple[float, float]]) -> Optional[tuple[float, float]]:
         """A street of the same name in another town is the usual wrong match: reject it."""
@@ -105,19 +135,30 @@ async def geocode(client: httpx.AsyncClient, address: Optional[str], city: Optio
             if hit:
                 return hit[0], hit[1], "address"
     if address and not JUNK_ADDRESS.match(address) and city:
-        hit = plausible(await _search(client, street=address, city=city))
-        await sleep()
-        if hit is None:
-            hit = plausible(await _search(client, q=f"{address}, {city}"))
-            await sleep()
-        if hit is None:
+        cleaned = clean_address(address)
+        # Each way of writing the street and the town, most exact first. A street of the same name in another town
+        # is the usual wrong match, so `plausible` rejects anything far from the town's centre.
+        for town in city_variants(city)[:2]:
+            for addr in dict.fromkeys([address, cleaned]):
+                for params in ({"street": addr, "city": town}, {"q": f"{addr}, {town}"}):
+                    hit = plausible(await _search(client, **params))
+                    await sleep()
+                    if hit:
+                        return hit[0], hit[1], "address"
             # "הסנה 15 א תעשיה": keep the street and number, drop trailing words that confuse the search
-            short = re.match(r"^(\D+?\s\d+)", address)
-            if short and short.group(1) != address:
-                hit = plausible(await _search(client, street=short.group(1), city=city))
+            short = re.match(r"^(\D+?\s\d+)", cleaned)
+            if short and short.group(1) != cleaned:
+                hit = plausible(await _search(client, street=short.group(1), city=town))
                 await sleep()
-        if hit:
-            return hit[0], hit[1], "address"
+                if hit:
+                    return hit[0], hit[1], "address"
+        # The street itself, without the number: the pin lands on the right street, which is good enough on a map.
+        street = street_only(cleaned)
+        if len(street) >= 3:
+            hit = plausible(await _search(client, street=street, city=city_variants(city)[0]))
+            await sleep()
+            if hit:
+                return hit[0], hit[1], "street"
     elif address and not JUNK_ADDRESS.match(address) and name:
         # No city on record. A bare street ("צה\"ל 34") matches the wrong town, but the store name
         # usually carries the town ("חדרה חדש", "נתניה", "ירושלים תלפיות"): search with both.
