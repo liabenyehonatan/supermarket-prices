@@ -57,12 +57,14 @@ const wazeUrl = (store: StoreResponse) => wazeLink(navText(store));
 const googleMapsUrl = (store: StoreResponse) => googleMapsLink(navText(store));
 
 /* ── Result card ─────────────────────────────────────────── */
-function ResultCard({ store: row, isWinner, nextTotal, minTotal, totalItems, basketItems, fetchDetail }: {
+function ResultCard({ store: row, isWinner, nextTotal, minTotal, totalItems, basketItems, fetchDetail, approx }: {
   store: BasketStoreTotal; isWinner: boolean; nextTotal: number | null; minTotal: number; totalItems: number;
   /** The products of this comparison, to tell which ones this store does not sell */
   basketItems: { barcode: string; name: string }[];
   /** Asks for the item lines of one store (the list beside the map only has totals until a card is opened) */
   fetchDetail?: (storeId: number) => Promise<BasketStoreTotal | null>;
+  /** We only know this store's town, not where in it: said under its name */
+  approx?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<BasketStoreTotal | null>(null);
@@ -97,7 +99,7 @@ function ResultCard({ store: row, isWinner, nextTotal, minTotal, totalItems, bas
     <StoreRow
       chain={store.store.chain.name}
       name={store.store.chain.name}
-      city={storeSubtitle({ chain: store.store.chain.name, name: store.store.name, address: store.store.address, city: store.store.city })}
+      city={`${storeSubtitle({ chain: store.store.chain.name, name: store.store.name, address: store.store.address, city: store.store.city })}${approx ? ' · מיקום משוער' : ''}`}
       warning={[store.items_missing > 0 && `חסרים ${store.items_missing} מתוך ${totalItems} מוצרים · הסכום חלקי`, isEilat(store.store.city) && EILAT_NOTE].filter(Boolean).join(' · ') || undefined}
       price={store.total_price}
       isCheapest={isWinner}
@@ -447,6 +449,17 @@ export function BasketPage() {
           .sort((a, b) => a.items_missing - b.items_missing || Number(a.total_price) - Number(b.total_price)),
         s => s.store.city, s => s.items_missing)
     : [];
+  // Stores we can place only in their town (not on the street): not pins, but they are in the list after the placed ones,
+  // when their town's centre is in the view, so no store silently disappears beside the map
+  const approxInView = split && mapReady
+    ? eilatLast(
+        mapData!.stores
+          .filter(s => s.store.geo_precision === 'city' && s.store.latitude != null && s.store.longitude != null
+            && s.store.latitude >= mapBounds!.south && s.store.latitude <= mapBounds!.north
+            && s.store.longitude! >= mapBounds!.west && s.store.longitude! <= mapBounds!.east)
+          .sort((a, b) => a.items_missing - b.items_missing || Number(a.total_price) - Number(b.total_price)),
+        s => s.store.city, s => s.items_missing)
+    : [];
   const pool = results ? (split ? inView : results.stores) : [];
   const listLoading = !!results && split && !mapReady;
   // Complete baskets only, unless none is complete or none is partial (then there is nothing to choose)
@@ -455,6 +468,7 @@ export function BasketPage() {
   const hasPartial = partialCount > 0 && !noCompleteStore;
   const filterComplete = onlyComplete && hasPartial;
   const shownStores = (filterComplete ? pool.filter(s => s.items_missing === 0) : pool).slice(0, 100);
+  const shownApprox = (filterComplete ? approxInView.filter(s => s.items_missing === 0) : approxInView).slice(0, 30);
 
   // A product most stores do not sell makes almost every basket partial: offer the comparison without it
   // With no complete basket at all, the rarest products are what is in the way, however common each one is alone
@@ -736,7 +750,7 @@ export function BasketPage() {
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TrendingUp size={20} strokeWidth={2} color="var(--green-600)" />
                   {split
-                    ? (listLoading ? 'טוען סניפים...' : `${pool.length} סניפים באזור שבמפה · ממוין מהזול ליקר`)
+                    ? (listLoading ? 'טוען סניפים...' : `${pool.length} סניפים באזור שבמפה${approxInView.length > 0 ? ` (ועוד ${approxInView.length} במיקום משוער)` : ''} · ממוין מהזול ליקר`)
                     : <>{results.total_stores ?? results.stores.length} סניפים · ממוין מהזול ליקר{results.total_stores != null && results.total_stores > results.stores.length ? ` (מוצגים ${results.stores.length} הזולים)` : ''}</>}
                 </div>
                 <div className="section-subtitle">
@@ -822,7 +836,7 @@ export function BasketPage() {
                   </div>
                 </div>
               ))}
-              {split && mapReady && shownStores.length === 0 && (
+              {split && mapReady && shownStores.length === 0 && shownApprox.length === 0 && (
                 <div className="empty-state" style={{ padding: '28px 0' }}>
                   <div className="empty-state-title">אין סניפים באזור הזה</div>
                   <div className="empty-state-desc">{pool.length > 0 ? 'כל הסניפים כאן חסרים בהם מוצרים. אפשר להציג גם אותם.' : 'אפשר להזיז את המפה, או לחזור לאזור שנפתחה עליו.'}</div>
@@ -851,6 +865,25 @@ export function BasketPage() {
                   </div>
                 </Fragment>
               ))}
+              {shownApprox.length > 0 && (
+                <>
+                  <div className="partial-divider">סניפים שאנחנו מכירים רק לפי העיר · מיקום משוער, בלי סיכה במפה</div>
+                  {shownApprox.map(store => (
+                    <div key={`approx-${store.store.id}`} id={`store-card-${store.store.id}`} className="store-card-wrap">
+                      <ResultCard
+                        store={store}
+                        isWinner={false}
+                        nextTotal={null}
+                        minTotal={minTotal}
+                        totalItems={results.total_items_requested}
+                        basketItems={basketItems}
+                        fetchDetail={fetchDetail}
+                        approx
+                      />
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
             </div>
           </>

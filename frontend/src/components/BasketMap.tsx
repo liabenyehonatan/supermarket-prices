@@ -395,7 +395,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
       )}
 
       {hidden > 0 && mapped.length > 0 && (
-        <div className="map-hidden-note">{hidden} סניפים בלי מיקום מדויק מופיעים רק ברשימה</div>
+        <div className="map-hidden-note">{hidden} סניפים בלי מיקום מדויק לא מסומנים במפה (הם ברשימה)</div>
       )}
     </div>
   );
