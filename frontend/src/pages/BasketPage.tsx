@@ -314,6 +314,9 @@ export function BasketPage() {
   const [cities, setCities] = useState<string[]>([]);
   useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
   const [showAllItems, setShowAllItems] = useState(false);
+  // Linking list and map: the card under the pointer lights its pin; a pin picked on the map scrolls to its card
+  const [hoverId, setHoverId] = useState<number | null>(null);
+  const [focusId, setFocusId] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     if (!menuOpen) return;
@@ -384,6 +387,8 @@ export function BasketPage() {
     return () => mq.removeEventListener('change', on);
   }, []);
   const mapActive = wide || view === 'map';
+  // On a wide screen the results and the map come first: the basket's own items fold away until asked for
+  const shownCount = wide && results ? 0 : COLLAPSED_COUNT;
   // The map shows every store, not just the 100 cheapest the list is cut to: fetched when the map is first opened
   // for these results. Once opened it stays mounted (hidden) so switching back and forth keeps zoom and selection.
   const [mapOpened, setMapOpened] = useState(false);
@@ -500,7 +505,7 @@ export function BasketPage() {
         {/* Item list */}
         {items.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-            {(editing || showAllItems ? items : items.slice(0, COLLAPSED_COUNT)).map(item => (
+            {(editing || showAllItems ? items : items.slice(0, shownCount)).map(item => (
               <SwipeRow
                 key={item.barcode}
                 className={`basket-item${editing ? ' editing' : ''}${selected.has(item.barcode) ? ' selected' : ''}`}
@@ -561,11 +566,11 @@ export function BasketPage() {
                 </div>
               </SwipeRow>
             ))}
-            {!editing && items.length > COLLAPSED_COUNT && (
+            {!editing && items.length > shownCount && (
               <button className="basket-more" onClick={() => setShowAllItems(v => !v)} aria-expanded={showAllItems}>
                 {showAllItems
                   ? <><ChevronUp size={15} strokeWidth={2} /> הציגו פחות</>
-                  : <><ChevronDown size={15} strokeWidth={2} /> הציגו עוד {items.length - COLLAPSED_COUNT} מוצרים</>}
+                  : <><ChevronDown size={15} strokeWidth={2} /> {shownCount === 0 ? `הציגו את ${items.length} המוצרים בסל` : `הציגו עוד ${items.length - shownCount} מוצרים`}</>}
               </button>
             )}
           </div>
@@ -734,7 +739,8 @@ export function BasketPage() {
                 {mapData?.source === results ? (
                   <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
                     <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={mapActive}
-                      onlyComplete={onlyComplete} onOnlyCompleteChange={setOnlyComplete} />
+                      onlyComplete={onlyComplete} onOnlyCompleteChange={setOnlyComplete}
+                      highlightId={hoverId} onSelectStore={id => { setFocusId(id); if (id != null && wide) document.getElementById(`store-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
                   </Suspense>
                 ) : (
                   <div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />
@@ -755,6 +761,9 @@ export function BasketPage() {
                   {!filterComplete && !noCompleteStore && store.items_missing > 0 && (idx === 0 || shownStores[idx - 1].items_missing === 0) && (
                     <div className="partial-divider">סניפים שחסרים בהם מוצרים · לא להשוואה ישירה</div>
                   )}
+                  <div id={`store-card-${store.store.id}`} className={`store-card-wrap${focusId === store.store.id ? ' card-focus' : ''}`}
+                       onMouseEnter={wide ? () => setHoverId(store.store.id) : undefined}
+                       onMouseLeave={wide ? () => setHoverId(null) : undefined}>
                   <ResultCard
                     store={store}
                     rank={idx}
@@ -764,6 +773,7 @@ export function BasketPage() {
                     missing={items.filter(i => !skipped.includes(i.barcode) && !store.item_prices.some(p => p.barcode === i.barcode))
                       .map(i => ({ barcode: i.barcode, name: i.name }))}
                   />
+                  </div>
                 </Fragment>
               ))}
             </div>

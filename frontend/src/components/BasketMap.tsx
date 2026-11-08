@@ -43,7 +43,7 @@ function priceText(total: number): string {
  * lack some of the basket in grey. `stores` is in the comparison's order (complete baskets first, cheapest first),
  * and that order decides which pins win when they would overlap.
  */
-export default function BasketMap({ stores, myCoords, onCoords, visible, onlyComplete: onlyCompleteProp, onOnlyCompleteChange }: {
+export default function BasketMap({ stores, myCoords, onCoords, visible, onlyComplete: onlyCompleteProp, onOnlyCompleteChange, onSelectStore, highlightId }: {
   stores: BasketStoreTotal[];
   /** False while the list is shown: the map stays mounted but has no size */
   visible: boolean;
@@ -51,6 +51,10 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   /** Shared with the list: show only branches that have the whole basket. Without these the map keeps its own switch. */
   onlyComplete?: boolean;
   onOnlyCompleteChange?: (on: boolean) => void;
+  /** Told when the visitor picks (or closes) a branch on the map, so the list can scroll to it */
+  onSelectStore?: (id: number | null) => void;
+  /** The branch whose list card the pointer is over: its pin is drawn emphasised */
+  highlightId?: number | null;
   /** The visitor's position, when the map's own button found it */
   onCoords: (coords: Coords) => void;
 }) {
@@ -58,6 +62,8 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   const mapRef = useRef<maplibregl.Map | null>(null);
   const pins = useRef(new Map<number, maplibregl.Marker>());
   const selectedRef = useRef<number | null>(null);
+  const highlightRef = useRef<number | null>(null);
+  highlightRef.current = highlightId ?? null;
   const [selected, setSelected] = useState<BasketStoreTotal | null>(null);
   const [failed, setFailed] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -131,10 +137,10 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
       const el = marker.getElement();
       const pill = el.firstElementChild as HTMLButtonElement;
       const isBest = s.store.id === best && s.items_missing === 0;
-      pill.className = `map-pin${isBest ? ' map-pin-best' : ''}${s.items_missing > 0 ? ' map-pin-partial' : ''}${s.store.id === selectedRef.current ? ' map-pin-selected' : ''}`;
+      pill.className = `map-pin${isBest ? ' map-pin-best' : ''}${s.items_missing > 0 ? ' map-pin-partial' : ''}${s.store.id === selectedRef.current ? ' map-pin-selected' : ''}${s.store.id === highlightRef.current ? ' map-pin-hover' : ''}`;
       pill.textContent = priceText(s.total_price);
       pill.setAttribute('aria-label', `${s.store.chain.name}, ${money(s.total_price)}${s.items_missing > 0 ? `, חסרים ${s.items_missing} מוצרים` : ''}`);
-      el.style.zIndex = s.store.id === selectedRef.current ? '3' : isBest ? '2' : '1';
+      el.style.zIndex = s.store.id === selectedRef.current ? '3' : s.store.id === highlightRef.current ? '3' : isBest ? '2' : '1';
     }
   }
 
@@ -142,6 +148,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
     selectedRef.current = s ? s.store.id : null;
     setSelected(s);
     draw();
+    onSelectStore?.(s ? s.store.id : null);
   }
 
   // Create the map once
@@ -239,6 +246,8 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   }
 
   // Shown again after the list: the map was laid out while hidden
+  useEffect(() => { draw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [highlightId]);
+
   const autoLocated = useRef(false);
   useEffect(() => {
     if (!visible) return;
