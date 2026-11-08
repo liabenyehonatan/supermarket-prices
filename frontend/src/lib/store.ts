@@ -65,3 +65,11 @@ export function storeSubtitle(s: StoreText): string {
 export function navQuery(s: StoreText): string {
   return unique([s.chain, s.name, s.address, cityName(s.city)]).join(', ');
 }
+
+/** Navigate-to links for a branch (both take a free-text destination). */
+export function wazeLink(s: StoreText): string {
+  return `https://waze.com/ul?q=${encodeURIComponent(navQuery(s) || s.chain)}&navigate=yes`;
+}
+export function googleMapsLink(s: StoreText): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(navQuery(s) || s.chain)}`;
+}

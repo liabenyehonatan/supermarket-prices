@@ -18,3 +18,7 @@ celerybeat-schedule*
 # Build output
 frontend/.next/
 frontend/dist/
+
+# Map tiles are too big for git: dev copy in frontend/public/tiles, server copy in deploy/tiles (see deploy/tiles/README.md)
+frontend/public/tiles/
+deploy/tiles/*.pmtiles

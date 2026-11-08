@@ -4,3 +4,4 @@ node_modules/
 .env.local
 .claude/
 dist/
+public/tiles/

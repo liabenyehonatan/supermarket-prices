@@ -181,6 +181,7 @@ services:
       - "${NGINX_BIND:-0.0.0.0:80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/tiles:/srv/tiles:ro          # the map file (not in git, see deploy/tiles/README.md)
       - nginx_cache:/var/cache/nginx/api
     depends_on:
       - api
