@@ -784,3 +784,5 @@ html { touch-action: manipulation; }
 .store-card-wrap { animation: card-in 260ms var(--ease-standard, ease) both; }
 @keyframes card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .store-card-wrap { animation: none; } }
+.results-area, .results-area > * { transition: opacity 0.2s; }
+.is-refreshing { opacity: 0.55; pointer-events: none; }
