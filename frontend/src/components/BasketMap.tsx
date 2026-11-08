@@ -60,8 +60,14 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  const mapped = useMemo(() => stores.filter(isMappable), [stores]);
-  const hidden = stores.length - mapped.length;
+  // Baskets that lack products look cheaper than they are, so by default only complete ones are drawn
+  // (when there is at least one complete basket on the map; otherwise the partial ones are all there is).
+  const [onlyComplete, setOnlyComplete] = useState(true);
+  const located = useMemo(() => stores.filter(isMappable), [stores]);
+  const partialCount = located.filter(s => s.items_missing > 0).length;
+  const filterComplete = onlyComplete && partialCount > 0 && partialCount < located.length;
+  const mapped = useMemo(() => filterComplete ? located.filter(s => s.items_missing === 0) : located, [located, filterComplete]);
+  const hidden = stores.length - located.length;
   // Everything the draw function reads is kept in a ref so the map's own event handlers never go stale
   const data = useRef({ mapped, myCoords });
   data.current = { mapped, myCoords };
@@ -199,11 +205,12 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
     map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration });
   }
 
-  function locateMe() {
+  /** `auto`: the map found the visitor by itself on opening; it stays quiet when that does not work. */
+  function locateMe(auto = false) {
     setGeoError(null);
     if (myCoords && !locating) { showAround(myCoords); }
     if (!window.isSecureContext || !('geolocation' in navigator)) {
-      setGeoError('המכשיר או הדפדפן לא מאפשרים לאתר מיקום בדף הזה.');
+      if (!auto) setGeoError('המכשיר או הדפדפן לא מאפשרים לאתר מיקום בדף הזה.');
       return;
     }
     setLocating(true);
@@ -217,6 +224,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
       },
       err => {
         setLocating(false);
+        if (auto) return;
         setGeoError(err.code === err.PERMISSION_DENIED
           ? 'הגישה למיקום חסומה. אפשר לאפשר אותה בהגדרות הדפדפן.'
           : 'לא הצלחנו לאתר אותך. נסו שוב.');
@@ -226,8 +234,16 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
   }
 
   // Shown again after the list: the map was laid out while hidden
+  const autoLocated = useRef(false);
   useEffect(() => {
-    if (visible) mapRef.current?.resize();
+    if (!visible) return;
+    mapRef.current?.resize();
+    // The first time the map is seen without a known position, find the visitor: nobody should have to look for themselves
+    if (!myCoords && !autoLocated.current) {
+      autoLocated.current = true;
+      locateMe(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   // The visitor's own position
@@ -260,7 +276,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
       <div ref={box} className="basket-map-canvas" />
 
       {!selected && (
-        <button className="map-locate" onClick={locateMe} disabled={locating}>
+        <button className="map-locate" onClick={() => locateMe()} disabled={locating}>
           <Locate size={15} strokeWidth={2} />
           {locating ? 'מאתר...' : myCoords ? 'המיקום שלי' : 'מה קרוב אליי'}
         </button>
@@ -298,7 +314,14 @@ export default function BasketMap({ stores, myCoords, onCoords, visible }: {
       <div className="map-legend">
         <span className="map-legend-dot" />
         {myCoords ? `הירוק: הכי זול ברדיוס ${NEAR_KM} ק״מ ממך` : 'הירוק: הכי זול באזור שמוצג במפה'}
+        {partialCount > 0 && !filterComplete && ' · מסגרת אדומה: חסרים מוצרים'}
       </div>
+
+      {partialCount > 0 && partialCount < located.length && (
+        <button className={`map-filter${filterComplete ? ' active' : ''}`} aria-pressed={filterComplete} onClick={() => setOnlyComplete(v => !v)}>
+          {filterComplete ? `רק סניפים עם כל המוצרים · מוסתרים ${partialCount}` : 'הציגו גם סניפים שחסרים בהם מוצרים'}
+        </button>
+      )}
 
       {hidden > 0 && mapped.length > 0 && (
         <div className="map-hidden-note">{hidden} סניפים בלי מיקום מדויק מופיעים רק ברשימה</div>
