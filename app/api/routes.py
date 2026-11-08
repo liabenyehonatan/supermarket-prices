@@ -344,6 +344,7 @@ async def compare_product_prices(
             scraped_at=max(filter(None, (price.scraped_at, store.last_full_at)), default=None),
             latitude=store.latitude,
             longitude=store.longitude,
+            geo_precision=store.geo_precision,
             delivery_url=store.delivery_url,
             promotions=promos.get(store.id, []),
         ))

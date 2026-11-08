@@ -27,6 +27,8 @@ export interface PriceAtStore {
   scraped_at?: string;
   latitude?: number;
   longitude?: number;
+  /** 'address' = the branch itself, 'city' = only the town's centre */
+  geo_precision?: string | null;
   delivery_url?: string;
   promotions?: PromoInfo[];
 }
