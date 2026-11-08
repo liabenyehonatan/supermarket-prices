@@ -10,7 +10,7 @@ import { compareBasket, fetchSubstitutes, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
-import { EILAT_NOTE, googleMapsLink, isEilat, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
+import { EILAT_NOTE, eilatLast, googleMapsLink, isEilat, isMappable, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { endsText } from '../lib/dealDays';
@@ -56,12 +56,27 @@ const wazeUrl = (store: StoreResponse) => wazeLink(navText(store));
 const googleMapsUrl = (store: StoreResponse) => googleMapsLink(navText(store));
 
 /* ── Result card ─────────────────────────────────────────── */
-function ResultCard({ store, rank, nextTotal, minTotal, totalItems, missing }: {
+function ResultCard({ store: row, rank, nextTotal, minTotal, totalItems, basketItems, fetchDetail }: {
   store: BasketStoreTotal; rank: number; nextTotal: number | null; minTotal: number; totalItems: number;
-  /** The basket products this store does not sell */
-  missing: { barcode: string; name: string }[];
+  /** The products of this comparison, to tell which ones this store does not sell */
+  basketItems: { barcode: string; name: string }[];
+  /** Asks for the item lines of one store (the list beside the map only has totals until a card is opened) */
+  fetchDetail?: (storeId: number) => Promise<BasketStoreTotal | null>;
 }) {
   const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<BasketStoreTotal | null>(null);
+  const [detailFailed, setDetailFailed] = useState(false);
+  const needsDetail = !!fetchDetail && row.item_prices.length === 0 && row.items_found > 0;
+  useEffect(() => {
+    if (!open || !needsDetail || detail) return;
+    let current = true;
+    fetchDetail!(row.store.id).then(d => { if (current) { if (d) setDetail(d); else setDetailFailed(true); } })
+      .catch(() => { if (current) setDetailFailed(true); });
+    return () => { current = false; };
+  }, [open]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const store = detail ?? row;
+  const waitingForDetail = needsDetail && !detail;
+  const missing = waitingForDetail ? [] : basketItems.filter(i => !store.item_prices.some(p => p.barcode === i.barcode));
   // Something like each missing product that this store does sell: asked for only when the card is opened
   const [subs, setSubs] = useState<Record<string, Substitute> | null>(null);
   useEffect(() => {
@@ -71,7 +86,7 @@ function ResultCard({ store, rank, nextTotal, minTotal, totalItems, missing }: {
       .then(r => { if (current) setSubs(r); })
       .catch(() => { if (current) setSubs({}); });      // a suggestion is a bonus: no message when it fails
     return () => { current = false; };
-  }, [open]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, missing.length]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Only a store with the whole basket can be "the cheapest": a partial basket always looks cheap
   const isWinner  = rank === 0 && store.items_missing === 0;
   // How much cheaper this store is than the next one in the list (never against the dearest branch of all,
@@ -125,6 +140,7 @@ function ResultCard({ store, rank, nextTotal, minTotal, totalItems, missing }: {
       </div>
 
       <div className="basket-result-breakdown">
+        {waitingForDetail && <div className="store-row-sub" style={{ padding: '10px 14px' }}>{detailFailed ? 'לא הצלחנו לטעון את הפירוט. נסו שוב.' : 'טוען פירוט...'}</div>}
         {store.item_prices.map((item, i) => (
           <div key={i} className="basket-breakdown-row">
             <div className="basket-breakdown-name" title={item.product_name}>
@@ -315,6 +331,7 @@ export function BasketPage() {
   useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
   const [showAllItems, setShowAllItems] = useState(false);
   // Linking list and map: the card under the pointer lights its pin; a pin picked on the map scrolls to its card
+  const [mapBounds, setMapBounds] = useState<{ west: number; south: number; east: number; north: number } | null>(null);
   const [hoverId, setHoverId] = useState<number | null>(null);
   const [focusId, setFocusId] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -407,12 +424,25 @@ export function BasketPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapActive, results]);
 
+  // The stores the list shows. On a narrow screen: the cheapest 100 of the comparison. Beside the map: the stores in
+  // the map's view, cheapest first (complete baskets first, Eilat after the rest), the way the map's pins are.
+  const mapReady = !!results && mapData?.source === results && mapBounds != null;
+  const inView = wide && mapReady
+    ? eilatLast(
+        mapData!.stores
+          .filter(s => isMappable(s) && s.store.latitude! >= mapBounds!.south && s.store.latitude! <= mapBounds!.north
+            && s.store.longitude! >= mapBounds!.west && s.store.longitude! <= mapBounds!.east)
+          .sort((a, b) => a.items_missing - b.items_missing || Number(a.total_price) - Number(b.total_price)),
+        s => s.store.city, s => s.items_missing)
+    : [];
+  const pool = results ? (wide ? inView : results.stores) : [];
+  const listLoading = !!results && wide && !mapReady;
   // Complete baskets only, unless none is complete or none is partial (then there is nothing to choose)
-  const partialCount = results ? results.stores.filter(s => s.items_missing > 0).length : 0;
-  const noCompleteStore = !!results && results.stores.length > 0 && partialCount === results.stores.length;
+  const partialCount = pool.filter(s => s.items_missing > 0).length;
+  const noCompleteStore = pool.length > 0 && partialCount === pool.length;
   const hasPartial = partialCount > 0 && !noCompleteStore;
   const filterComplete = onlyComplete && hasPartial;
-  const shownStores = results ? (filterComplete ? results.stores.filter(s => s.items_missing === 0) : results.stores) : [];
+  const shownStores = (filterComplete ? pool.filter(s => s.items_missing === 0) : pool).slice(0, 100);
 
   // A product most stores do not sell makes almost every basket partial: offer the comparison without it
   // With no complete basket at all, the rarest products are what is in the way, however common each one is alone
@@ -425,11 +455,15 @@ export function BasketPage() {
   const skippedNames = items.filter(i => skipped.includes(i.barcode)).map(i => i.name);
 
   // The winner's lead is measured against the next store that has as much of the basket as the winner.
-  const nextStore = results && results.stores.length > 1
-    ? results.stores.slice(1).find(s => s.items_missing === results.stores[0].items_missing)
+  const nextStore = shownStores.length > 1
+    ? shownStores.slice(1).find(s => s.items_missing === shownStores[0].items_missing)
     : undefined;
   const nextTotal = nextStore ? Number(nextStore.total_price) : null;
-  const minTotal = results && results.stores.length > 0 ? results.stores[0].total_price : 0;
+  const minTotal = shownStores.length > 0 ? shownStores[0].total_price : 0;
+  const basketItems = items.filter(i => !skipped.includes(i.barcode)).map(i => ({ barcode: i.barcode, name: i.name }));
+  const fetchDetail = (storeId: number) =>
+    compareBasket(items.filter(i => !skipped.includes(i.barcode)).map(i => ({ barcode: i.barcode, quantity: i.quantity })), { city, chain }, false, [storeId])
+      .then(d => d.stores[0] ?? null);
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
 
   /* Empty state */
@@ -683,7 +717,9 @@ export function BasketPage() {
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TrendingUp size={20} strokeWidth={2} color="var(--green-600)" />
-                  {results.total_stores ?? results.stores.length} סניפים · ממוין מהזול ליקר{results.total_stores != null && results.total_stores > results.stores.length ? ` (מוצגים ${results.stores.length} הזולים)` : ''}
+                  {wide
+                    ? (listLoading ? 'טוען סניפים...' : `${pool.length} סניפים באזור שבמפה · ממוין מהזול ליקר`)
+                    : <>{results.total_stores ?? results.stores.length} סניפים · ממוין מהזול ליקר{results.total_stores != null && results.total_stores > results.stores.length ? ` (מוצגים ${results.stores.length} הזולים)` : ''}</>}
                 </div>
                 <div className="section-subtitle">
                   עבור {results.total_items_requested} מוצרים בסל
@@ -740,7 +776,7 @@ export function BasketPage() {
                   <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
                     <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={mapActive}
                       onlyComplete={onlyComplete} onOnlyCompleteChange={setOnlyComplete}
-                      highlightId={hoverId} onSelectStore={id => { setFocusId(id); if (id != null && wide) document.getElementById(`store-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
+                      highlightId={hoverId} onBoundsChange={setMapBounds} onSelectStore={id => { setFocusId(id); if (id != null && wide) document.getElementById(`store-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
                   </Suspense>
                 ) : (
                   <div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />
@@ -770,8 +806,8 @@ export function BasketPage() {
                     nextTotal={nextTotal}
                     minTotal={minTotal}
                     totalItems={results.total_items_requested}
-                    missing={items.filter(i => !skipped.includes(i.barcode) && !store.item_prices.some(p => p.barcode === i.barcode))
-                      .map(i => ({ barcode: i.barcode, name: i.name }))}
+                    basketItems={basketItems}
+                    fetchDetail={wide ? fetchDetail : undefined}
                   />
                   </div>
                 </Fragment>

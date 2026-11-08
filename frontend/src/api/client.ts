@@ -162,10 +162,13 @@ export function compareBasket(
   filters: { city?: string; chain?: string } = {},
   /** The map wants every store (to show the ones near the visitor), but only totals and positions, not the item lines. */
   forMap = false,
+  /** Only these stores (their details are asked for when a card is opened) */
+  storeIds: number[] = [],
 ): Promise<BasketCompareResponse> {
   const params = new URLSearchParams();
   if (filters.city?.trim()) params.set('city', filters.city.trim());
   if (filters.chain?.trim()) params.set('chain', filters.chain.trim());
+  for (const id of storeIds.slice(0, 50)) params.append('store_ids', String(id));
   if (forMap) params.set('compact', 'true');
   else params.set('limit', '100');     // the best 100 stores are plenty to show; the full list is ~1.3 MB
   const qs = params.toString();

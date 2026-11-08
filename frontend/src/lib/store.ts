@@ -1,3 +1,4 @@
+import type { BasketStoreTotal } from '../types';
 // How a store is described in the UI. Chains publish messy store data: the
 // "city" is often a numeric CBS code ("2600"), "0" or "unknown", and the store
 // name is frequently just the branch or town. Show the chain first, the branch name
@@ -86,4 +87,12 @@ export const EILAT_NOTE = 'אילת: המחיר בלי מע״מ, לא להשוו
 export function eilatLast<T>(rows: T[], cityOf: (row: T) => string | null | undefined, tierOf: (row: T) => number = () => 0): T[] {
   if (rows.every(r => isEilat(cityOf(r)))) return rows;
   return [...rows].sort((a, b) => tierOf(a) - tierOf(b) || Number(isEilat(cityOf(a))) - Number(isEilat(cityOf(b))));
+}
+
+/** A branch we can put on the map: it has a position of its own (its address, or at least its street), not just its town's centre. */
+export function isMappable(s: BasketStoreTotal): boolean {
+  const { latitude, longitude, geo_precision } = s.store;
+  // Only a position found from the branch's own address counts: 'city' (the town's centre) and rows from before
+  // precision was recorded would stack several branches on one spot and look exact when they are not.
+  return latitude != null && longitude != null && (geo_precision === 'address' || geo_precision === 'street');
 }
