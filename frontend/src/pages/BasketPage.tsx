@@ -10,6 +10,7 @@ import { compareBasket, fetchSubstitutes, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { pickBest } from '../lib/bestPin';
 import { EILAT_NOTE, eilatLast, googleMapsLink, isEilat, isMappable, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
@@ -56,8 +57,8 @@ const wazeUrl = (store: StoreResponse) => wazeLink(navText(store));
 const googleMapsUrl = (store: StoreResponse) => googleMapsLink(navText(store));
 
 /* ── Result card ─────────────────────────────────────────── */
-function ResultCard({ store: row, rank, nextTotal, minTotal, totalItems, basketItems, fetchDetail }: {
-  store: BasketStoreTotal; rank: number; nextTotal: number | null; minTotal: number; totalItems: number;
+function ResultCard({ store: row, isWinner, nextTotal, minTotal, totalItems, basketItems, fetchDetail }: {
+  store: BasketStoreTotal; isWinner: boolean; nextTotal: number | null; minTotal: number; totalItems: number;
   /** The products of this comparison, to tell which ones this store does not sell */
   basketItems: { barcode: string; name: string }[];
   /** Asks for the item lines of one store (the list beside the map only has totals until a card is opened) */
@@ -87,8 +88,6 @@ function ResultCard({ store: row, rank, nextTotal, minTotal, totalItems, basketI
       .catch(() => { if (current) setSubs({}); });      // a suggestion is a bonus: no message when it fails
     return () => { current = false; };
   }, [open, missing.length]);   // eslint-disable-line react-hooks/exhaustive-deps
-  // Only a store with the whole basket can be "the cheapest": a partial basket always looks cheap
-  const isWinner  = rank === 0 && store.items_missing === 0;
   // How much cheaper this store is than the next one in the list (never against the dearest branch of all,
   // which would make the saving look bigger than it is).
   const lead      = nextTotal != null ? nextTotal - store.total_price : 0;
@@ -390,7 +389,8 @@ export function BasketPage() {
     if (results || loading) void runCompare({ city, chain: next });
   }
 
-  const onLocatedCity = (found: string) => changeCity(matchCity(found, cities));
+  // Beside the map, "my location" moves the map there; it must not also narrow the comparison to one city
+  const onLocatedCity = (found: string) => { if (!wide) changeCity(matchCity(found, cities)); };
   const [myCoords, setMyCoords] = useState<Coords | null>(() => readMyCoords());
   const { locate, request, pickCity, suggestedCity, locating, problem, dismiss } = useCurrentCity(onLocatedCity, setMyCoords);
   const [view, setView] = useState<'list' | 'map'>('list');
@@ -404,6 +404,10 @@ export function BasketPage() {
     return () => mq.removeEventListener('change', on);
   }, []);
   const mapActive = wide || view === 'map';
+  // No map on this device (no WebGL): the page falls back to the plain list of the cheapest stores
+  const [mapFailed, setMapFailed] = useState(false);
+  const split = wide && !mapFailed;
+  const [recenterKey, setRecenterKey] = useState(0);
   // On a wide screen the results and the map come first: the basket's own items fold away until asked for
   const shownCount = wide && results ? 0 : COLLAPSED_COUNT;
   // The map shows every store, not just the 100 cheapest the list is cut to: fetched when the map is first opened
@@ -427,7 +431,7 @@ export function BasketPage() {
   // The stores the list shows. On a narrow screen: the cheapest 100 of the comparison. Beside the map: the stores in
   // the map's view, cheapest first (complete baskets first, Eilat after the rest), the way the map's pins are.
   const mapReady = !!results && mapData?.source === results && mapBounds != null;
-  const inView = wide && mapReady
+  const inView = split && mapReady
     ? eilatLast(
         mapData!.stores
           .filter(s => isMappable(s) && s.store.latitude! >= mapBounds!.south && s.store.latitude! <= mapBounds!.north
@@ -435,8 +439,8 @@ export function BasketPage() {
           .sort((a, b) => a.items_missing - b.items_missing || Number(a.total_price) - Number(b.total_price)),
         s => s.store.city, s => s.items_missing)
     : [];
-  const pool = results ? (wide ? inView : results.stores) : [];
-  const listLoading = !!results && wide && !mapReady;
+  const pool = results ? (split ? inView : results.stores) : [];
+  const listLoading = !!results && split && !mapReady;
   // Complete baskets only, unless none is complete or none is partial (then there is nothing to choose)
   const partialCount = pool.filter(s => s.items_missing > 0).length;
   const noCompleteStore = pool.length > 0 && partialCount === pool.length;
@@ -454,11 +458,17 @@ export function BasketPage() {
     : [];
   const skippedNames = items.filter(i => skipped.includes(i.barcode)).map(i => i.name);
 
-  // The winner's lead is measured against the next store that has as much of the basket as the winner.
-  const nextStore = shownStores.length > 1
-    ? shownStores.slice(1).find(s => s.items_missing === shownStores[0].items_missing)
-    : undefined;
-  const nextTotal = nextStore ? Number(nextStore.total_price) : null;
+  // The branch marked "cheapest". Beside the map it is the green pin's branch (same rule), otherwise the first complete one.
+  const best = split
+    ? pickBest(shownStores, myCoords, () => true)
+    : shownStores[0]?.items_missing === 0 ? shownStores[0] : undefined;
+  // Its lead is measured against the next complete store that costs at least as much (Eilat, with no VAT, does not count)
+  const nextTotal = best
+    ? shownStores
+        .filter(s => s.items_missing === 0 && s.store.id !== best.store.id && Number(s.total_price) >= Number(best.total_price)
+          && (isEilat(best.store.city) || !isEilat(s.store.city)))
+        .reduce<number | null>((m, s) => (m == null || Number(s.total_price) < m ? Number(s.total_price) : m), null)
+    : null;
   const minTotal = shownStores.length > 0 ? shownStores[0].total_price : 0;
   const basketItems = items.filter(i => !skipped.includes(i.barcode)).map(i => ({ barcode: i.barcode, name: i.name }));
   const fetchDetail = (storeId: number) =>
@@ -717,7 +727,7 @@ export function BasketPage() {
               <div>
                 <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TrendingUp size={20} strokeWidth={2} color="var(--green-600)" />
-                  {wide
+                  {split
                     ? (listLoading ? 'טוען סניפים...' : `${pool.length} סניפים באזור שבמפה · ממוין מהזול ליקר`)
                     : <>{results.total_stores ?? results.stores.length} סניפים · ממוין מהזול ליקר{results.total_stores != null && results.total_stores > results.stores.length ? ` (מוצגים ${results.stores.length} הזולים)` : ''}</>}
                 </div>
@@ -776,7 +786,7 @@ export function BasketPage() {
                   <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
                     <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={mapActive}
                       onlyComplete={onlyComplete} onOnlyCompleteChange={setOnlyComplete}
-                      highlightId={hoverId} onBoundsChange={setMapBounds} onSelectStore={id => { setFocusId(id); if (id != null && wide) document.getElementById(`store-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
+                      highlightId={hoverId} onBoundsChange={setMapBounds} onFailed={() => setMapFailed(true)} recenterKey={recenterKey} onSelectStore={id => { setFocusId(id); if (id != null && wide) document.getElementById(`store-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
                   </Suspense>
                 ) : (
                   <div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />
@@ -792,6 +802,27 @@ export function BasketPage() {
             )}
 
             <div style={{ display: mapActive && !wide ? 'none' : 'flex', flexDirection: 'column', gap: 12, paddingBottom: 40 }}>
+              {listLoading && Array.from({ length: 4 }).map((_, i) => (
+                <div key={`sk-${i}`} className="card" style={{ padding: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 10 }} />
+                    <div style={{ flex: 1 }}>
+                      <div className="skeleton" style={{ height: 14, width: '45%', marginBottom: 8 }} />
+                      <div className="skeleton" style={{ height: 12, width: '30%' }} />
+                    </div>
+                    <div className="skeleton" style={{ height: 24, width: 64 }} />
+                  </div>
+                </div>
+              ))}
+              {split && mapReady && shownStores.length === 0 && (
+                <div className="empty-state" style={{ padding: '28px 0' }}>
+                  <div className="empty-state-title">אין סניפים באזור הזה</div>
+                  <div className="empty-state-desc">{pool.length > 0 ? 'כל הסניפים כאן חסרים בהם מוצרים. אפשר להציג גם אותם.' : 'אפשר להזיז את המפה, או לחזור לאזור שנפתחה עליו.'}</div>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { if (pool.length > 0) setOnlyComplete(false); else setRecenterKey(k => k + 1); }}>
+                    {pool.length > 0 ? 'הציגו גם סניפים חלקיים' : 'חזרה לאזור שלי'}
+                  </button>
+                </div>
+              )}
               {shownStores.map((store, idx) => (
                 <Fragment key={`${store.store.id}-${idx}`}>
                   {!filterComplete && !noCompleteStore && store.items_missing > 0 && (idx === 0 || shownStores[idx - 1].items_missing === 0) && (
@@ -802,12 +833,12 @@ export function BasketPage() {
                        onMouseLeave={wide ? () => setHoverId(null) : undefined}>
                   <ResultCard
                     store={store}
-                    rank={idx}
+                    isWinner={store.store.id === best?.store.id}
                     nextTotal={nextTotal}
                     minTotal={minTotal}
                     totalItems={results.total_items_requested}
                     basketItems={basketItems}
-                    fetchDetail={wide ? fetchDetail : undefined}
+                    fetchDetail={split ? fetchDetail : undefined}
                   />
                   </div>
                 </Fragment>

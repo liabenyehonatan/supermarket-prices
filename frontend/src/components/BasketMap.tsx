@@ -7,14 +7,14 @@ import { Locate, MapPin, Navigation, X } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 import { ISRAEL_BOUNDS, MIN_ZOOM, mapStyle } from '../lib/mapStyle';
 import { distanceKm } from '../lib/geo';
-import { googleMapsLink, isEilat, isMappable, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
+import { googleMapsLink, isMappable, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
 import { money } from '../lib/safe';
 import { saveMyCoords, type Coords } from '../lib/location';
+import { NEAR_KM, pickBest } from '../lib/bestPin';
 import type { BasketStoreTotal } from '../types';
 
 
 const MAX_PINS = 80;                 // pins drawn at once (the cheapest that fit; zooming in shows more)
-const NEAR_KM = 5;                   // "near me" for the green pin
 const PIN_W = 76, PIN_H = 34;        // the pixel box a pin needs, to keep pins from covering each other
 
 let ready = false;
@@ -36,7 +36,7 @@ function priceText(total: number): string {
  * lack some of the basket in grey. `stores` is in the comparison's order (complete baskets first, cheapest first),
  * and that order decides which pins win when they would overlap.
  */
-export default function BasketMap({ stores, myCoords, onCoords, visible, onlyComplete: onlyCompleteProp, onOnlyCompleteChange, onSelectStore, highlightId, onBoundsChange }: {
+export default function BasketMap({ stores, myCoords, onCoords, visible, onlyComplete: onlyCompleteProp, onOnlyCompleteChange, onSelectStore, highlightId, onBoundsChange, onFailed, recenterKey }: {
   stores: BasketStoreTotal[];
   /** False while the list is shown: the map stays mounted but has no size */
   visible: boolean;
@@ -50,6 +50,10 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   highlightId?: number | null;
   /** The area the map shows now (after every move), so the list beside it can follow */
   onBoundsChange?: (b: { west: number; south: number; east: number; north: number }) => void;
+  /** Told when the map cannot be drawn on this device (no WebGL), so the page can show its plain list instead */
+  onFailed?: () => void;
+  /** Changes whenever the page asks the map to go back to the area it opened on */
+  recenterKey?: number;
   /** The visitor's position, when the map's own button found it */
   onCoords: (coords: Coords) => void;
 }) {
@@ -60,6 +64,11 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   const highlightRef = useRef<number | null>(null);
   const boundsRef = useRef(onBoundsChange);
   boundsRef.current = onBoundsChange;
+  const failedRef = useRef(onFailed);
+  failedRef.current = onFailed;
+  // The list beside the map follows what the map shows, but only once the map has gone to its opening area:
+  // before that it would show the whole country for a moment
+  const fitted = useRef(false);
   highlightRef.current = highlightId ?? null;
   const [selected, setSelected] = useState<BasketStoreTotal | null>(null);
   const [failed, setFailed] = useState(false);
@@ -80,23 +89,12 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
   const data = useRef({ mapped, myCoords });
   data.current = { mapped, myCoords };
 
-  /** The green pin: the cheapest complete basket near the visitor (or, without a position, in the area shown).
-   *  The overall cheapest is no use: Eilat has no VAT, so its branches always win and mean nothing elsewhere.
-   *  `stores` is in comparison order, so the first match is the cheapest. */
-  function pickBest(all: BasketStoreTotal[], bounds: maplibregl.LngLatBounds, me: Coords | null): BasketStoreTotal | undefined {
-    const near = all.filter(s => s.items_missing === 0 && (me
-      ? distanceKm(me.lat, me.lng, s.store.latitude!, s.store.longitude!) <= NEAR_KM
-      : bounds.contains([s.store.longitude!, s.store.latitude!])));
-    const withVat = near.filter(s => !isEilat(s.store.city));
-    return (withVat.length ? withVat : near)[0];
-  }
-
   function draw() {
     const map = mapRef.current;
     if (!map) return;
     const { mapped: all, myCoords: me } = data.current;
     const bounds = map.getBounds();
-    const bestStore = pickBest(all, bounds, me);
+    const bestStore = pickBest(all, me, s => bounds.contains([s.store.longitude!, s.store.latitude!]));
     const best = bestStore?.store.id;
     const taken: { x: number; y: number }[] = [];
     const keep = new Set<number>();
@@ -165,13 +163,14 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
       });
     } catch {
       setFailed(true);          // no WebGL on this device
+      failedRef.current?.();
       return;
     }
     map.touchZoomRotate.disableRotation();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
     const reportBounds = () => {
       const b = map.getBounds();
-      boundsRef.current?.({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+      if (fitted.current) boundsRef.current?.({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
     };
     map.on('moveend', draw);
     map.on('moveend', reportBounds);
@@ -187,31 +186,67 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // New results: show the cheapest branches (and the visitor, when known)
-  useEffect(() => {
+  /** Goes to the opening area: around the visitor when known, otherwise where most of the branches are */
+  function fitToStores() {
     const map = mapRef.current;
     if (!map) return;
+    const all = data.current.mapped, me = data.current.myCoords;
+    fitted.current = true;
+    if (me && all.length > 0) {
+      showAround(me, 0);                              // where the visitor is, with the branches around them
+    } else if (all.length > 0) {
+      // Not located: the area where most of the branches are, not the corner the few cheapest ones happen to be in
+      const lats = all.map(s => s.store.latitude!).sort((a, b) => a - b);
+      const lngs = all.map(s => s.store.longitude!).sort((a, b) => a - b);
+      const at = (v: number[], q: number) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
+      const view = new maplibregl.LngLatBounds([at(lngs, 0.1), at(lats, 0.1)], [at(lngs, 0.9), at(lats, 0.9)]);
+      map.fitBounds(view, { padding: 40, maxZoom: 12, duration: 0 });
+    } else {
+      draw();
+      const b = map.getBounds();
+      boundsRef.current?.({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+    }
+  }
+
+  // New results (a different set of located branches): go to the opening area
+  useEffect(() => {
+    if (!mapRef.current) return;
     selectedRef.current = null;
     setSelected(null);
     for (const m of pins.current.values()) m.remove();
     pins.current.clear();
-    if (myCoords && mapped.length > 0) {
-      showAround(myCoords, 0);                       // where the visitor is, with the branches around them
-    } else if (mapped.length > 0) {
-      // Not located: the area where most of the branches are, not the corner the few cheapest ones happen to be in
-      const lats = mapped.map(s => s.store.latitude!).sort((a, b) => a - b);
-      const lngs = mapped.map(s => s.store.longitude!).sort((a, b) => a - b);
-      const at = (v: number[], q: number) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
-      const view = new maplibregl.LngLatBounds([at(lngs, 0.1), at(lats, 0.1)], [at(lngs, 0.9), at(lats, 0.9)]);
-      map.fitBounds(view, { padding: 40, maxZoom: 12, duration: 0 });
-    } else draw();
+    fitted.current = false;
+    fitToStores();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [located]);
+
+  // The "complete baskets only" switch: the pins change, the view stays where the visitor put it
+  useEffect(() => {
+    if (!mapRef.current || !fitted.current) return;
+    for (const m of pins.current.values()) m.remove();
+    pins.current.clear();
+    if (selectedRef.current != null && !mapped.some(s => s.store.id === selectedRef.current)) {
+      selectedRef.current = null;
+      setSelected(null);
+    }
+    draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped]);
+
+  // The page asked to go back to the opening area
+  const lastRecenter = useRef(recenterKey);
+  useEffect(() => {
+    if (recenterKey === lastRecenter.current) return;
+    lastRecenter.current = recenterKey;
+    fitToStores();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterKey]);
 
   /** Where the visitor is, and the branches around them: the map goes there. Stays in the browser, nothing is sent. */
   function showAround(me: Coords, duration = 700) {
     const map = mapRef.current;
     if (!map) return;
+    shownFor.current = `${me.lat.toFixed(4)},${me.lng.toFixed(4)}`;
     const near = [...data.current.mapped]
       .sort((a, b) => distanceKm(me.lat, me.lng, a.store.latitude!, a.store.longitude!) - distanceKm(me.lat, me.lng, b.store.latitude!, b.store.longitude!))
       .slice(0, 6);
@@ -265,6 +300,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
 
   // The visitor's own position
   const me = useRef<maplibregl.Marker | null>(null);
+  const shownFor = useRef('');
   useEffect(() => {
     const map = mapRef.current;
     me.current?.remove(); me.current = null;
@@ -274,6 +310,9 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
     el.setAttribute('aria-label', 'המיקום שלך');
     me.current = new maplibregl.Marker({ element: el }).setLngLat([myCoords.lng, myCoords.lat]).addTo(map);
     draw();                       // the green pin follows the visitor's position
+    // A position found elsewhere on the page (not by this map's own button): show where they are
+    const key = `${myCoords.lat.toFixed(4)},${myCoords.lng.toFixed(4)}`;
+    if (shownFor.current !== key) { shownFor.current = key; if (fitted.current && data.current.mapped.length > 0) showAround(myCoords); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myCoords]);
 
@@ -330,7 +369,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
 
       <div className="map-legend">
         <span className="map-legend-dot" />
-        {myCoords ? `הירוק: הכי זול ברדיוס ${NEAR_KM} ק״מ ממך` : 'הירוק: הכי זול באזור שמוצג במפה'}
+        {myCoords ? `הירוק: הכי זול בקרבתך (עד ${NEAR_KM} ק״מ) באזור שמוצג` : 'הירוק: הכי זול באזור שמוצג במפה'}
         {partialCount > 0 && !filterComplete && ' · מסגרת אדומה: חסרים מוצרים'}
       </div>
 
