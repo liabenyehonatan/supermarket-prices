@@ -943,3 +943,38 @@ async def test_basket_compare_compact_drops_the_item_breakdown(client, session):
     slim = (await client.post("/api/v1/basket/compare", params={"compact": "true"}, json=body)).json()["stores"][0]
     assert len(full["item_prices"]) == 1
     assert slim["item_prices"] == [] and slim["total_price"] == full["total_price"] and slim["store"]["latitude"] == 32.80
+
+
+async def test_search_card_prices_never_take_eilat_as_the_cheapest(client, session):
+    """Eilat has no VAT: its prices are ~17% lower and say nothing about the rest of the country."""
+    from datetime import datetime
+    from app.db.models import Chain, Price, Product, Store
+
+    chain = Chain(chain_id="7290027600007", name="שופרסל")
+    session.add(chain)
+    await session.flush()
+    tlv = Store(chain_id=chain.id, store_id="1", name="שופרסל דיל", city="תל אביב")
+    eilat = Store(chain_id=chain.id, store_id="2", name="שופרסל אילת", city="אילת")
+    only_eilat = Store(chain_id=chain.id, store_id="3", name="שופרסל אילת 2", city="אילת")
+    milk = Product(barcode="7290000000301", name="חלב", unit_of_measure="ליטר")
+    salt = Product(barcode="7290000000302", name="מלח", unit_of_measure="ק״ג")
+    session.add_all([tlv, eilat, only_eilat, milk, salt])
+    await session.flush()
+    now = datetime(2026, 11, 8)
+    p = lambda prod, store, price, unit: Price(
+        product_id=prod.id, store_id=store.id, price=price, unit_price=unit, price_updated_at=now, is_current=True)
+    session.add_all([
+        p(milk, tlv, "6.00", "6.00"), p(milk, eilat, "5.00", "5.00"),
+        p(salt, only_eilat, "3.00", "3.00"),                           # sold only in Eilat: Eilat is all there is
+    ])
+    await session.commit()
+    codes = {"barcodes": ["7290000000301", "7290000000302"]}
+
+    cheapest = (await client.post("/api/v1/products/cheapest-batch", json=codes)).json()
+    assert float(cheapest["7290000000301"]) == 6.00 and float(cheapest["7290000000302"]) == 3.00
+    summary = (await client.post("/api/v1/products/price-summary-batch", json=codes)).json()
+    assert float(summary["7290000000301"]["price"]) == 6.00
+    assert float(summary["7290000000301"]["unit_price"]) == 6.00
+    assert float(summary["7290000000302"]["price"]) == 3.00
+    units = (await client.post("/api/v1/products/unit-prices-batch", json=codes)).json()
+    assert float(units["7290000000301"]["unit_price"]) == 6.00 and float(units["7290000000302"]["unit_price"]) == 3.00

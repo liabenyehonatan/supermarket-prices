@@ -76,6 +76,17 @@ def _not_wholesale():
     return or_(Store.name.is_(None), ~Store.name.ilike("%סיטונ%"))
 
 
+def _is_eilat():
+    """Eilat is VAT-free, so its prices run ~17% below the rest of the country: never the "cheapest" for a shopper
+    elsewhere. (The same rule as the front end's isEilat.)"""
+    return func.coalesce(Store.city, "").contains("אילת")
+
+
+def _cheapest(column):
+    """Lowest of `column` over the rows, ignoring Eilat unless every row is Eilat (then Eilat's lowest)."""
+    return func.coalesce(func.min(case((~_is_eilat(), column))), func.min(column))
+
+
 # ─── Endpoint 1: Search Products ─────────────────────────────────────────────
 
 @router.get(
@@ -375,7 +386,7 @@ async def cheapest_prices_batch(
         return {}
 
     rows = await db.execute(
-        select(Product.barcode, func.min(Price.price))
+        select(Product.barcode, _cheapest(Price.price))
         .join(Price, Price.product_id == Product.id)
         .join(Store, Price.store_id == Store.id)
         .where(
@@ -416,7 +427,10 @@ async def price_summary_batch(
             Price.price.label("price"),
             Price.unit_price.label("unit_price"),
             display_chain_name_sql().label("chain"),
-            func.min(Price.price).over(partition_by=Product.barcode).label("min_price"),
+            # Eilat (no VAT) never sets the cheapest price unless it is the only place that sells the product.
+            func.min(case((~_is_eilat(), Price.price))).over(partition_by=Product.barcode).label("min_elsewhere"),
+            func.min(Price.price).over(partition_by=Product.barcode).label("min_all"),
+            _is_eilat().label("eilat"),
         )
         .join(Price, Price.product_id == Product.id)
         .join(Store, Price.store_id == Store.id)
@@ -430,16 +444,21 @@ async def price_summary_batch(
         )
         .subquery()
     )
+    min_price = func.coalesce(current.c.min_elsewhere, current.c.min_all)
     rows = await db.execute(
         select(
             current.c.barcode,
             current.c.unit,
-            current.c.min_price,
+            min_price,
             func.min(case((current.c.unit_price > 0, current.c.unit_price))),
             func.array_agg(current.c.chain.distinct()),
         )
-        .where(current.c.price == current.c.min_price)
-        .group_by(current.c.barcode, current.c.unit, current.c.min_price)
+        .where(
+            current.c.price == min_price,
+            # an Eilat row only counts when there is nowhere else (a tie in price must not list it)
+            or_(~current.c.eilat, current.c.min_elsewhere.is_(None)),
+        )
+        .group_by(current.c.barcode, current.c.unit, min_price)
     )
     return {
         barcode: PriceSummary(price=price, chains=sorted(set(chains)), unit_price=unit_price, unit=unit)
@@ -468,7 +487,7 @@ async def unit_prices_batch(
         return {}
 
     rows = await db.execute(
-        select(Product.barcode, Product.unit_of_measure, func.min(Price.unit_price))
+        select(Product.barcode, Product.unit_of_measure, _cheapest(Price.unit_price))
         .join(Price, Price.product_id == Product.id)
         .join(Store, Price.store_id == Store.id)
         .where(
