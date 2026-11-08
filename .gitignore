@@ -18,3 +18,5 @@ celerybeat-schedule*
 # Build output
 frontend/.next/
 frontend/dist/
+
+mcp_service/.venv/
