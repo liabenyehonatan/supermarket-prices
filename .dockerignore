@@ -15,3 +15,6 @@ gov_chains.html
 docs/
 tests/
 pytest.ini
+
+# The MCP service has its own image (mcp_service/Dockerfile)
+mcp_service
