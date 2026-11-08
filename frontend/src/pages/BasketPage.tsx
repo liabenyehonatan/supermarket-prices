@@ -650,7 +650,7 @@ export function BasketPage() {
               <div style={{ display: view === 'map' ? 'block' : 'none' }}>
                 {mapData?.source === results ? (
                   <Suspense fallback={<div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />}>
-                    <BasketMap stores={mapData.stores} myCoords={myCoords} onLocate={locate} visible={view === 'map'} />
+                    <BasketMap stores={mapData.stores} myCoords={myCoords} onCoords={setMyCoords} visible={view === 'map'} />
                   </Suspense>
                 ) : (
                   <div className="skeleton" style={{ height: 380, borderRadius: 16, marginBottom: 40 }} />

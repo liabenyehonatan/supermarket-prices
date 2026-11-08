@@ -27,5 +27,7 @@ export function mapStyle(origin: string): StyleSpecification {
   };
 }
 
-/** Israel with a margin: the map cannot be dragged to where there are no tiles. */
-export const ISRAEL_BOUNDS: [[number, number], [number, number]] = [[34.0, 29.2], [36.1, 33.7]];
+/** Israel with a wide margin: the map cannot be dragged to where there are no tiles. The margin must stay larger
+ *  than the map's size at its lowest zoom, otherwise there is nothing to drag (the map only zooms). */
+export const ISRAEL_BOUNDS: [[number, number], [number, number]] = [[32.4, 27.6], [37.6, 35.0]];
+export const MIN_ZOOM = 8;

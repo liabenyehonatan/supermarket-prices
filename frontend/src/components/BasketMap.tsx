@@ -5,11 +5,11 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import rtlTextPlugin from '@mapbox/mapbox-gl-rtl-text/mapbox-gl-rtl-text.min.js?url';
 import { Locate, MapPin, Navigation, X } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
-import { ISRAEL_BOUNDS, mapStyle } from '../lib/mapStyle';
+import { ISRAEL_BOUNDS, MIN_ZOOM, mapStyle } from '../lib/mapStyle';
 import { distanceKm } from '../lib/geo';
 import { googleMapsLink, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
 import { money } from '../lib/safe';
-import type { Coords } from '../lib/location';
+import { saveMyCoords, type Coords } from '../lib/location';
 import type { BasketStoreTotal } from '../types';
 
 /** A branch we can put on the map: it has a position of its own, not just its town's centre. */
@@ -42,12 +42,13 @@ function priceText(total: number): string {
  * lack some of the basket in grey. `stores` is in the comparison's order (complete baskets first, cheapest first),
  * and that order decides which pins win when they would overlap.
  */
-export default function BasketMap({ stores, myCoords, onLocate, visible }: {
+export default function BasketMap({ stores, myCoords, onCoords, visible }: {
   stores: BasketStoreTotal[];
   /** False while the list is shown: the map stays mounted but has no size */
   visible: boolean;
   myCoords: Coords | null;
-  onLocate: () => void;
+  /** The visitor's position, when the map's own button found it */
+  onCoords: (coords: Coords) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -55,6 +56,8 @@ export default function BasketMap({ stores, myCoords, onLocate, visible }: {
   const selectedRef = useRef<number | null>(null);
   const [selected, setSelected] = useState<BasketStoreTotal | null>(null);
   const [failed, setFailed] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   const mapped = useMemo(() => stores.filter(isMappable), [stores]);
   const hidden = stores.length - mapped.length;
@@ -126,7 +129,7 @@ export default function BasketMap({ stores, myCoords, onLocate, visible }: {
       map = new maplibregl.Map({
         container: box.current,
         style: mapStyle(window.location.origin),
-        center: [34.85, 32.05], zoom: 9, maxZoom: 16,
+        center: [34.85, 32.05], zoom: 9, minZoom: MIN_ZOOM, maxZoom: 16,
         maxBounds: ISRAEL_BOUNDS,
         attributionControl: { compact: true },
         dragRotate: false, pitchWithRotate: false, touchPitch: false,
@@ -166,6 +169,44 @@ export default function BasketMap({ stores, myCoords, onLocate, visible }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped]);
 
+  /** Where the visitor is, and the branches around them: the map goes there. Stays in the browser, nothing is sent. */
+  function showAround(me: Coords) {
+    const map = mapRef.current;
+    if (!map) return;
+    const near = [...data.current.mapped]
+      .sort((a, b) => distanceKm(me.lat, me.lng, a.store.latitude!, a.store.longitude!) - distanceKm(me.lat, me.lng, b.store.latitude!, b.store.longitude!))
+      .slice(0, 6);
+    const view = new maplibregl.LngLatBounds([me.lng, me.lat], [me.lng, me.lat]);
+    near.forEach(s => view.extend([s.store.longitude!, s.store.latitude!]));
+    map.fitBounds(view, { padding: { top: 70, bottom: 60, left: 50, right: 50 }, maxZoom: 14, duration: 700 });
+  }
+
+  function locateMe() {
+    setGeoError(null);
+    if (myCoords && !locating) { showAround(myCoords); }
+    if (!window.isSecureContext || !('geolocation' in navigator)) {
+      setGeoError('המכשיר או הדפדפן לא מאפשרים לאתר מיקום בדף הזה.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLocating(false);
+        const me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        saveMyCoords(me);
+        onCoords(me);
+        showAround(me);
+      },
+      err => {
+        setLocating(false);
+        setGeoError(err.code === err.PERMISSION_DENIED
+          ? 'הגישה למיקום חסומה. אפשר לאפשר אותה בהגדרות הדפדפן.'
+          : 'לא הצלחנו לאתר אותך. נסו שוב.');
+      },
+      { timeout: 10000, maximumAge: 5 * 60 * 1000 },
+    );
+  }
+
   // Shown again after the list: the map was laid out while hidden
   useEffect(() => {
     if (visible) mapRef.current?.resize();
@@ -198,12 +239,13 @@ export default function BasketMap({ stores, myCoords, onLocate, visible }: {
     <div className="basket-map">
       <div ref={box} className="basket-map-canvas" />
 
-      {!myCoords && !selected && (
-        <button className="map-locate" onClick={onLocate}>
+      {!selected && (
+        <button className="map-locate" onClick={locateMe} disabled={locating}>
           <Locate size={15} strokeWidth={2} />
-          מה קרוב אליי
+          {locating ? 'מאתר...' : myCoords ? 'המיקום שלי' : 'מה קרוב אליי'}
         </button>
       )}
+      {geoError && !selected && <div className="map-geo-error" role="status">{geoError}</div>}
 
       {mapped.length === 0 && (
         <div className="map-empty">אין לנו עדיין מיקום מדויק לסניפים האלה. הרשימה מציגה את כולם.</div>

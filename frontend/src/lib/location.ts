@@ -14,6 +14,10 @@ export function readMyCoords(): Coords | null {
   } catch { return null; }
 }
 
+export function saveMyCoords(coords: Coords) {
+  try { sessionStorage.setItem(COORDS_KEY, JSON.stringify(coords)); } catch { /* storage blocked */ }
+}
+
 /** The city nearest to the coordinates, from our own stores (see fetchNearestCity): no third-party service. */
 async function cityFromCoords(lat: number, lon: number): Promise<string> {
   return fetchNearestCity(lat, lon);
