@@ -15,4 +15,5 @@ MAX_QTY = 99                   # the API refuses a basket line above this
 MAX_QUERY_LEN = 100            # the API refuses a longer search text
 MAX_TEXT_LEN = 120             # product names and promotion text from the API are cut to this
 API_TIMEOUT_SECONDS = 10.0
+SLOT_WAIT_SECONDS = 5.0        # waiting longer than this for a free API slot is answered "busy", not queued
 MAX_CONCURRENT_API_CALLS = 4   # the MCP reaches the API directly, past nginx's limits: it limits itself

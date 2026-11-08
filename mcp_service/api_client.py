@@ -28,11 +28,16 @@ class ApiClient:
         await self._http.aclose()
 
     async def _send(self, method: str, path: str, **kwargs: Any) -> Any:
-        async with self._slots:
-            try:
-                response = await self._http.request(method, path, **kwargs)
-            except httpx.HTTPError:          # timeouts and connection failures
-                raise ApiBusy() from None
+        try:        # under load, shed instead of queueing without bound (abandoned calls must not keep loading the API)
+            await asyncio.wait_for(self._slots.acquire(), config.SLOT_WAIT_SECONDS)
+        except asyncio.TimeoutError:
+            raise ApiBusy() from None
+        try:
+            response = await self._http.request(method, path, **kwargs)
+        except httpx.HTTPError:              # timeouts and connection failures
+            raise ApiBusy() from None
+        finally:
+            self._slots.release()
         if response.status_code >= 500:
             raise ApiBusy()
         if response.status_code >= 400:

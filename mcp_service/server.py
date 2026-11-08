@@ -104,7 +104,7 @@ async def compare_basket(
 ) -> dict:
     """משווה את כל הסל בשלושת הסניפים הזולים ביותר ומחזיר סכום, חיסכון, פריטים חסרים ומבצעים שחלו.
     'cheapest' הוא הסל המלא הזול ביותר. מחזיר גם open_in_site_url (קישור שפותח את הסל באתר) ו-shopping_list
-    להעתקה לאתר הסופר. קרא ל-warnings ול-prices_as_of ומסור אותם למשתמש."""
+    להעתקה לאתר הסופר. אם יש joint_promos (מבצעים על כמה מוצרים יחד), החיסכון שלהם מופחת מהסכום הכולל ולא משורה אחת. קרא ל-warnings ול-prices_as_of ומסור אותם למשתמש."""
     return await tools.compare_basket(get_api(), [i.model_dump() for i in items], city, chain)
 
 

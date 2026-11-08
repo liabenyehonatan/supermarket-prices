@@ -15,11 +15,11 @@ def line(barcode, name, qty, unit_price, line_total=None, promo=None):
             "line_total": str(total), "regular_line_total": str(unit_price * qty), "promo": promo}
 
 
-def store(chain, city, total, lines, missing=0, promos_known=True, savings="0", delivery=None):
+def store(chain, city, total, lines, missing=0, promos_known=True, savings="0", delivery=None, adjustments=()):
     return {"store": {"id": 1, "store_id": "1", "name": f"{chain} {city}", "city": city, "address": None,
                       "delivery_url": delivery, "chain": {"id": 1, "name": chain, "chain_id": "1"}},
             "total_price": str(total), "items_found": len(lines), "items_missing": missing, "item_prices": lines,
-            "savings": savings, "promotions_known": promos_known, "promo_adjustments": []}
+            "savings": savings, "promotions_known": promos_known, "promo_adjustments": list(adjustments)}
 
 
 def fresh_stamp(hours_ago=1):
@@ -139,10 +139,10 @@ async def test_fresh_data_has_no_stale_warning(make_api):
 
 async def test_shopping_list_matches_cheapest_store(make_api):
     promo_line = line(B1, "חלב 3%", 2, 6, line_total=10, promo={"description": "2 ב-10", "min_qty": 2})
-    api = basket_api(make_api, [store("שופרסל", "חיפה", 22, [promo_line, GOOD[1]], delivery="https://shufersal.example/o")])
+    api = basket_api(make_api, [store("שופרסל", "חיפה", 22, [promo_line, GOOD[1]])])
     out = await tools.compare_basket(api, [{"barcode": B1, "qty": 2}, {"barcode": B2, "qty": 1}])
     assert out["shopping_list"] == {
-        "chain": "שופרסל", "city": "חיפה", "delivery_url": "https://shufersal.example/o", "total": 22.0,
+        "chain": "שופרסל", "city": "חיפה", "total": 22.0, "joint_promos": [],
         "lines": [{"name": "חלב 3%", "qty": 2, "price": 10.0}, {"name": "ביצים L", "qty": 1, "price": 12.0}],
     }
     assert out["stores"][0]["lines"][0]["promo"] == "2 ב-10"
@@ -174,3 +174,21 @@ async def test_incomplete_baskets_rank_fewer_missing_first_like_the_site(make_ap
     out = await tools.compare_basket(api, [{"barcode": B1, "qty": 2}, {"barcode": B2, "qty": 1}])
     assert [s["chain"] for s in out["stores"]] == ["חסר אחד", "זול חסר שניים"]
     assert out["cheapest"]["chain"] == "חסר אחד"
+
+
+async def test_joint_promotion_is_reported_so_the_lines_add_up_to_the_total(make_api):
+    joint = {"description": "2 מוצרים ב-20", "min_qty": 2, "price": "20", "sets": 1, "saving": "4.00", "ends_at": None,
+             "barcodes": [B1, B2]}
+    api = basket_api(make_api, [store("שופרסל", "חיפה", 20, GOOD, adjustments=[joint])])
+    out = await tools.compare_basket(api, [{"barcode": B1, "qty": 2}, {"barcode": B2, "qty": 1}])
+    expected = [{"description": "2 מוצרים ב-20", "saving": 4.0, "barcodes": [B1, B2]}]
+    assert out["stores"][0]["joint_promos"] == expected
+    assert out["shopping_list"]["joint_promos"] == expected and out["shopping_list"]["total"] == 20.0
+    line_sum = sum(l["price"] for l in out["shopping_list"]["lines"])
+    assert round(line_sum - 4.0, 2) == out["shopping_list"]["total"]
+
+
+async def test_shopping_list_has_no_delivery_url_the_basket_answer_never_carries_one(make_api):
+    out = await tools.compare_basket(basket_api(make_api, [store("שופרסל", "חיפה", 24, GOOD, delivery="https://x.example/o")]),
+                                     [{"barcode": B1, "qty": 2}])
+    assert "delivery_url" not in out["shopping_list"]

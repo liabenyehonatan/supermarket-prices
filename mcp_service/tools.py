@@ -217,7 +217,9 @@ def _hours_since(stamp: str | None) -> float | None:
 async def compare_basket(api, items: list[dict], city: str | None = None, chain: str | None = None) -> dict:
     """Total of the whole basket at the three cheapest branches. "Cheapest" means the cheapest COMPLETE basket
     (a basket missing items always looks cheap); when no branch has everything, that is said. `shopping_list`
-    is the cheapest branch's list: `price` is the line's total in shekels (promotion applied)."""
+    is the cheapest branch's list: `price` is the line's total in shekels (single-product promotions applied);
+    `joint_promos` are promotions over several products, whose `saving` is taken off the total as a whole, so
+    sum(line prices) - sum(joint savings) == total."""
     pairs = _merge_items(items)
     params: dict = {"limit": 3}
     if chain:
@@ -240,7 +242,9 @@ async def compare_basket(api, items: list[dict], city: str | None = None, chain:
             "name": clean_text(s["store"].get("name")) or None, "total": _num(s["total_price"]),
             "items_missing": s["items_missing"], "missing_barcodes": [b for b in asked if b not in have],
             "savings": _num(s.get("savings")) or 0.0, "promotions_known": bool(s.get("promotions_known")),
-            "lines": lines, "_delivery": s["store"].get("delivery_url") or "",
+            "lines": lines, "joint_promos": [
+                {"description": clean_text(a["description"]), "saving": _num(a["saving"]), "barcodes": list(a["barcodes"])}
+                for a in s.get("promo_adjustments") or []],
         })
     shown.sort(key=lambda s: (s["items_missing"], s["total"]))   # the site's own order: fewest missing first, then cheapest
     shown = shown[:3]
@@ -267,12 +271,10 @@ async def compare_basket(api, items: list[dict], city: str | None = None, chain:
         out["cheapest"] = {"chain": best["chain"], "city": best["city"], "total": best["total"], "complete": complete}
         out["shopping_list"] = {
             "chain": best["chain"], "city": best["city"],
-            "delivery_url": best["_delivery"] if best["_delivery"].startswith("http") else None,
             "lines": [{"name": l["name"], "qty": l["qty"], "price": l["line_total"]} for l in best["lines"]],
+            "joint_promos": best["joint_promos"],     # promotions over several products: they lower the total, not a line
             "total": best["total"],
         }
-    for s in shown:
-        s.pop("_delivery")
     out["stores"] = shown
     link = build_basket_link(config.SITE_URL, pairs)
     if link:

@@ -37,7 +37,8 @@ shopping list instead.
 
 - 40 products per `compare_basket`; 10 searches per `search_products`; every API call has a 10 s timeout and at most 4
   run at once (`mcp_service/config.py`). The service reaches the API directly, past nginx, so it limits itself.
-- nginx: `/mcp` has its own allowance, 2 requests/s per address with a burst of 10, and bodies up to 64 KB.
+- nginx: `/mcp` has its own allowance, 20 requests/s per address with a burst of 60 (claude.ai calls from Anthropic's servers, so many shoppers share a few addresses), and bodies up to 64 KB. nginx finds the `mcp` container per request, so a stopped `mcp` only makes `/mcp` answer 502; the site keeps running.
+- A call that cannot get one of the 4 API slots within 5 s is answered "busy" (`ApiBusy`) instead of waiting.
 - Names and promotion text from the chains' sites are cut to 120 characters and treated as data, never instructions.
 
 ## Operating it

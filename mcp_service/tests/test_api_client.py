@@ -3,6 +3,7 @@ import asyncio
 import httpx
 import pytest
 
+from mcp_service import config
 from mcp_service.api_client import ApiClient
 from mcp_service.errors import ApiBusy, ToolUserError
 
@@ -72,3 +73,23 @@ async def test_at_most_4_calls_in_flight():
     api = client_with(handler)
     await asyncio.gather(*[api.get("/x") for _ in range(10)])
     assert peak == 4
+
+
+async def test_waiting_for_a_free_slot_gives_up_with_api_busy(monkeypatch):
+    monkeypatch.setattr(config, "SLOT_WAIT_SECONDS", 0.05)
+
+    async def handler(req):
+        await asyncio.sleep(0.4)
+        return httpx.Response(200, json={})
+
+    api = client_with(handler)
+    results = await asyncio.gather(*[api.get("/x") for _ in range(6)], return_exceptions=True)
+    assert sum(isinstance(r, ApiBusy) for r in results) == 2          # 4 slots; the other 2 calls shed, not queued
+    assert sum(r == {} for r in results) == 4
+
+
+async def test_slots_are_released_after_a_shed_call(monkeypatch):
+    monkeypatch.setattr(config, "SLOT_WAIT_SECONDS", 0.05)
+    api = client_with(lambda req: httpx.Response(200, json={"ok": 1}))
+    for _ in range(10):                                               # more calls than slots, one after another
+        assert await api.get("/x") == {"ok": 1}
