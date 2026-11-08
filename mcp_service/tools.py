@@ -243,6 +243,7 @@ async def compare_basket(api, items: list[dict], city: str | None = None, chain:
             "lines": lines, "_delivery": s["store"].get("delivery_url") or "",
         })
     shown.sort(key=lambda s: (s["items_missing"] > 0, s["total"]))   # complete baskets first, cheapest first
+    shown = shown[:3]
 
     as_of = await prices_as_of(api)
     complete = bool(shown) and shown[0]["items_missing"] == 0
