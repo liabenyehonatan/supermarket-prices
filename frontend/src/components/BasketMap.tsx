@@ -7,7 +7,7 @@ import { Locate, MapPin, Navigation, X } from 'lucide-react';
 import { ChainLogo } from './ChainLogo';
 import { ISRAEL_BOUNDS, MIN_ZOOM, mapStyle } from '../lib/mapStyle';
 import { distanceKm } from '../lib/geo';
-import { googleMapsLink, isMappable, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
+import { brandName, googleMapsLink, isMappable, isOnlineStore, storeSubtitle, wazeLink } from '../lib/store';
 import { money } from '../lib/safe';
 import { saveMyCoords, type Coords } from '../lib/location';
 import { NEAR_KM, pickBest } from '../lib/bestPin';
@@ -134,7 +134,7 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
       const isBest = s.store.id === best && s.items_missing === 0;
       pill.className = `map-pin${isBest ? ' map-pin-best' : ''}${s.items_missing > 0 ? ' map-pin-partial' : ''}${s.store.id === selectedRef.current ? ' map-pin-selected' : ''}${s.store.id === highlightRef.current ? ' map-pin-hover' : ''}`;
       pill.textContent = priceText(s.total_price);
-      pill.setAttribute('aria-label', `${s.store.chain.name}, ${money(s.total_price)}${s.items_missing > 0 ? `, חסרים ${s.items_missing} מוצרים` : ''}`);
+      pill.setAttribute('aria-label', `${brandName(s.store.chain.name, s.store.name)}, ${money(s.total_price)}${s.items_missing > 0 ? `, חסרים ${s.items_missing} מוצרים` : ''}`);
       el.style.zIndex = s.store.id === selectedRef.current ? '3' : s.store.id === highlightRef.current ? '3' : isBest ? '2' : '1';
     }
   }
@@ -359,12 +359,12 @@ export default function BasketMap({ stores, myCoords, onCoords, visible, onlyCom
       )}
 
       {selected && text && (
-        <div className="map-card" role="dialog" aria-label={`${selected.store.chain.name}, פרטי הסניף`}>
+        <div className="map-card" role="dialog" aria-label={`${brandName(selected.store.chain.name, selected.store.name)}, פרטי הסניף`}>
           <button className="map-card-close" onClick={() => selectStore(null)} aria-label="סגירה"><X size={16} strokeWidth={2.2} /></button>
           <div className="map-card-head">
-            <ChainLogo name={selected.store.chain.name} size={40} />
+            <ChainLogo name={brandName(selected.store.chain.name, selected.store.name)} size={40} />
             <div className="map-card-info">
-              <div className="map-card-name">{selected.store.chain.name}</div>
+              <div className="map-card-name">{brandName(selected.store.chain.name, selected.store.name)}</div>
               <div className="map-card-sub">{storeSubtitle(text) || selected.store.city}</div>
               {km != null && <div className="map-card-sub">{km.toFixed(1)} ק״מ ממך</div>}
             </div>

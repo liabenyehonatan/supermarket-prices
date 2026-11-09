@@ -4,6 +4,14 @@ import type { BasketStoreTotal } from '../types';
 // name is frequently just the branch or town. Show the chain first, the branch name
 // under it (the address when the row is opened), and never show a city that is not a name.
 
+const AMPM = /\bam\s*[-:]?\s*pm\b|אם\s*פם/i;
+
+/** The brand a shopper knows the store by. Dor Alon runs its convenience stores as AM:PM, and the chain's file
+ *  lists them under Dor Alon, with "Am-pm" only in the branch's name. */
+export function brandName(chain: string, storeName?: string | null): string {
+  return chain === 'דור אלון' && AMPM.test(storeName ?? '') ? 'AM:PM' : chain;
+}
+
 /** The city if it is a real name, otherwise ''. */
 export function cityName(city?: string | null): string {
   const c = (city ?? '').trim();

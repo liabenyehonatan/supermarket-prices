@@ -11,7 +11,7 @@ import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { pickBest } from '../lib/bestPin';
-import { EILAT_NOTE, eilatLast, googleMapsLink, isEilat, isMappable, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
+import { brandName, EILAT_NOTE, eilatLast, googleMapsLink, isEilat, isMappable, isOnlineStore, storeAddress, storeSubtitle, wazeLink } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { FilterSheet } from '../components/FilterSheet';
 import { endsText } from '../lib/dealDays';
@@ -97,8 +97,8 @@ function ResultCard({ store: row, isWinner, nextTotal, minTotal, totalItems, bas
 
   return (
     <StoreRow
-      chain={store.store.chain.name}
-      name={store.store.chain.name}
+      chain={brandName(store.store.chain.name, store.store.name)}
+      name={brandName(store.store.chain.name, store.store.name)}
       city={`${storeSubtitle({ chain: store.store.chain.name, name: store.store.name, address: store.store.address, city: store.store.city })}${approx ? ' · מיקום משוער' : ''}`}
       warning={[store.items_missing > 0 && `חסרים ${store.items_missing} מתוך ${totalItems} מוצרים · הסכום חלקי`, isEilat(store.store.city) && EILAT_NOTE].filter(Boolean).join(' · ') || undefined}
       price={store.total_price}
