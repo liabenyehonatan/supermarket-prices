@@ -8,7 +8,7 @@ import { compareProduct, fetchCities } from '../api/client';
 import { StoreRow } from '../components/StoreRow';
 import { money, safeHttpUrl } from '../lib/safe';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
-import { cityName, EILAT_NOTE, eilatLast, isEilat, isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
+import { brandName, cityName, EILAT_NOTE, eilatLast, isEilat, isOnlineStore, navQuery, storeAddress, storeSubtitle } from '../lib/store';
 import { ProductImage } from '../components/ProductImage';
 import { useBasket } from '../context/BasketContext';
 import type { ProductCompareResponse, PriceAtStore, BasketStoreTotal } from '../types';
@@ -422,8 +422,8 @@ export function ProductPage() {
                 return (
                   <StoreRow
                     key={key}
-                    chain={row.chain_name}
-                    name={row.chain_name}
+                    chain={brandName(row.chain_name, row.store_name)}
+                    name={brandName(row.chain_name, row.store_name)}
                     city={storeSubtitle({ chain: row.chain_name, name: row.store_name, address: row.store_address, city: row.store_city })}
                     warning={[isStale(row.scraped_at ?? row.price_updated_at) && `מחיר ישן · עודכן לפני ${timeAgo(row.scraped_at ?? row.price_updated_at)}`, isEilat(row.store_city) && EILAT_NOTE].filter(Boolean).join(' · ') || undefined}
                     promo={promos[0]?.description}
