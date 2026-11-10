@@ -40,6 +40,9 @@ fi
 if echo "$changed" | grep -qE '^(frontend/|docker-compose\.yml)'; then
   services+=(frontend)
 fi
+if echo "$changed" | grep -qE '^(mcp_service/|docker-compose\.yml)'; then
+  services+=(mcp)
+fi
 
 if [ "${#services[@]}" -gt 0 ]; then
   # api first pulls in `migrate` (schema changes run as the owner role before the new api starts)
@@ -58,11 +61,14 @@ if [ "${#services[@]}" -gt 0 ] || echo "$changed" | grep -qE '^nginx/'; then
   fi
 fi
 
-# The site must answer (up to ~3 minutes: the api can take 90 s to start after a rebuild): the API through nginx, and a page with its own title (search-engine head tags)
+# The site must answer (up to ~3 minutes: the api can take 90 s to start after a rebuild): the API through nginx, a page with its own title (search-engine head tags), and the Claude connector listing its tools
 # 127.0.0.1, not "localhost": inside the nginx container "localhost" can resolve to IPv6 (::1), where nginx does not listen
 for attempt in $(seq 1 60); do
   if $DOCKER compose exec -T nginx wget -qO- http://127.0.0.1/health >/dev/null 2>&1 \
-     && $DOCKER compose exec -T nginx wget -qO- http://127.0.0.1/promotions 2>/dev/null | grep -q '<title>'; then
+     && $DOCKER compose exec -T nginx wget -qO- http://127.0.0.1/promotions 2>/dev/null | grep -q '<title>' \
+     && $DOCKER compose exec -T nginx wget -qO- --header 'Content-Type: application/json' \
+          --header 'Accept: application/json, text/event-stream' \
+          --post-data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1/mcp 2>/dev/null | grep -q compare_basket; then
     echo "deployed $after (rebuilt: ${services[*]:-nothing}; the worker was not restarted)"
     exit 0
   fi

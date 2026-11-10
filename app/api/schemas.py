@@ -165,6 +165,11 @@ class ProductCompareResponse(BaseModel):
     price_difference: Decimal  # How much you save by choosing cheapest
 
 
+class ByBarcodesRequest(BaseModel):
+    """Barcodes to look the products up by (the basket link import and the MCP use it)."""
+    barcodes: Annotated[List[Annotated[str, StringConstraints(max_length=20)]], Field(max_length=100)]
+
+
 class CheapestPriceRequest(BaseModel):
     """A list of barcodes to look up the cheapest current price for, in one call."""
     # At most 100 barcodes of at most 20 characters per call (a real page asks for ~20).

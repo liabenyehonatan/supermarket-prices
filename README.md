@@ -52,6 +52,11 @@ chains' price portals ─► worker ─► PostgreSQL ◄─ FastAPI (read-only 
 - **Operations included:** `/health` and `/health/data` for uptime monitors, healthchecks.io pings from the worker and
   the backup job, nightly `pg_dump` (plus a script that copies it off the server), a watchdog for chains that stop loading, capped container logs.
 
+### Claude connector
+
+The site can be used from inside Claude: Claude searches products, compares a basket and gives a link that opens it on
+the site. See [docs/mcp.md](docs/mcp.md).
+
 ## Run it locally
 
 Needs Python 3.11+, Node 20+ and PostgreSQL 16 (with the `pg_trgm` extension).

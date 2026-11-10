@@ -19,6 +19,8 @@ celerybeat-schedule*
 frontend/.next/
 frontend/dist/
 
+mcp_service/.venv/
+
 # Map tiles are too big for git: dev copy in frontend/public/tiles, server copy in deploy/tiles (see deploy/tiles/README.md)
 frontend/public/tiles/
 deploy/tiles/*.pmtiles

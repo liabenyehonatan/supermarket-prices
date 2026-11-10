@@ -33,6 +33,7 @@ from app.api.schemas import (
     PriceAtStore,
     PromoInfo,
     CheapestPriceRequest,
+    ByBarcodesRequest,
     BasketItem,
     BasketCompareResponse,
     ItemCoverage,
@@ -364,6 +365,23 @@ async def compare_product_prices(
         most_expensive_price=most_expensive,
         price_difference=most_expensive - cheapest,
     )
+
+
+# ─── Endpoint: Products by barcode ───────────────────────────────────────────
+@router.post(
+    "/products/by-barcodes",
+    response_model=List[ProductSearchResult],
+    summary="The products for a list of barcodes, in the order asked; unknown barcodes are left out",
+)
+async def products_by_barcodes(payload: ByBarcodesRequest, db: AsyncSession = Depends(get_db)):
+    """Names for a list of barcodes in one request (at most 100). A barcode we do not hold, or that is a chain's
+    own item number (see MIN_BARCODE_LEN), is simply missing from the answer; a repeated barcode is answered once."""
+    wanted = list(dict.fromkeys(b.strip() for b in payload.barcodes if b and b.strip()))
+    if not wanted:
+        return []
+    rows = (await db.execute(select(Product).where(Product.barcode.in_(wanted), _real_barcode()))).scalars().all()
+    by_barcode = {p.barcode: p for p in rows}
+    return [by_barcode[b] for b in wanted if b in by_barcode]
 
 
 # ─── Endpoint: Cheapest price for many products at once ─────────────────────

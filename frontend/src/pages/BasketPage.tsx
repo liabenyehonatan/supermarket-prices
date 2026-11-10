@@ -18,6 +18,7 @@ import { endsText } from '../lib/dealDays';
 import { LocationPrompt } from '../components/LocationPrompt';
 import { useCurrentCity, readMyCoords, type Coords } from '../lib/location';
 import { useBasket } from '../context/BasketContext';
+import { useBasketLinkImport } from '../lib/useBasketLinkImport';
 import { matchCity, onCityFilterChange, readCityFilter, readChainFilter, saveCityFilter, saveChainFilter } from '../lib/filters';
 import { BasketSwitcher } from '../components/BasketSwitcher';
 import { snapshotFrom, timeAgo } from '../lib/basketCompare';
@@ -297,6 +298,7 @@ function SwipeRow({ onRemove, onClick, disabled, className, children }: {
 export function BasketPage() {
   const navigate = useNavigate();
   useDocumentTitle('הסל שלי | סלי');
+  useBasketLinkImport();   // opens the basket Claude linked to (?items=...) as a new basket
   const { items, updateQty, removeItem, removeItems, clearBasket, activeId, active, recordCompare, openMove } = useBasket();
   const [results, setResults] = useState<BasketCompareResponse | null>(null);
   const requestId = useRef(0);
