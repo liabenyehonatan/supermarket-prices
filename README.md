@@ -4,7 +4,7 @@ Search a product or build a shopping basket, and see which store is cheapest. Sa
 Israeli supermarket chains are required by law to publish, twice a day, and compares them in a fast, mobile-first
 Hebrew (right-to-left) web app.
 
-**Live:** http://82.70.214.11 (a custom domain with HTTPS is on its way)
+**Live:** https://sali.one
 
 | | | |
 |:-:|:-:|:-:|
