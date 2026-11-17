@@ -11,12 +11,16 @@ Hebrew (right-to-left) web app.
 | ![Home](docs/screenshots/home.png) | ![Search](docs/screenshots/search.png) | ![Product](docs/screenshots/product.png) |
 
 - **29 chains, about 2,000 stores, 240,000 products**, refreshed at 06:00 and 18:00 Israel time.
-- **Basket comparison:** the total of a whole basket per store, cheapest first, with store promotions applied where the
-  data lets us do it safely.
+- **Basket comparison:** the total of a whole basket per store, cheapest first (complete baskets before partial ones), with
+  store promotions applied where the data lets us do it safely. Several named baskets, kept in the browser. For a product
+  a store lacks it suggests a similar one the store does sell, or offers the comparison without it.
+- **Map:** a self-hosted (PMTiles) map of the stores of a basket or a product, with the prices on it, links to Waze and
+  Google Maps, and a filter for branches that lack products. Eilat (VAT-free) is kept out of "cheapest" everywhere.
 - **Deals:** only promotions that really are cheaper than the cheapest shelf price we know of the same product.
 - **Near me:** distance-ordered stores, from the browser's position or a chosen city.
 - **Barcode scanner** in the browser (camera), for comparing a product while standing in the aisle.
-- No sign-up, no cookies, no tracking. Baskets live in the browser's local storage.
+- No sign-up and no cookies. Baskets live in the browser's local storage. The site keeps anonymous visit statistics (a random
+  id in local storage, no personal data) and can feed Google Analytics 4 if `GA_MEASUREMENT_ID` is set.
 
 ## How it works
 
@@ -32,7 +36,7 @@ chains' price portals ─► worker ─► PostgreSQL ◄─ FastAPI (read-only 
 | `app/api` | FastAPI, fully async (`asyncpg`). Search, compare, basket, deals, health. Connects with a **read-only database role**. |
 | `app/basket_promos.py` | The promotion engine: prices a basket with "N for X" promotions, single-product and multi-product, picking the largest saving first and the cheapest units first. Verified against a slow reference implementation on random baskets. |
 | `frontend/` | React + TypeScript + Vite, hand-written CSS (RTL), route-level code splitting. |
-| `deploy/`, `nginx/`, `docker-compose.yml` | One small VPS in Israel (several chains only answer Israeli addresses): db, api, worker, backup, nginx, and optional Caddy for HTTPS. |
+| `deploy/`, `nginx/`, `docker-compose.yml` | One small VPS in Israel (several chains only answer Israeli addresses): db, migrate, api, worker, backup, frontend, nginx, and optional Caddy for HTTPS. |
 
 ### Decisions worth a look
 
@@ -70,7 +74,7 @@ cd frontend && npm ci && npm run dev                      # app on :3000, proxie
 Tests (create and drop a throw-away database, `sm_pytest`):
 
 ```bash
-venv/bin/python -m pytest        # 347 tests: parsing, loading, promotions, API, migrations, worker
+venv/bin/python -m pytest        # 406 tests: parsing, loading, promotions, API, geocoding, migrations, worker
 cd frontend && npm run build     # type-check + production build
 ```
 
